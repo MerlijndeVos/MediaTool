@@ -60,7 +60,7 @@ jobs:
             macOS) bash packaging/macos/build-dmg.sh "$VERSION" ;;
             Linux)
               sudo apt-get update
-              sudo apt-get install -y libgtk-3-0 libwebkit2gtk-4.1-0 fuse libfuse2
+              sudo apt-get install -y libgtk-3-0 libwebkit2gtk-4.1-0 fuse libfuse2 librsvg2-bin
               wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage -O appimagetool
               chmod +x appimagetool
               sudo mv appimagetool /usr/local/bin/appimagetool
