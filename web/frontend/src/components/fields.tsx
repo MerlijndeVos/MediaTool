@@ -1,10 +1,14 @@
 import { useState } from "react";
-import { FolderOpen } from "lucide-react";
+import { AlertTriangle, Eye, FolderOpen } from "lucide-react";
 import { isDesktopApp, pickFolder } from "@/lib/desktop";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { cn } from "@/lib/utils";
+
+/** Safe default: preview planned actions before writing to disk. */
+export const DEFAULT_DRY_RUN = true;
 
 export function Field({
   label,
@@ -97,6 +101,59 @@ export function CheckField({
         {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
       </div>
       <Switch checked={checked} onCheckedChange={onChange} />
+    </div>
+  );
+}
+
+export function DryRunField({
+  dryRun,
+  onChange,
+  hint,
+}: {
+  dryRun: boolean;
+  onChange: (v: boolean) => void;
+  hint?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        "rounded-lg border-2 px-4 py-3 transition-colors",
+        dryRun
+          ? "border-amber-500/70 bg-amber-500/10 dark:border-amber-400/50 dark:bg-amber-500/15"
+          : "border-red-500/60 bg-red-500/5 dark:border-red-400/50 dark:bg-red-500/10",
+      )}
+      role="group"
+      aria-label={dryRun ? "Dry run enabled" : "Apply changes enabled"}
+    >
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex gap-3">
+          <div
+            className={cn(
+              "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
+              dryRun ? "bg-amber-500/20 text-amber-700 dark:text-amber-300" : "bg-red-500/15 text-red-700 dark:text-red-300",
+            )}
+          >
+            {dryRun ? <Eye className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
+          </div>
+          <div>
+            <p className={cn("text-sm font-semibold", dryRun ? "text-amber-900 dark:text-amber-100" : "text-red-900 dark:text-red-100")}>
+              {dryRun ? "Dry run — preview only" : "Apply changes — writes to disk"}
+            </p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {dryRun
+                ? "Shows planned actions in the log without creating, moving, or editing files."
+                : "Runs for real. Files and folders may be created, moved, renamed, or deleted."}
+            </p>
+            {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
+          </div>
+        </div>
+        <div className="flex shrink-0 flex-col items-end gap-1">
+          <Switch checked={dryRun} onCheckedChange={onChange} aria-label="Dry run" />
+          <span className={cn("text-[10px] font-semibold uppercase tracking-wide", dryRun ? "text-amber-700 dark:text-amber-400" : "text-red-700 dark:text-red-400")}>
+            {dryRun ? "On" : "Off"}
+          </span>
+        </div>
+      </div>
     </div>
   );
 }

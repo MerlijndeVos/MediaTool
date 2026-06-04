@@ -3,7 +3,8 @@ import { Loader2, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { CheckField, Field, PathField, SelectField } from "@/components/fields";
+import { CheckField, DEFAULT_DRY_RUN, DryRunField, Field, PathField, SelectField } from "@/components/fields";
+import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { YouTubeDownloadPanel } from "@/components/YouTubeDownloadPanel";
 import type { ActiveJob, ToolId } from "@/lib/types";
@@ -102,17 +103,30 @@ function RunBar({
   onClick,
   disabled,
   loading,
-  label = "Run",
+  dryRun,
+  label,
 }: {
   onClick: () => void;
   disabled?: boolean;
   loading?: boolean;
+  dryRun: boolean;
   label?: string;
 }) {
+  const runLabel = label ?? (dryRun ? "Run preview" : "Apply changes");
   return (
-    <Button onClick={onClick} disabled={disabled} className="w-full sm:w-auto" size="lg">
+    <Button
+      onClick={onClick}
+      disabled={disabled}
+      variant={dryRun ? "secondary" : "default"}
+      className={cn(
+        "w-full sm:w-auto",
+        dryRun && "border-amber-500/50 bg-amber-500/15 text-amber-950 hover:bg-amber-500/25 dark:text-amber-50",
+        !dryRun && "shadow-sm",
+      )}
+      size="lg"
+    >
       {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-      {label}
+      {runLabel}
     </Button>
   );
 }
@@ -132,7 +146,7 @@ function ConvertForm({
   const [deinterlace, setDeinterlace] = useState("auto");
   const [crf, setCrf] = useState("19");
   const [preset, setPreset] = useState("slow");
-  const [dryRun, setDryRun] = useState(false);
+  const [dryRun, setDryRun] = useState(DEFAULT_DRY_RUN);
   const [prune, setPrune] = useState(false);
   const [useful, setUseful] = useState(false);
 
@@ -162,10 +176,11 @@ function ConvertForm({
         </Field>
         <SelectField label="Preset" value={preset} onChange={setPreset} options={PRESETS.map((p) => ({ value: p, label: p }))} />
       </div>
-      <CheckField label="Dry run" checked={dryRun} onChange={setDryRun} />
       <CheckField label="Prune non-matching from output" checked={prune} onChange={setPrune} />
       <CheckField label="Copy useful-only tree" checked={useful} onChange={setUseful} />
+      <DryRunField dryRun={dryRun} onChange={setDryRun} />
       <RunBar
+        dryRun={dryRun}
         loading={disabled}
         disabled={disabled || !input || !output}
         onClick={() =>
@@ -194,7 +209,7 @@ function TrimForm({ onRun, disabled }: { onRun: (p: Record<string, unknown>) => 
   const [trimStart, setTrimStart] = useState("0");
   const [trimEnd, setTrimEnd] = useState("0");
   const [fmt, setFmt] = useState("mp4");
-  const [dryRun, setDryRun] = useState(false);
+  const [dryRun, setDryRun] = useState(DEFAULT_DRY_RUN);
   const [reencode, setReencode] = useState(false);
   const [replace, setReplace] = useState(false);
   const [noRec, setNoRec] = useState(false);
@@ -214,11 +229,12 @@ function TrimForm({ onRun, disabled }: { onRun: (p: Record<string, unknown>) => 
           <Input value={fmt} onChange={(e) => setFmt(e.target.value)} />
         </Field>
       </div>
-      <CheckField label="Dry run" checked={dryRun} onChange={setDryRun} />
       <CheckField label="Re-encode (frame-accurate)" checked={reencode} onChange={setReencode} />
       <CheckField label="Replace original" checked={replace} onChange={setReplace} hint="Overwrites source when trim succeeds." />
       <CheckField label="No recursion" checked={noRec} onChange={setNoRec} />
+      <DryRunField dryRun={dryRun} onChange={setDryRun} />
       <RunBar
+        dryRun={dryRun}
         loading={disabled}
         disabled={disabled || !input}
         onClick={() =>
@@ -242,7 +258,7 @@ function TrimForm({ onRun, disabled }: { onRun: (p: Record<string, unknown>) => 
 function StitchForm({ onRun, disabled }: { onRun: (p: Record<string, unknown>) => void; disabled?: boolean }) {
   const [parts, setParts] = useState<string[]>(["", ""]);
   const [output, setOutput] = useState("");
-  const [dryRun, setDryRun] = useState(false);
+  const [dryRun, setDryRun] = useState(DEFAULT_DRY_RUN);
   const [reencode, setReencode] = useState(false);
 
   const setPart = (i: number, v: string) => {
@@ -259,9 +275,10 @@ function StitchForm({ onRun, disabled }: { onRun: (p: Record<string, unknown>) =
         Add part
       </Button>
       <PathField label="Output file" value={output} onChange={setOutput} placeholder="C:\\out\\joined.mp4" />
-      <CheckField label="Dry run" checked={dryRun} onChange={setDryRun} />
       <CheckField label="Re-encode" checked={reencode} onChange={setReencode} />
+      <DryRunField dryRun={dryRun} onChange={setDryRun} />
       <RunBar
+        dryRun={dryRun}
         loading={disabled}
         disabled={disabled || parts.filter(Boolean).length < 2 || !output}
         onClick={() =>
@@ -282,7 +299,7 @@ function StitchForm({ onRun, disabled }: { onRun: (p: Record<string, unknown>) =
 function VtsForm({ onRun, disabled }: { onRun: (p: Record<string, unknown>) => void; disabled?: boolean }) {
   const [input, setInput] = useState("");
   const [output, setOutput] = useState("");
-  const [dryRun, setDryRun] = useState(true);
+  const [dryRun, setDryRun] = useState(DEFAULT_DRY_RUN);
   const [reencode, setReencode] = useState(false);
   const [minMb, setMinMb] = useState("50");
 
@@ -295,9 +312,10 @@ function VtsForm({ onRun, disabled }: { onRun: (p: Record<string, unknown>) => v
       <Field label="Min title size (MB)">
         <Input type="number" value={minMb} onChange={(e) => setMinMb(e.target.value)} />
       </Field>
-      <CheckField label="Dry run" checked={dryRun} onChange={setDryRun} />
       <CheckField label="Re-encode to H.264" checked={reencode} onChange={setReencode} />
+      <DryRunField dryRun={dryRun} onChange={setDryRun} />
       <RunBar
+        dryRun={dryRun}
         loading={disabled}
         disabled={disabled || !input || !output}
         onClick={() =>
@@ -323,7 +341,7 @@ function VtsForm({ onRun, disabled }: { onRun: (p: Record<string, unknown>) => v
 function RenameForm({ onRun, disabled }: { onRun: (p: Record<string, unknown>) => void; disabled?: boolean }) {
   const [input, setInput] = useState("");
   const [output, setOutput] = useState("");
-  const [apply, setApply] = useState(false);
+  const [dryRun, setDryRun] = useState(DEFAULT_DRY_RUN);
   const [copy, setCopy] = useState(false);
   const [undo, setUndo] = useState(false);
 
@@ -331,17 +349,18 @@ function RenameForm({ onRun, disabled }: { onRun: (p: Record<string, unknown>) =
     <div className="space-y-4">
       <PathField label="Input folder" value={input} onChange={setInput} />
       <PathField label="Output (optional)" value={output} onChange={setOutput} hint="Leave empty to reorganize in place." />
-      <CheckField label="Apply changes" checked={apply} onChange={setApply} hint="Off = dry run." />
       <CheckField label="Copy instead of move" checked={copy} onChange={setCopy} />
       <CheckField label="Undo last apply" checked={undo} onChange={setUndo} />
+      <DryRunField dryRun={dryRun} onChange={setDryRun} />
       <RunBar
+        dryRun={dryRun}
         loading={disabled}
         disabled={disabled || !input}
         onClick={() =>
           onRun({
             input,
             output: output || null,
-            apply,
+            apply: !dryRun,
             copy,
             undo,
             type: "auto",
@@ -359,7 +378,7 @@ function RenameForm({ onRun, disabled }: { onRun: (p: Record<string, unknown>) =
 function AudioForm({ onRun, disabled }: { onRun: (p: Record<string, unknown>) => void; disabled?: boolean }) {
   const [input, setInput] = useState("");
   const [lang, setLang] = useState("eng");
-  const [apply, setApply] = useState(false);
+  const [dryRun, setDryRun] = useState(DEFAULT_DRY_RUN);
 
   return (
     <div className="space-y-4">
@@ -367,11 +386,12 @@ function AudioForm({ onRun, disabled }: { onRun: (p: Record<string, unknown>) =>
       <Field label="Language">
         <Input value={lang} onChange={(e) => setLang(e.target.value)} placeholder="eng" />
       </Field>
-      <CheckField label="Apply" checked={apply} onChange={setApply} hint="Requires MKVToolNix on PATH." />
+      <DryRunField dryRun={dryRun} onChange={setDryRun} hint="Apply mode requires MKVToolNix on PATH." />
       <RunBar
+        dryRun={dryRun}
         loading={disabled}
         disabled={disabled || !input || !lang}
-        onClick={() => onRun({ input, lang, apply, set_language: false, no_recursive: false })}
+        onClick={() => onRun({ input, lang, apply: !dryRun, set_language: false, no_recursive: false })}
       />
     </div>
   );
@@ -379,26 +399,26 @@ function AudioForm({ onRun, disabled }: { onRun: (p: Record<string, unknown>) =>
 
 function DedupForm({ onRun, disabled }: { onRun: (p: Record<string, unknown>) => void; disabled?: boolean }) {
   const [input, setInput] = useState("");
-  const [apply, setApply] = useState(false);
+  const [dryRun, setDryRun] = useState(DEFAULT_DRY_RUN);
 
   return (
     <div className="space-y-4">
       <PathField label="Folder" value={input} onChange={setInput} />
-      <CheckField label="Apply" checked={apply} onChange={setApply} />
-      <RunBar loading={disabled} disabled={disabled || !input} onClick={() => onRun({ input, apply })} />
+      <DryRunField dryRun={dryRun} onChange={setDryRun} />
+      <RunBar dryRun={dryRun} loading={disabled} disabled={disabled || !input} onClick={() => onRun({ input, apply: !dryRun })} />
     </div>
   );
 }
 
 function RenameFoldersForm({ onRun, disabled }: { onRun: (p: Record<string, unknown>) => void; disabled?: boolean }) {
   const [root, setRoot] = useState("");
-  const [dryRun, setDryRun] = useState(true);
+  const [dryRun, setDryRun] = useState(DEFAULT_DRY_RUN);
 
   return (
     <div className="space-y-4">
       <PathField label="Root folder" value={root} onChange={setRoot} />
-      <CheckField label="Dry run" checked={dryRun} onChange={setDryRun} />
-      <RunBar loading={disabled} disabled={disabled || !root} onClick={() => onRun({ root, dry_run: dryRun })} />
+      <DryRunField dryRun={dryRun} onChange={setDryRun} />
+      <RunBar dryRun={dryRun} loading={disabled} disabled={disabled || !root} onClick={() => onRun({ root, dry_run: dryRun })} />
     </div>
   );
 }

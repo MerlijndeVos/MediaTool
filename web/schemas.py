@@ -31,7 +31,7 @@ class ConvertParams(BaseModel):
     use_gpu: Literal["auto", "on", "off"] = "auto"
     crf: int = Field(default=19, ge=0, le=51)
     preset: str = "slow"
-    dry_run: bool = False
+    dry_run: bool = True
     prune_output: bool = False
     copy_useful_only: bool = False
 
@@ -47,7 +47,7 @@ class VtsParams(BaseModel):
     preset: str = "slow"
     include_menus: bool = False
     min_mb: int = Field(default=50, ge=0)
-    dry_run: bool = False
+    dry_run: bool = True
 
 
 class RenameParams(BaseModel):
@@ -98,7 +98,7 @@ class TrimParams(BaseModel):
     no_recursive: bool = False
     reencode: bool = False
     replace: bool = False
-    dry_run: bool = False
+    dry_run: bool = True
 
 
 class StitchParams(BaseModel):
@@ -107,7 +107,7 @@ class StitchParams(BaseModel):
     input_format: str = "mp4"
     no_recursive: bool = False
     reencode: bool = False
-    dry_run: bool = False
+    dry_run: bool = True
 
 
 class RenameFoldersParams(BaseModel):
