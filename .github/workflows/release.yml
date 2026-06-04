@@ -1,0 +1,94 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+          - os: macos-latest
+          - os: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/frontend/package-lock.json
+
+      - name: Build frontend
+        working-directory: web/frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Install Python dependencies
+        run: pip install -e ".[desktop,pack]"
+
+      - name: PyInstaller bundle
+        run: pyinstaller packaging/media-tool.spec --noconfirm --clean
+
+      - name: Platform installer
+        shell: bash
+        env:
+          APP_VERSION: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '0.1.0' }}
+        run: |
+          VERSION="${APP_VERSION#v}"
+          case "${{ runner.os }}" in
+            Windows) choco install innosetup -y && iscc packaging/windows/setup.iss ;;
+            macOS) bash packaging/macos/build-dmg.sh "$VERSION" ;;
+            Linux)
+              sudo apt-get update
+              sudo apt-get install -y libgtk-3-0 libwebkit2gtk-4.1-0 fuse libfuse2
+              wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage -O appimagetool
+              chmod +x appimagetool
+              sudo mv appimagetool /usr/local/bin/appimagetool
+              bash packaging/linux/build-appimage.sh "$VERSION"
+              ;;
+          esac
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: media-tool-${{ matrix.os }}
+          path: |
+            packaging/dist/
+            dist/
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/**/*
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

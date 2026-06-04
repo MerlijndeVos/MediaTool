@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "media-tool"
+version = "0.1.0"
+description = "Cross-platform desktop app for local video conversion, library organization, and downloads"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+dependencies = [
+    "yt-dlp>=2024.0.0",
+    "yt-dlp-ejs>=0.8.0",
+]
+
+[project.optional-dependencies]
+web = [
+    "fastapi>=0.110.0",
+    "uvicorn[standard]>=0.27.0",
+    "pydantic>=2.0.0",
+]
+desktop = [
+    "fastapi>=0.110.0",
+    "uvicorn[standard]>=0.27.0",
+    "pydantic>=2.0.0",
+    "pywebview>=5.0",
+]
+dev = []
+pack = [
+    "pyinstaller>=6.0",
+]
+
+[project.scripts]
+media-tool = "cli.__main__:main"
+media-tool-web = "web.__main__:main"
+media-tool-app = "web.desktop:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["core*", "cli*", "web*"]
+
+[tool.setuptools]
+py-modules = ["app"]

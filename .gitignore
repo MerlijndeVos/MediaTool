@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+dist/
+build/
+*.egg
+.venv/
+venv/
+.env
+
+# Logs & local data
+*.log
+logs/
+out/
+tmp_pl_test/
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Frontend (web/frontend has its own .gitignore for node_modules/dist)
+web/frontend/node_modules/
+web/frontend/dist/
+
+# PyInstaller / packaging (Phase 6)
+packaging/build/
+packaging/dist/
