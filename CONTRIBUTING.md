@@ -73,6 +73,16 @@ Local Windows bundle:
 .\packaging\build.ps1
 ```
 
+### Private repository and in-app updates
+
+GitHub’s API returns 404 for private releases without authentication. The desktop app supports a **read-only** token so “Check for updates” and one-click installs keep working while the repo stays private.
+
+1. Create a fine-grained PAT (or classic token) with **Contents: Read-only** on this repository.
+2. Add it as the repository secret **`MEDIA_TOOL_UPDATE_TOKEN`** so release CI embeds it in installers (see `packaging/secrets/README.md`).
+3. For local builds or dev runs of the desktop app, set `MEDIA_TOOL_GITHUB_TOKEN` or place the token in `%LOCALAPPDATA%\MediaTool\github_token` (Windows).
+
+Official installers built without that secret will show a clear message asking for a token; they will not silently report “up to date.”
+
 ## Code style
 
 - Match existing patterns in the file you edit.

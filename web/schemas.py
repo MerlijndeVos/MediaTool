@@ -165,6 +165,8 @@ class UpdateCheckResponse(BaseModel):
     release_url: Optional[str] = None
     release_notes: Optional[str] = None
     error: Optional[str] = None
+    status_message: Optional[str] = None
+    authenticated: bool = False
 
 
 class UpdateApplyResponse(BaseModel):

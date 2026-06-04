@@ -8,6 +8,7 @@ import {
   type UpdateCheck,
 } from "@/api/client";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { isDesktopApp } from "@/lib/desktop";
 
 const CHECK_INTERVAL_MS = 60 * 60 * 1000;
@@ -53,9 +54,37 @@ function ReleaseNotes({ text }: { text: string }) {
   );
 }
 
+function UpdateFeedback({
+  checking,
+  check,
+  networkError,
+}: {
+  checking: boolean;
+  check: UpdateCheck | null;
+  networkError: string | null;
+}) {
+  const error = networkError ?? check?.error;
+  const status = checking ? "Checking for updates…" : check?.status_message;
+
+  if (!error && !status) return null;
+
+  return (
+    <span
+      className={cn(
+        "max-w-[14rem] text-xs leading-snug",
+        error ? "text-red-600 dark:text-red-400" : "text-muted-foreground",
+      )}
+      title={error ?? status ?? undefined}
+    >
+      {error ?? status}
+    </span>
+  );
+}
+
 export function UpdateButton() {
   const [check, setCheck] = useState<UpdateCheck | null>(null);
   const [checking, setChecking] = useState(false);
+  const [networkError, setNetworkError] = useState<string | null>(null);
   const [applyStatus, setApplyStatus] = useState<UpdateApplyStatus | null>(null);
   const [applyError, setApplyError] = useState<string | null>(null);
   const [whatsNewOpen, setWhatsNewOpen] = useState(false);
@@ -63,10 +92,14 @@ export function UpdateButton() {
 
   const runCheck = useCallback(async () => {
     setChecking(true);
+    setNetworkError(null);
     try {
       setCheck(await checkForUpdates());
-    } catch {
+    } catch (err) {
       setCheck(null);
+      setNetworkError(
+        err instanceof Error ? err.message : "Could not reach the update server.",
+      );
     } finally {
       setChecking(false);
     }
@@ -120,6 +153,16 @@ export function UpdateButton() {
     check?.update_available && check.can_install && check.latest_version;
   const releaseNotes = check?.release_notes?.trim();
 
+  const versionTitle = check
+    ? check.error
+      ? `Media Tool v${check.current_version} — update check failed`
+      : check.update_available
+        ? `Media Tool v${check.current_version} — update available`
+        : check.status_message
+          ? `Media Tool v${check.current_version} — ${check.status_message}`
+          : `Media Tool v${check.current_version}`
+    : "Check for updates";
+
   const handleApply = async () => {
     setApplyError(null);
     setWhatsNewOpen(false);
@@ -136,22 +179,23 @@ export function UpdateButton() {
   };
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex max-w-[min(100%,28rem)] items-center gap-2">
+      <UpdateFeedback checking={checking} check={check} networkError={networkError} />
       {applyError && (
-        <span className="max-w-[12rem] truncate text-xs text-red-600 dark:text-red-400" title={applyError}>
+        <span className="max-w-[14rem] truncate text-xs text-red-600 dark:text-red-400" title={applyError}>
           {applyError}
         </span>
       )}
       {applyStatus?.phase === "error" && applyStatus.error && (
         <span
-          className="max-w-[12rem] truncate text-xs text-red-600 dark:text-red-400"
+          className="max-w-[14rem] truncate text-xs text-red-600 dark:text-red-400"
           title={applyStatus.error}
         >
           {applyStatus.error}
         </span>
       )}
       {showUpdate ? (
-        <div ref={whatsNewRef} className="relative flex items-center gap-1">
+        <div ref={whatsNewRef} className="relative flex shrink-0 items-center gap-1">
           {releaseNotes && (
             <>
               <Button
@@ -192,7 +236,7 @@ export function UpdateButton() {
           <Button
             variant="default"
             size="sm"
-            className="gap-1.5"
+            className="shrink-0 gap-1.5"
             disabled={applying}
             onClick={handleApply}
             title={releaseNotes ? "Download and install update" : undefined}
@@ -214,14 +258,10 @@ export function UpdateButton() {
         <Button
           variant="ghost"
           size="sm"
-          className="gap-1.5 text-muted-foreground"
+          className="shrink-0 gap-1.5 text-muted-foreground"
           disabled={checking}
           onClick={runCheck}
-          title={
-            check
-              ? `Media Tool v${check.current_version}${check.update_available ? " — update on releases page" : " — up to date"}`
-              : "Check for updates"
-          }
+          title={versionTitle}
         >
           {checking ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />

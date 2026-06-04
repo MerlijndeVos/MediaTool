@@ -12,17 +12,21 @@ import threading
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from typing import Callable, Literal
 
-from .runtime import app_data_dir, is_frozen
+from .runtime import app_data_dir, is_frozen, resource_root
 from .version import app_version
 
 logger = logging.getLogger(__name__)
 
 GITHUB_REPO = "MerlijndeVos/MediaTool"
-GITHUB_LATEST = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
+GITHUB_API = f"https://api.github.com/repos/{GITHUB_REPO}"
+GITHUB_LATEST = f"{GITHUB_API}/releases/latest"
 USER_AGENT = "MediaTool-updater"
+TOKEN_ENV_VARS = ("MEDIA_TOOL_GITHUB_TOKEN", "GITHUB_TOKEN")
+TOKEN_FILENAME = "github_token"
 
 UpdatePhase = Literal["idle", "downloading", "installing", "error"]
 
@@ -39,6 +43,57 @@ _state: dict = {
 def register_quit_callback(fn: Callable[[], None]) -> None:
     global _quit_callback
     _quit_callback = fn
+
+
+@lru_cache(maxsize=1)
+def get_github_token() -> str | None:
+    """Read-only token for private release checks (env, app data, or CI-bundled file)."""
+    for key in TOKEN_ENV_VARS:
+        value = os.environ.get(key, "").strip()
+        if value:
+            return value
+    for path in _token_file_paths():
+        try:
+            if path.is_file():
+                text = path.read_text(encoding="utf-8").strip()
+                if text:
+                    return text
+        except OSError:
+            logger.debug("Could not read token file %s", path, exc_info=True)
+    return None
+
+
+def _token_file_paths() -> tuple[Path, ...]:
+    bundled = resource_root() / TOKEN_FILENAME
+    return (app_data_dir() / TOKEN_FILENAME, bundled)
+
+
+def _github_headers(*, for_download: bool = False) -> dict[str, str]:
+    headers = {
+        "Accept": "application/octet-stream" if for_download else "application/vnd.github+json",
+        "User-Agent": USER_AGENT,
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    token = get_github_token()
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    return headers
+
+
+def _github_get(url: str, timeout: float) -> tuple[int, dict | None, str | None]:
+    req = urllib.request.Request(url, headers=_github_headers())
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return resp.status, json.loads(resp.read().decode("utf-8")), None
+    except urllib.error.HTTPError as exc:
+        body = ""
+        try:
+            body = exc.read().decode("utf-8", errors="replace")
+        except Exception:
+            pass
+        return exc.code, None, body
+    except Exception as exc:
+        return -1, None, str(exc)
 
 
 def _parse_version(raw: str) -> tuple[int, int, int]:
@@ -82,13 +137,61 @@ def _pick_asset(assets: list[dict]) -> dict | None:
     pattern = _asset_pattern()
     for asset in assets:
         name = str(asset.get("name", ""))
-        if name.endswith(pattern) or (sys.platform == "linux" and name.endswith(".AppImage") and pattern.split("-linux-")[-1] in name):
+        if name.endswith(pattern) or (
+            sys.platform == "linux"
+            and name.endswith(".AppImage")
+            and pattern.split("-linux-")[-1] in name
+        ):
             return asset
     if sys.platform == "linux":
         for asset in assets:
             name = str(asset.get("name", ""))
             if name.endswith(".AppImage"):
                 return asset
+    return None
+
+
+def _asset_download_url(asset: dict) -> str | None:
+    asset_id = asset.get("id")
+    if asset_id is not None and get_github_token():
+        return f"{GITHUB_API}/releases/assets/{int(asset_id)}"
+    url = asset.get("browser_download_url")
+    return str(url) if url else None
+
+
+def _releases_error_message(http_code: int, *, has_token: bool) -> str:
+    if http_code == 401:
+        return "GitHub token was rejected. Replace it and try again."
+    if http_code == 403:
+        return "GitHub token cannot read releases. It needs repository read access."
+    if http_code == 404:
+        if not has_token:
+            return (
+                "Cannot reach releases on this private repository. "
+                "Add a read-only GitHub token (see CONTRIBUTING.md)."
+            )
+        return "No published releases yet."
+    if http_code > 0:
+        return f"Could not check for updates (HTTP {http_code})."
+    return "Could not check for updates (network error)."
+
+
+def _status_message(
+    *,
+    current: str,
+    latest_version: str | None,
+    update_available: bool,
+    download_url: str | None,
+    error: str | None,
+) -> str | None:
+    if error:
+        return None
+    if update_available:
+        return None
+    if latest_version and _is_newer(latest_version, current) and not download_url:
+        return f"v{latest_version} is available — no installer for this platform on the release."
+    if latest_version and not _is_newer(latest_version, current):
+        return "You're up to date."
     return None
 
 
@@ -103,6 +206,8 @@ class UpdateInfo:
     release_url: str | None
     release_notes: str | None
     error: str | None = None
+    status_message: str | None = None
+    authenticated: bool = False
 
     def to_dict(self) -> dict:
         return {
@@ -115,69 +220,58 @@ class UpdateInfo:
             "release_url": self.release_url,
             "release_notes": self.release_notes,
             "error": self.error,
+            "status_message": self.status_message,
+            "authenticated": self.authenticated,
         }
+
+
+def _base_info(current: str, can_install: bool, *, authenticated: bool) -> dict:
+    return {
+        "current_version": current,
+        "can_install": can_install,
+        "authenticated": authenticated,
+        "release_url": f"https://github.com/{GITHUB_REPO}/releases",
+    }
 
 
 def check_for_update(timeout: float = 15.0) -> UpdateInfo:
     current = app_version()
     can_install = is_frozen()
+    has_token = bool(get_github_token())
 
-    try:
-        req = urllib.request.Request(
-            GITHUB_LATEST,
-            headers={
-                "Accept": "application/vnd.github+json",
-                "User-Agent": USER_AGENT,
-            },
-        )
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            payload = json.loads(resp.read().decode("utf-8"))
-    except urllib.error.HTTPError as exc:
-        if exc.code == 404:
-            return UpdateInfo(
-                current_version=current,
-                latest_version=None,
-                update_available=False,
-                can_install=can_install,
-                download_url=None,
-                asset_name=None,
-                release_url=f"https://github.com/{GITHUB_REPO}/releases",
-                release_notes=None,
-                error="No published releases yet.",
-            )
+    status, payload, err_body = _github_get(GITHUB_LATEST, timeout)
+    if status != 200 or not payload:
+        error = _releases_error_message(status, has_token=has_token)
+        if status not in {401, 403, 404} and err_body:
+            logger.debug("Update check failed: %s", err_body[:500])
+        base = _base_info(current, can_install, authenticated=has_token)
         return UpdateInfo(
-            current_version=current,
+            **base,
             latest_version=None,
             update_available=False,
-            can_install=can_install,
             download_url=None,
             asset_name=None,
-            release_url=f"https://github.com/{GITHUB_REPO}/releases",
             release_notes=None,
-            error=f"Could not check for updates (HTTP {exc.code}).",
-        )
-    except Exception as exc:
-        logger.debug("Update check failed", exc_info=True)
-        return UpdateInfo(
-            current_version=current,
-            latest_version=None,
-            update_available=False,
-            can_install=can_install,
-            download_url=None,
-            asset_name=None,
-            release_url=f"https://github.com/{GITHUB_REPO}/releases",
-            release_notes=None,
-            error=f"Could not check for updates ({exc}).",
+            error=error,
+            status_message=None,
         )
 
     tag = str(payload.get("tag_name", "")).lstrip("vV")
     latest_version = tag or None
     asset = _pick_asset(list(payload.get("assets") or []))
-    download_url = str(asset.get("browser_download_url")) if asset else None
+    download_url = _asset_download_url(asset) if asset else None
     asset_name = str(asset.get("name")) if asset else None
     release_url = str(payload.get("html_url") or f"https://github.com/{GITHUB_REPO}/releases")
     release_notes = str(payload.get("body") or "").strip() or None
     update_available = bool(latest_version and _is_newer(latest_version, current) and download_url)
+    error = None
+    status_message = _status_message(
+        current=current,
+        latest_version=latest_version,
+        update_available=update_available,
+        download_url=download_url,
+        error=error,
+    )
 
     return UpdateInfo(
         current_version=current,
@@ -188,6 +282,9 @@ def check_for_update(timeout: float = 15.0) -> UpdateInfo:
         asset_name=asset_name,
         release_url=release_url,
         release_notes=release_notes,
+        error=error,
+        status_message=status_message,
+        authenticated=has_token,
     )
 
 
@@ -218,7 +315,10 @@ def _set_state(
 
 
 def _download_file(url: str, dest: Path) -> None:
-    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    headers = {"User-Agent": USER_AGENT}
+    if get_github_token() and "api.github.com" in url:
+        headers = _github_headers(for_download=True)
+    req = urllib.request.Request(url, headers=headers)
     with urllib.request.urlopen(req, timeout=300) as resp:
         total = int(resp.headers.get("Content-Length") or 0)
         read = 0
@@ -274,6 +374,12 @@ def _apply_update_worker(info: UpdateInfo) -> None:
     if not info.download_url or not info.asset_name:
         _set_state(phase="error", error="No installer found for this platform.")
         return
+    if not get_github_token() and info.download_url.startswith("https://api.github.com/"):
+        _set_state(
+            phase="error",
+            error="A GitHub token is required to download updates from a private repository.",
+        )
+        return
 
     cache_dir = app_data_dir() / "updates"
     cache_dir.mkdir(parents=True, exist_ok=True)
@@ -295,6 +401,11 @@ def start_apply_update(info: UpdateInfo) -> tuple[bool, str | None]:
         return False, "In-app updates are only available in the installed desktop app."
     if not info.update_available or not info.download_url:
         return False, "No update is available."
+    if info.download_url.startswith("https://api.github.com/") and not get_github_token():
+        return (
+            False,
+            "A GitHub token is required to install updates from a private repository.",
+        )
 
     with _lock:
         if _state["phase"] in {"downloading", "installing"}:

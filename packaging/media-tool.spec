@@ -14,8 +14,8 @@ from pathlib import Path
 
 from PyInstaller.utils.hooks import collect_all, collect_submodules, copy_metadata
 
-ROOT = Path(SPECPATH).resolve().parent
-FRONTEND_DIST = ROOT / "web" / "frontend" / "dist"
+REPO_ROOT = Path(SPECPATH).resolve().parent
+FRONTEND_DIST = REPO_ROOT / "web" / "frontend" / "dist"
 
 if not FRONTEND_DIST.is_dir():
     raise SystemExit(
@@ -26,6 +26,9 @@ if not FRONTEND_DIST.is_dir():
 block_cipher = None
 
 datas: list[tuple[str, str]] = [(str(FRONTEND_DIST), "web/frontend/dist")]
+_bundled_github_token = REPO_ROOT / "packaging" / "secrets" / "github_token"
+if _bundled_github_token.is_file():
+    datas.append((str(_bundled_github_token), "."))
 try:
     datas += copy_metadata("media-tool")
 except Exception:
@@ -89,8 +92,8 @@ for pkg in (
         hiddenimports += collect_submodules(pkg)
 
 a = Analysis(
-    [str(ROOT / "app.py")],
-    pathex=[str(ROOT)],
+    [str(REPO_ROOT / "app.py")],
+    pathex=[str(REPO_ROOT)],
     binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,
