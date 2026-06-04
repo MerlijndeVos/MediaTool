@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { AlertTriangle, Eye, FolderOpen } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { AlertTriangle, Eye, FolderOpen, Loader2, Play } from "lucide-react";
 import { isDesktopApp, pickFolder } from "@/lib/desktop";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,8 +7,123 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 
-/** Safe default: preview planned actions before writing to disk. */
-export const DEFAULT_DRY_RUN = true;
+function ApplyConfirmDialog({
+  open,
+  onOpenChange,
+  onConfirm,
+  hint,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onConfirm: () => void;
+  hint?: string;
+}) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+
+  useEffect(() => {
+    const el = dialogRef.current;
+    if (!el) return;
+    if (open && !el.open) el.showModal();
+    else if (!open && el.open) el.close();
+  }, [open]);
+
+  return (
+    <dialog
+      ref={dialogRef}
+      className="fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg border border-border bg-background p-0 shadow-lg backdrop:bg-black/50 open:animate-in"
+      onClose={() => onOpenChange(false)}
+      onClick={(e) => {
+        if (e.target === dialogRef.current) onOpenChange(false);
+      }}
+    >
+      <div className="space-y-4 p-6">
+        <div className="flex gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-500/15 text-red-700 dark:text-red-300">
+            <AlertTriangle className="h-5 w-5" />
+          </div>
+          <div className="space-y-1">
+            <h2 className="text-lg font-semibold text-foreground">Apply changes?</h2>
+            <p className="text-sm text-muted-foreground">
+              This runs for real. Files and folders may be created, moved, renamed, edited, or deleted.
+            </p>
+            {hint && <p className="text-sm text-muted-foreground">{hint}</p>}
+          </div>
+        </div>
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            onClick={() => {
+              onOpenChange(false);
+              onConfirm();
+            }}
+          >
+            Apply changes
+          </Button>
+        </div>
+      </div>
+    </dialog>
+  );
+}
+
+export function ToolRunActions({
+  onPreview,
+  onApply,
+  disabled,
+  loading,
+  applyHint,
+}: {
+  onPreview: () => void;
+  onApply: () => void;
+  disabled?: boolean;
+  loading?: boolean;
+  applyHint?: string;
+}) {
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  return (
+    <div className="space-y-3 border-t border-border/60 pt-4">
+      <p className="text-xs text-muted-foreground">
+        Preview logs planned actions without writing to disk. Apply makes permanent changes.
+      </p>
+      <div className="flex flex-wrap gap-3">
+        <Button
+          type="button"
+          onClick={onPreview}
+          disabled={disabled}
+          variant="secondary"
+          size="lg"
+          className={cn(
+            "border-amber-500/50 bg-amber-500/15 text-amber-950 hover:bg-amber-500/25 dark:text-amber-50",
+          )}
+        >
+          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />}
+          Preview
+        </Button>
+        <Button
+          type="button"
+          onClick={() => setConfirmOpen(true)}
+          disabled={disabled}
+          variant="default"
+          size="lg"
+          className="shadow-sm"
+        >
+          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+          Apply
+        </Button>
+      </div>
+      <ApplyConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        onConfirm={onApply}
+        hint={applyHint}
+      />
+    </div>
+  );
+}
 
 export function Field({
   label,
@@ -101,59 +216,6 @@ export function CheckField({
         {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
       </div>
       <Switch checked={checked} onCheckedChange={onChange} />
-    </div>
-  );
-}
-
-export function DryRunField({
-  dryRun,
-  onChange,
-  hint,
-}: {
-  dryRun: boolean;
-  onChange: (v: boolean) => void;
-  hint?: string;
-}) {
-  return (
-    <div
-      className={cn(
-        "rounded-lg border-2 px-4 py-3 transition-colors",
-        dryRun
-          ? "border-amber-500/70 bg-amber-500/10 dark:border-amber-400/50 dark:bg-amber-500/15"
-          : "border-red-500/60 bg-red-500/5 dark:border-red-400/50 dark:bg-red-500/10",
-      )}
-      role="group"
-      aria-label={dryRun ? "Dry run enabled" : "Apply changes enabled"}
-    >
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex gap-3">
-          <div
-            className={cn(
-              "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
-              dryRun ? "bg-amber-500/20 text-amber-700 dark:text-amber-300" : "bg-red-500/15 text-red-700 dark:text-red-300",
-            )}
-          >
-            {dryRun ? <Eye className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
-          </div>
-          <div>
-            <p className={cn("text-sm font-semibold", dryRun ? "text-amber-900 dark:text-amber-100" : "text-red-900 dark:text-red-100")}>
-              {dryRun ? "Dry run — preview only" : "Apply changes — writes to disk"}
-            </p>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              {dryRun
-                ? "Shows planned actions in the log without creating, moving, or editing files."
-                : "Runs for real. Files and folders may be created, moved, renamed, or deleted."}
-            </p>
-            {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
-          </div>
-        </div>
-        <div className="flex shrink-0 flex-col items-end gap-1">
-          <Switch checked={dryRun} onCheckedChange={onChange} aria-label="Dry run" />
-          <span className={cn("text-[10px] font-semibold uppercase tracking-wide", dryRun ? "text-amber-700 dark:text-amber-400" : "text-red-700 dark:text-red-400")}>
-            {dryRun ? "On" : "Off"}
-          </span>
-        </div>
-      </div>
     </div>
   );
 }

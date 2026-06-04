@@ -1,10 +1,8 @@
 import { useState } from "react";
-import { Loader2, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { CheckField, DEFAULT_DRY_RUN, DryRunField, Field, PathField, SelectField } from "@/components/fields";
-import { cn } from "@/lib/utils";
+import { CheckField, Field, PathField, SelectField, ToolRunActions } from "@/components/fields";
 import { Input } from "@/components/ui/input";
 import { YouTubeDownloadPanel } from "@/components/YouTubeDownloadPanel";
 import type { ActiveJob, ToolId } from "@/lib/types";
@@ -99,38 +97,6 @@ export function ToolPanel({
   );
 }
 
-function RunBar({
-  onClick,
-  disabled,
-  loading,
-  dryRun,
-  label,
-}: {
-  onClick: () => void;
-  disabled?: boolean;
-  loading?: boolean;
-  dryRun: boolean;
-  label?: string;
-}) {
-  const runLabel = label ?? (dryRun ? "Run preview" : "Apply changes");
-  return (
-    <Button
-      onClick={onClick}
-      disabled={disabled}
-      variant={dryRun ? "secondary" : "default"}
-      className={cn(
-        "w-full sm:w-auto",
-        dryRun && "border-amber-500/50 bg-amber-500/15 text-amber-950 hover:bg-amber-500/25 dark:text-amber-50",
-        !dryRun && "shadow-sm",
-      )}
-      size="lg"
-    >
-      {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-      {runLabel}
-    </Button>
-  );
-}
-
 function ConvertForm({
   onRun,
   disabled,
@@ -146,9 +112,22 @@ function ConvertForm({
   const [deinterlace, setDeinterlace] = useState("auto");
   const [crf, setCrf] = useState("19");
   const [preset, setPreset] = useState("slow");
-  const [dryRun, setDryRun] = useState(DEFAULT_DRY_RUN);
   const [prune, setPrune] = useState(false);
   const [useful, setUseful] = useState(false);
+
+  const runParams = (dryRun: boolean) => ({
+    input,
+    output,
+    input_format: inputFormat,
+    output_format: outputFormat,
+    use_gpu: useGpu,
+    deinterlace,
+    crf: Number(crf),
+    preset,
+    dry_run: dryRun,
+    prune_output: prune,
+    copy_useful_only: useful,
+  });
 
   return (
     <div className="space-y-4">
@@ -178,26 +157,11 @@ function ConvertForm({
       </div>
       <CheckField label="Prune non-matching from output" checked={prune} onChange={setPrune} />
       <CheckField label="Copy useful-only tree" checked={useful} onChange={setUseful} />
-      <DryRunField dryRun={dryRun} onChange={setDryRun} />
-      <RunBar
-        dryRun={dryRun}
+      <ToolRunActions
         loading={disabled}
         disabled={disabled || !input || !output}
-        onClick={() =>
-          onRun({
-            input,
-            output,
-            input_format: inputFormat,
-            output_format: outputFormat,
-            use_gpu: useGpu,
-            deinterlace,
-            crf: Number(crf),
-            preset,
-            dry_run: dryRun,
-            prune_output: prune,
-            copy_useful_only: useful,
-          })
-        }
+        onPreview={() => onRun(runParams(true))}
+        onApply={() => onRun(runParams(false))}
       />
     </div>
   );
@@ -209,10 +173,21 @@ function TrimForm({ onRun, disabled }: { onRun: (p: Record<string, unknown>) => 
   const [trimStart, setTrimStart] = useState("0");
   const [trimEnd, setTrimEnd] = useState("0");
   const [fmt, setFmt] = useState("mp4");
-  const [dryRun, setDryRun] = useState(DEFAULT_DRY_RUN);
   const [reencode, setReencode] = useState(false);
   const [replace, setReplace] = useState(false);
   const [noRec, setNoRec] = useState(false);
+
+  const runParams = (dryRun: boolean) => ({
+    input,
+    output: output || null,
+    trim_start: trimStart,
+    trim_end: trimEnd,
+    input_format: fmt,
+    dry_run: dryRun,
+    reencode,
+    replace,
+    no_recursive: noRec,
+  });
 
   return (
     <div className="space-y-4">
@@ -232,24 +207,11 @@ function TrimForm({ onRun, disabled }: { onRun: (p: Record<string, unknown>) => 
       <CheckField label="Re-encode (frame-accurate)" checked={reencode} onChange={setReencode} />
       <CheckField label="Replace original" checked={replace} onChange={setReplace} hint="Overwrites source when trim succeeds." />
       <CheckField label="No recursion" checked={noRec} onChange={setNoRec} />
-      <DryRunField dryRun={dryRun} onChange={setDryRun} />
-      <RunBar
-        dryRun={dryRun}
+      <ToolRunActions
         loading={disabled}
         disabled={disabled || !input}
-        onClick={() =>
-          onRun({
-            input,
-            output: output || null,
-            trim_start: trimStart,
-            trim_end: trimEnd,
-            input_format: fmt,
-            dry_run: dryRun,
-            reencode,
-            replace,
-            no_recursive: noRec,
-          })
-        }
+        onPreview={() => onRun(runParams(true))}
+        onApply={() => onRun(runParams(false))}
       />
     </div>
   );
@@ -258,8 +220,16 @@ function TrimForm({ onRun, disabled }: { onRun: (p: Record<string, unknown>) => 
 function StitchForm({ onRun, disabled }: { onRun: (p: Record<string, unknown>) => void; disabled?: boolean }) {
   const [parts, setParts] = useState<string[]>(["", ""]);
   const [output, setOutput] = useState("");
-  const [dryRun, setDryRun] = useState(DEFAULT_DRY_RUN);
   const [reencode, setReencode] = useState(false);
+
+  const runParams = (dryRun: boolean) => ({
+    input: parts.filter(Boolean),
+    output,
+    dry_run: dryRun,
+    reencode,
+    input_format: "mp4",
+    no_recursive: false,
+  });
 
   const setPart = (i: number, v: string) => {
     setParts((prev) => prev.map((p, j) => (j === i ? v : p)));
@@ -276,21 +246,11 @@ function StitchForm({ onRun, disabled }: { onRun: (p: Record<string, unknown>) =
       </Button>
       <PathField label="Output file" value={output} onChange={setOutput} placeholder="C:\\out\\joined.mp4" />
       <CheckField label="Re-encode" checked={reencode} onChange={setReencode} />
-      <DryRunField dryRun={dryRun} onChange={setDryRun} />
-      <RunBar
-        dryRun={dryRun}
+      <ToolRunActions
         loading={disabled}
         disabled={disabled || parts.filter(Boolean).length < 2 || !output}
-        onClick={() =>
-          onRun({
-            input: parts.filter(Boolean),
-            output,
-            dry_run: dryRun,
-            reencode,
-            input_format: "mp4",
-            no_recursive: false,
-          })
-        }
+        onPreview={() => onRun(runParams(true))}
+        onApply={() => onRun(runParams(false))}
       />
     </div>
   );
@@ -299,9 +259,22 @@ function StitchForm({ onRun, disabled }: { onRun: (p: Record<string, unknown>) =
 function VtsForm({ onRun, disabled }: { onRun: (p: Record<string, unknown>) => void; disabled?: boolean }) {
   const [input, setInput] = useState("");
   const [output, setOutput] = useState("");
-  const [dryRun, setDryRun] = useState(DEFAULT_DRY_RUN);
   const [reencode, setReencode] = useState(false);
   const [minMb, setMinMb] = useState("50");
+
+  const runParams = (dryRun: boolean) => ({
+    input,
+    output,
+    dry_run: dryRun,
+    reencode,
+    min_mb: Number(minMb),
+    output_format: "mkv",
+    deinterlace: "auto",
+    use_gpu: "auto",
+    crf: 19,
+    preset: "slow",
+    include_menus: false,
+  });
 
   return (
     <div className="space-y-4">
@@ -313,26 +286,11 @@ function VtsForm({ onRun, disabled }: { onRun: (p: Record<string, unknown>) => v
         <Input type="number" value={minMb} onChange={(e) => setMinMb(e.target.value)} />
       </Field>
       <CheckField label="Re-encode to H.264" checked={reencode} onChange={setReencode} />
-      <DryRunField dryRun={dryRun} onChange={setDryRun} />
-      <RunBar
-        dryRun={dryRun}
+      <ToolRunActions
         loading={disabled}
         disabled={disabled || !input || !output}
-        onClick={() =>
-          onRun({
-            input,
-            output,
-            dry_run: dryRun,
-            reencode,
-            min_mb: Number(minMb),
-            output_format: "mkv",
-            deinterlace: "auto",
-            use_gpu: "auto",
-            crf: 19,
-            preset: "slow",
-            include_menus: false,
-          })
-        }
+        onPreview={() => onRun(runParams(true))}
+        onApply={() => onRun(runParams(false))}
       />
     </div>
   );
@@ -341,9 +299,21 @@ function VtsForm({ onRun, disabled }: { onRun: (p: Record<string, unknown>) => v
 function RenameForm({ onRun, disabled }: { onRun: (p: Record<string, unknown>) => void; disabled?: boolean }) {
   const [input, setInput] = useState("");
   const [output, setOutput] = useState("");
-  const [dryRun, setDryRun] = useState(DEFAULT_DRY_RUN);
   const [copy, setCopy] = useState(false);
   const [undo, setUndo] = useState(false);
+
+  const runParams = (apply: boolean) => ({
+    input,
+    output: output || null,
+    apply,
+    copy,
+    undo,
+    type: "auto",
+    prune_empty_dirs: false,
+    no_titlecase: false,
+    strip_words: [],
+    bare_episode_numbers: false,
+  });
 
   return (
     <div className="space-y-4">
@@ -351,25 +321,11 @@ function RenameForm({ onRun, disabled }: { onRun: (p: Record<string, unknown>) =
       <PathField label="Output (optional)" value={output} onChange={setOutput} hint="Leave empty to reorganize in place." />
       <CheckField label="Copy instead of move" checked={copy} onChange={setCopy} />
       <CheckField label="Undo last apply" checked={undo} onChange={setUndo} />
-      <DryRunField dryRun={dryRun} onChange={setDryRun} />
-      <RunBar
-        dryRun={dryRun}
+      <ToolRunActions
         loading={disabled}
         disabled={disabled || !input}
-        onClick={() =>
-          onRun({
-            input,
-            output: output || null,
-            apply: !dryRun,
-            copy,
-            undo,
-            type: "auto",
-            prune_empty_dirs: false,
-            no_titlecase: false,
-            strip_words: [],
-            bare_episode_numbers: false,
-          })
-        }
+        onPreview={() => onRun(runParams(false))}
+        onApply={() => onRun(runParams(true))}
       />
     </div>
   );
@@ -378,7 +334,13 @@ function RenameForm({ onRun, disabled }: { onRun: (p: Record<string, unknown>) =
 function AudioForm({ onRun, disabled }: { onRun: (p: Record<string, unknown>) => void; disabled?: boolean }) {
   const [input, setInput] = useState("");
   const [lang, setLang] = useState("eng");
-  const [dryRun, setDryRun] = useState(DEFAULT_DRY_RUN);
+  const runParams = (apply: boolean) => ({
+    input,
+    lang,
+    apply,
+    set_language: false,
+    no_recursive: false,
+  });
 
   return (
     <div className="space-y-4">
@@ -386,12 +348,12 @@ function AudioForm({ onRun, disabled }: { onRun: (p: Record<string, unknown>) =>
       <Field label="Language">
         <Input value={lang} onChange={(e) => setLang(e.target.value)} placeholder="eng" />
       </Field>
-      <DryRunField dryRun={dryRun} onChange={setDryRun} hint="Apply mode requires MKVToolNix on PATH." />
-      <RunBar
-        dryRun={dryRun}
+      <ToolRunActions
         loading={disabled}
         disabled={disabled || !input || !lang}
-        onClick={() => onRun({ input, lang, apply: !dryRun, set_language: false, no_recursive: false })}
+        applyHint="Requires MKVToolNix on PATH."
+        onPreview={() => onRun(runParams(false))}
+        onApply={() => onRun(runParams(true))}
       />
     </div>
   );
@@ -399,26 +361,32 @@ function AudioForm({ onRun, disabled }: { onRun: (p: Record<string, unknown>) =>
 
 function DedupForm({ onRun, disabled }: { onRun: (p: Record<string, unknown>) => void; disabled?: boolean }) {
   const [input, setInput] = useState("");
-  const [dryRun, setDryRun] = useState(DEFAULT_DRY_RUN);
 
   return (
     <div className="space-y-4">
       <PathField label="Folder" value={input} onChange={setInput} />
-      <DryRunField dryRun={dryRun} onChange={setDryRun} />
-      <RunBar dryRun={dryRun} loading={disabled} disabled={disabled || !input} onClick={() => onRun({ input, apply: !dryRun })} />
+      <ToolRunActions
+        loading={disabled}
+        disabled={disabled || !input}
+        onPreview={() => onRun({ input, apply: false })}
+        onApply={() => onRun({ input, apply: true })}
+      />
     </div>
   );
 }
 
 function RenameFoldersForm({ onRun, disabled }: { onRun: (p: Record<string, unknown>) => void; disabled?: boolean }) {
   const [root, setRoot] = useState("");
-  const [dryRun, setDryRun] = useState(DEFAULT_DRY_RUN);
 
   return (
     <div className="space-y-4">
       <PathField label="Root folder" value={root} onChange={setRoot} />
-      <DryRunField dryRun={dryRun} onChange={setDryRun} />
-      <RunBar dryRun={dryRun} loading={disabled} disabled={disabled || !root} onClick={() => onRun({ root, dry_run: dryRun })} />
+      <ToolRunActions
+        loading={disabled}
+        disabled={disabled || !root}
+        onPreview={() => onRun({ root, dry_run: true })}
+        onApply={() => onRun({ root, dry_run: false })}
+      />
     </div>
   );
 }
