@@ -88,14 +88,18 @@ jobs:
     steps:
       - uses: actions/download-artifact@v6
         with:
+          pattern: media-tool-*
           path: artifacts
           merge-multiple: true
+
+      - name: List downloaded installers
+        run: ls -laR artifacts/
 
       - name: Create release
         uses: softprops/action-gh-release@v3
         with:
-          files: |
-            artifacts/**/*
+          tag_name: ${{ github.ref_name }}
+          files: artifacts/*
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
