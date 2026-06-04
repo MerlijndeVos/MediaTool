@@ -68,13 +68,17 @@ jobs:
               ;;
           esac
 
-      - name: Upload artifacts
+      - name: List installers
+        shell: bash
+        run: ls -la packaging/dist/ || dir packaging\\dist
+
+      - name: Upload release installer
         uses: actions/upload-artifact@v6
         with:
           name: media-tool-${{ matrix.os }}
-          path: |
-            packaging/dist/
-            dist/
+          path: packaging/dist/MediaTool-*
+          if-no-files-found: error
+          compression-level: 6
 
   release:
     name: Publish GitHub Release

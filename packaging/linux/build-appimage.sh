@@ -43,16 +43,15 @@ EOF
 cp "$APPDIR/media-tool.desktop" "$APPDIR/usr/share/applications/"
 
 # appimagetool requires a 256x256 PNG named after Icon= in the .desktop file
-mkdir -p "$(dirname "$ICON_PNG")"
-if [[ -f "$ICON_PNG" ]]; then
-  :
-elif command -v rsvg-convert >/dev/null 2>&1; then
-  rsvg-convert -w 256 -h 256 "$ICON_SRC" -o "$ICON_PNG"
-elif command -v convert >/dev/null 2>&1; then
-  convert -background none -resize 256x256 "$ICON_SRC" "$ICON_PNG"
-else
-  echo "Need rsvg-convert (librsvg2-bin) or ImageMagick to build the AppImage icon." >&2
-  exit 1
+if [[ ! -f "$ICON_PNG" ]]; then
+  if command -v rsvg-convert >/dev/null 2>&1; then
+    rsvg-convert -w 256 -h 256 "$ICON_SRC" -o "$ICON_PNG"
+  elif command -v convert >/dev/null 2>&1; then
+    convert -background none -resize 256x256 "$ICON_SRC" "$ICON_PNG"
+  else
+    echo "Missing $ICON_PNG and no rsvg-convert/ImageMagick to render from SVG." >&2
+    exit 1
+  fi
 fi
 
 cp "$ICON_PNG" "$APPDIR/media-tool.png"
@@ -66,4 +65,5 @@ fi
 
 mkdir -p "$OUT"
 ARCH="$ARCH" appimagetool "$APPDIR" "$APPIMAGE"
+rm -rf "$APPDIR"
 echo "Created $APPIMAGE"
