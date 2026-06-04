@@ -152,7 +152,31 @@ class JobCreateResponse(BaseModel):
 
 class HealthResponse(BaseModel):
     status: str = "ok"
-    version: str = "0.1.0"
+    version: str
+
+
+class UpdateCheckResponse(BaseModel):
+    current_version: str
+    latest_version: Optional[str] = None
+    update_available: bool = False
+    can_install: bool = False
+    download_url: Optional[str] = None
+    asset_name: Optional[str] = None
+    release_url: Optional[str] = None
+    release_notes: Optional[str] = None
+    error: Optional[str] = None
+
+
+class UpdateApplyResponse(BaseModel):
+    ok: bool
+    detail: Optional[str] = None
+
+
+class UpdateApplyStatusResponse(BaseModel):
+    phase: Literal["idle", "downloading", "installing", "error"] = "idle"
+    progress: float = 0.0
+    message: str = ""
+    error: Optional[str] = None
 
 
 class CommandInfo(BaseModel):

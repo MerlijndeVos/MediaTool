@@ -9,6 +9,7 @@ from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
 from core.tools import bootstrap_ffmpeg, get_tools_status
+from core.updates import app_version, check_for_update, get_apply_status, start_apply_update
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
@@ -23,6 +24,9 @@ from .schemas import (
     JobCreateResponse,
     JobSummary,
     PARAM_MODELS,
+    UpdateApplyResponse,
+    UpdateApplyStatusResponse,
+    UpdateCheckResponse,
     validate_params,
 )
 
@@ -38,7 +42,7 @@ async def _lifespan(_app: FastAPI):
 app = FastAPI(
     title="Media Tool API",
     description="Local REST + SSE API for video conversion, rename, download, and related tools.",
-    version="0.1.0",
+    version=app_version(),
     lifespan=_lifespan,
 )
 
@@ -66,7 +70,24 @@ COMMAND_DESCRIPTIONS: dict[str, str] = {
 
 @app.get("/api/health", response_model=HealthResponse)
 def health() -> HealthResponse:
-    return HealthResponse()
+    return HealthResponse(version=app_version())
+
+
+@app.get("/api/updates/check", response_model=UpdateCheckResponse)
+def updates_check() -> UpdateCheckResponse:
+    return UpdateCheckResponse(**check_for_update().to_dict())
+
+
+@app.post("/api/updates/apply", response_model=UpdateApplyResponse)
+def updates_apply() -> UpdateApplyResponse:
+    info = check_for_update()
+    ok, detail = start_apply_update(info)
+    return UpdateApplyResponse(ok=ok, detail=detail)
+
+
+@app.get("/api/updates/status", response_model=UpdateApplyStatusResponse)
+def updates_status() -> UpdateApplyStatusResponse:
+    return UpdateApplyStatusResponse(**get_apply_status())
 
 
 @app.get("/api/tools")

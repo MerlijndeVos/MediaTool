@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import { cancelJob, createJob, jobEventsUrl } from "@/api/client";
-import type { ActiveJob, CommandName, LogLine } from "@/lib/types";
+import type { ActiveJob, CommandName, DownloadJobMeta, LogLine } from "@/lib/types";
 
 export function useJobRunner() {
   const [jobs, setJobs] = useState<ActiveJob[]>([]);
@@ -64,9 +64,19 @@ export function useJobRunner() {
   );
 
   const startJob = useCallback(
-    async (command: CommandName, params: Record<string, unknown>, fileLogging = true) => {
+    async (
+      command: CommandName,
+      params: Record<string, unknown>,
+      fileLogging = true,
+      opts?: { downloadMeta?: DownloadJobMeta },
+    ) => {
       const res = await createJob(command, params, fileLogging);
-      const job: ActiveJob = { ...res.job, logs: [], progress: null };
+      const job: ActiveJob = {
+        ...res.job,
+        logs: [],
+        progress: null,
+        downloadMeta: opts?.downloadMeta,
+      };
       setJobs((prev) => [job, ...prev]);
       appendLog({
         jobId: job.id,
@@ -87,5 +97,15 @@ export function useJobRunner() {
 
   const clearLogs = useCallback(() => setLogs([]), []);
 
-  return { jobs, logs, startJob, cancel, clearLogs };
+  const dismissFinishedDownloads = useCallback(() => {
+    setJobs((prev) =>
+      prev.filter(
+        (j) =>
+          j.command !== "download" ||
+          (j.status !== "completed" && j.status !== "cancelled" && j.status !== "failed"),
+      ),
+    );
+  }, []);
+
+  return { jobs, logs, startJob, cancel, clearLogs, dismissFinishedDownloads };
 }

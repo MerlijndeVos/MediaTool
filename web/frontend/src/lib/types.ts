@@ -34,10 +34,17 @@ export interface LogLine {
   ts: number;
 }
 
+export interface DownloadJobMeta {
+  url: string;
+  format: string;
+  output: string;
+}
+
 export interface ActiveJob extends JobSummary {
   logs: LogLine[];
   progress?: number | null;
   progressLabel?: string;
+  downloadMeta?: DownloadJobMeta;
 }
 
 export type ToolId = CommandName;
@@ -55,7 +62,7 @@ export const TOOL_LABELS: Record<ToolId, string> = {
   convert: "Convert",
   trim: "Trim",
   stitch: "Stitch",
-  download: "Download",
+  download: "YouTube",
   vts: "DVD (VTS)",
   rename: "Rename Media",
   audio: "Audio Default",

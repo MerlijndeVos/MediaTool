@@ -12,7 +12,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from PyInstaller.utils.hooks import collect_all, collect_submodules
+from PyInstaller.utils.hooks import collect_all, collect_submodules, copy_metadata
 
 ROOT = Path(SPECPATH).resolve().parent
 FRONTEND_DIST = ROOT / "web" / "frontend" / "dist"
@@ -26,12 +26,17 @@ if not FRONTEND_DIST.is_dir():
 block_cipher = None
 
 datas: list[tuple[str, str]] = [(str(FRONTEND_DIST), "web/frontend/dist")]
+try:
+    datas += copy_metadata("media-tool")
+except Exception:
+    pass
 binaries: list[tuple[str, str]] = []
 hiddenimports: list[str] = [
     "app",
     "core",
     "core.runtime",
     "core.ffmpeg_bootstrap",
+    "core.updates",
     "cli",
     "web",
     "web.server",

@@ -4,6 +4,7 @@ import { checkHealth } from "@/api/client";
 import { LogDrawer } from "@/components/LogDrawer";
 import { ToolsBanner } from "@/components/ToolsBanner";
 import { ToolPanel } from "@/components/ToolPanel";
+import { UpdateButton } from "@/components/UpdateButton";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
@@ -24,7 +25,7 @@ export default function App() {
   );
   const [apiOk, setApiOk] = useState<boolean | null>(null);
   const [running, setRunning] = useState(false);
-  const { jobs, logs, startJob, clearLogs } = useJobRunner();
+  const { jobs, logs, startJob, cancel, clearLogs, dismissFinishedDownloads } = useJobRunner();
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);
@@ -38,13 +39,31 @@ export default function App() {
   }, []);
 
   const activeJob = useMemo(
-    () => jobs.find((j) => j.command === tool && (j.status === "running" || j.status === "queued")),
+    () =>
+      tool === "download"
+        ? undefined
+        : jobs.find((j) => j.command === tool && (j.status === "running" || j.status === "queued")),
     [jobs, tool],
   );
 
+  const downloadJobs = useMemo(
+    () => jobs.filter((j) => j.command === "download"),
+    [jobs],
+  );
+
   const handleRun = async (params: Record<string, unknown>) => {
-    setRunning(true);
     setLogOpen(true);
+    if (tool === "download") {
+      await startJob(tool, params, true, {
+        downloadMeta: {
+          url: String(params.url),
+          format: String(params.format ?? "mp4"),
+          output: String(params.output),
+        },
+      });
+      return;
+    }
+    setRunning(true);
     try {
       await startJob(tool, params);
     } finally {
@@ -67,6 +86,7 @@ export default function App() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <UpdateButton />
             <span
               className={cn(
                 "flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium",
@@ -138,7 +158,15 @@ export default function App() {
               )}
             </div>
           )}
-          <ToolPanel tool={tool} onRun={handleRun} running={running} activeJob={activeJob} />
+          <ToolPanel
+            tool={tool}
+            onRun={handleRun}
+            running={running}
+            activeJob={activeJob}
+            downloadJobs={downloadJobs}
+            onCancelDownload={cancel}
+            onDismissFinishedDownloads={dismissFinishedDownloads}
+          />
         </main>
       </div>
 

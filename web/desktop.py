@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import argparse
+import os
 import threading
 
 from core.tools import bootstrap_ffmpeg
+from core.updates import register_quit_callback
 
 from .desktop_api import DesktopApi
 from .paths import FRONTEND_DIST
 from .run import pick_port, run_uvicorn, wait_for_server
+
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
 WINDOW_TITLE = "Media Tool"
@@ -80,6 +83,15 @@ def main(argv: list[str] | None = None) -> None:
         height=840,
         min_size=(960, 640),
     )
+
+    def _quit_for_update() -> None:
+        try:
+            window.destroy()
+        except Exception:
+            pass
+        os._exit(0)
+
+    register_quit_callback(_quit_for_update)
     webview.start(debug=args.debug)
 
 

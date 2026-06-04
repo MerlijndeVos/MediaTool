@@ -19,11 +19,42 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export async function checkHealth(): Promise<boolean> {
   try {
-    await request<{ status: string }>("/api/health");
+    await request<{ status: string; version: string }>("/api/health");
     return true;
   } catch {
     return false;
   }
+}
+
+export interface UpdateCheck {
+  current_version: string;
+  latest_version?: string | null;
+  update_available: boolean;
+  can_install: boolean;
+  download_url?: string | null;
+  asset_name?: string | null;
+  release_url?: string | null;
+  release_notes?: string | null;
+  error?: string | null;
+}
+
+export interface UpdateApplyStatus {
+  phase: "idle" | "downloading" | "installing" | "error";
+  progress: number;
+  message: string;
+  error?: string | null;
+}
+
+export function checkForUpdates(): Promise<UpdateCheck> {
+  return request<UpdateCheck>("/api/updates/check");
+}
+
+export function applyUpdate(): Promise<{ ok: boolean; detail?: string | null }> {
+  return request("/api/updates/apply", { method: "POST" });
+}
+
+export function fetchUpdateStatus(): Promise<UpdateApplyStatus> {
+  return request<UpdateApplyStatus>("/api/updates/status");
 }
 
 export interface ToolsStatus {

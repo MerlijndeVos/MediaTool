@@ -3,9 +3,9 @@ import { Loader2, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { DropZone } from "@/components/DropZone";
 import { CheckField, Field, PathField, SelectField } from "@/components/fields";
 import { Input } from "@/components/ui/input";
+import { YouTubeDownloadPanel } from "@/components/YouTubeDownloadPanel";
 import type { ActiveJob, ToolId } from "@/lib/types";
 import { TOOL_LABELS } from "@/lib/types";
 
@@ -28,9 +28,20 @@ interface ToolPanelProps {
   onRun: (params: Record<string, unknown>) => Promise<void>;
   running: boolean;
   activeJob?: ActiveJob;
+  downloadJobs?: ActiveJob[];
+  onCancelDownload?: (jobId: string) => void;
+  onDismissFinishedDownloads?: () => void;
 }
 
-export function ToolPanel({ tool, onRun, running, activeJob }: ToolPanelProps) {
+export function ToolPanel({
+  tool,
+  onRun,
+  running,
+  activeJob,
+  downloadJobs = [],
+  onCancelDownload,
+  onDismissFinishedDownloads,
+}: ToolPanelProps) {
   const [error, setError] = useState<string | null>(null);
 
   const run = async (params: Record<string, unknown>) => {
@@ -42,6 +53,19 @@ export function ToolPanel({ tool, onRun, running, activeJob }: ToolPanelProps) {
     }
   };
 
+  if (tool === "download" && onCancelDownload && onDismissFinishedDownloads) {
+    return (
+      <Card className="border-0 shadow-md">
+        <YouTubeDownloadPanel
+          jobs={downloadJobs}
+          onQueue={run}
+          onCancel={onCancelDownload}
+          onDismissFinished={onDismissFinishedDownloads}
+        />
+      </Card>
+    );
+  }
+
   return (
     <Card className="border-0 shadow-md">
       <CardHeader>
@@ -52,7 +76,6 @@ export function ToolPanel({ tool, onRun, running, activeJob }: ToolPanelProps) {
         {tool === "convert" && <ConvertForm onRun={run} disabled={running} />}
         {tool === "trim" && <TrimForm onRun={run} disabled={running} />}
         {tool === "stitch" && <StitchForm onRun={run} disabled={running} />}
-        {tool === "download" && <DownloadForm onRun={run} disabled={running} />}
         {tool === "vts" && <VtsForm onRun={run} disabled={running} />}
         {tool === "rename" && <RenameForm onRun={run} disabled={running} />}
         {tool === "audio" && <AudioForm onRun={run} disabled={running} />}
@@ -78,15 +101,17 @@ export function ToolPanel({ tool, onRun, running, activeJob }: ToolPanelProps) {
 function RunBar({
   onClick,
   disabled,
+  loading,
   label = "Run",
 }: {
   onClick: () => void;
   disabled?: boolean;
+  loading?: boolean;
   label?: string;
 }) {
   return (
     <Button onClick={onClick} disabled={disabled} className="w-full sm:w-auto" size="lg">
-      {disabled ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+      {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
       {label}
     </Button>
   );
@@ -113,7 +138,6 @@ function ConvertForm({
 
   return (
     <div className="space-y-4">
-      <DropZone onPaths={(p) => setInput(p[0])} hint="Drop a sample file, then set input/output folders below." />
       <div className="grid gap-4 sm:grid-cols-2">
         <PathField label="Input folder" value={input} onChange={setInput} />
         <PathField label="Output folder" value={output} onChange={setOutput} />
@@ -142,6 +166,7 @@ function ConvertForm({
       <CheckField label="Prune non-matching from output" checked={prune} onChange={setPrune} />
       <CheckField label="Copy useful-only tree" checked={useful} onChange={setUseful} />
       <RunBar
+        loading={disabled}
         disabled={disabled || !input || !output}
         onClick={() =>
           onRun({
@@ -176,7 +201,6 @@ function TrimForm({ onRun, disabled }: { onRun: (p: Record<string, unknown>) => 
 
   return (
     <div className="space-y-4">
-      <DropZone onPaths={(p) => setInput(p[0])} />
       <PathField label="Input file or folder" value={input} onChange={setInput} />
       <PathField label="Output folder (optional)" value={output} onChange={setOutput} placeholder="Leave empty for 'name - trimmed.ext'" />
       <div className="grid gap-4 sm:grid-cols-3">
@@ -195,6 +219,7 @@ function TrimForm({ onRun, disabled }: { onRun: (p: Record<string, unknown>) => 
       <CheckField label="Replace original" checked={replace} onChange={setReplace} hint="Overwrites source when trim succeeds." />
       <CheckField label="No recursion" checked={noRec} onChange={setNoRec} />
       <RunBar
+        loading={disabled}
         disabled={disabled || !input}
         onClick={() =>
           onRun({
@@ -226,10 +251,6 @@ function StitchForm({ onRun, disabled }: { onRun: (p: Record<string, unknown>) =
 
   return (
     <div className="space-y-4">
-      <DropZone
-        multi
-        onPaths={(paths) => setParts(paths.length >= 2 ? paths : [...paths, ""])}
-      />
       <p className="text-sm text-muted-foreground">Parts in order (full paths):</p>
       {parts.map((p, i) => (
         <PathField key={i} label={`Part ${i + 1}`} value={p} onChange={(v) => setPart(i, v)} placeholder="C:\\path\\part.mp4" />
@@ -241,6 +262,7 @@ function StitchForm({ onRun, disabled }: { onRun: (p: Record<string, unknown>) =
       <CheckField label="Dry run" checked={dryRun} onChange={setDryRun} />
       <CheckField label="Re-encode" checked={reencode} onChange={setReencode} />
       <RunBar
+        loading={disabled}
         disabled={disabled || parts.filter(Boolean).length < 2 || !output}
         onClick={() =>
           onRun({
@@ -252,54 +274,6 @@ function StitchForm({ onRun, disabled }: { onRun: (p: Record<string, unknown>) =
             no_recursive: false,
           })
         }
-      />
-    </div>
-  );
-}
-
-function DownloadForm({ onRun, disabled }: { onRun: (p: Record<string, unknown>) => void; disabled?: boolean }) {
-  const [url, setUrl] = useState("");
-  const [output, setOutput] = useState("");
-  const [format, setFormat] = useState("mp4");
-  const [quality, setQuality] = useState("best");
-  const [bitrate, setBitrate] = useState("192");
-  const [playlist, setPlaylist] = useState(false);
-
-  return (
-    <div className="space-y-4">
-      <Field label="URL">
-        <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://youtube.com/watch?v=…" />
-      </Field>
-      <PathField label="Output folder" value={output} onChange={setOutput} />
-      <div className="grid gap-4 sm:grid-cols-2">
-        <SelectField label="Format" value={format} onChange={setFormat} options={[
-          { value: "mp4", label: "MP4 video" },
-          { value: "mp3", label: "MP3 audio" },
-        ]} />
-        <SelectField label="Max quality" value={quality} onChange={setQuality} options={[
-          "best", "2160", "1440", "1080", "720", "480", "360",
-        ].map((v) => ({ value: v, label: v === "best" ? "Best" : `${v}p` }))} />
-      </div>
-      {format === "mp3" && (
-        <Field label="Audio bitrate (kbps)">
-          <Input type="number" value={bitrate} onChange={(e) => setBitrate(e.target.value)} />
-        </Field>
-      )}
-      <CheckField label="Playlist mode" checked={playlist} onChange={setPlaylist} />
-      <RunBar
-        disabled={disabled || !url || !output}
-        onClick={() =>
-          onRun({
-            url,
-            output,
-            format,
-            video_quality: quality,
-            audio_bitrate: Number(bitrate),
-            playlist,
-            no_playlist_index: false,
-          })
-        }
-        label="Download"
       />
     </div>
   );
@@ -324,6 +298,7 @@ function VtsForm({ onRun, disabled }: { onRun: (p: Record<string, unknown>) => v
       <CheckField label="Dry run" checked={dryRun} onChange={setDryRun} />
       <CheckField label="Re-encode to H.264" checked={reencode} onChange={setReencode} />
       <RunBar
+        loading={disabled}
         disabled={disabled || !input || !output}
         onClick={() =>
           onRun({
@@ -360,6 +335,7 @@ function RenameForm({ onRun, disabled }: { onRun: (p: Record<string, unknown>) =
       <CheckField label="Copy instead of move" checked={copy} onChange={setCopy} />
       <CheckField label="Undo last apply" checked={undo} onChange={setUndo} />
       <RunBar
+        loading={disabled}
         disabled={disabled || !input}
         onClick={() =>
           onRun({
@@ -393,6 +369,7 @@ function AudioForm({ onRun, disabled }: { onRun: (p: Record<string, unknown>) =>
       </Field>
       <CheckField label="Apply" checked={apply} onChange={setApply} hint="Requires MKVToolNix on PATH." />
       <RunBar
+        loading={disabled}
         disabled={disabled || !input || !lang}
         onClick={() => onRun({ input, lang, apply, set_language: false, no_recursive: false })}
       />
@@ -408,7 +385,7 @@ function DedupForm({ onRun, disabled }: { onRun: (p: Record<string, unknown>) =>
     <div className="space-y-4">
       <PathField label="Folder" value={input} onChange={setInput} />
       <CheckField label="Apply" checked={apply} onChange={setApply} />
-      <RunBar disabled={disabled || !input} onClick={() => onRun({ input, apply })} />
+      <RunBar loading={disabled} disabled={disabled || !input} onClick={() => onRun({ input, apply })} />
     </div>
   );
 }
@@ -421,7 +398,7 @@ function RenameFoldersForm({ onRun, disabled }: { onRun: (p: Record<string, unkn
     <div className="space-y-4">
       <PathField label="Root folder" value={root} onChange={setRoot} />
       <CheckField label="Dry run" checked={dryRun} onChange={setDryRun} />
-      <RunBar disabled={disabled || !root} onClick={() => onRun({ root, dry_run: dryRun })} />
+      <RunBar loading={disabled} disabled={disabled || !root} onClick={() => onRun({ root, dry_run: dryRun })} />
     </div>
   );
 }
