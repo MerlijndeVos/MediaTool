@@ -25,7 +25,13 @@ from core import (
     run_trim,
     run_vts,
 )
-from core.progress import LogHooks, set_active_hooks
+from core.progress import (
+    CallbackLogHandler,
+    LogHooks,
+    attach_log_callback,
+    detach_log_callback,
+    set_active_hooks,
+)
 from core.rename_folders import process_root
 
 from .schemas import (
@@ -245,7 +251,16 @@ class JobManager:
         def on_progress(payload: dict) -> None:
             job.emit("progress", payload)
 
-        set_active_hooks(LogHooks(on_log=on_log, on_progress=on_progress))
+        hooks = LogHooks(on_log=on_log, on_progress=on_progress)
+        set_active_hooks(hooks)
+
+        root = logging.getLogger()
+        root.setLevel(logging.INFO)
+        callback_handler = attach_log_callback(
+            root,
+            on_log,
+            formatter=logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"),
+        )
 
         try:
             if job.command == "download":
@@ -275,6 +290,7 @@ class JobManager:
             logging.getLogger(__name__).exception("Job %s failed", job.id)
             job.emit("log", {"message": f"Error: {exc}", "level": logging.ERROR})
         finally:
+            detach_log_callback(root, callback_handler)
             set_active_hooks(None)
             loggers = COMMAND_LOGGERS.get(job.command, ())
             if loggers:
