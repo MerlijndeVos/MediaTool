@@ -53,7 +53,19 @@ cd web/frontend && npm run build
 
 ## Releases
 
-Tag with semver (`v0.1.0`). GitHub Actions builds Windows, macOS, and Linux artifacts and publishes them to Releases.
+**Version lives in one place:** bump `[project].version` in `pyproject.toml` only.
+
+Build scripts, CI, the in-app updater, and installers all read from there. When you tag a release, the tag must match (e.g. pyproject `0.2.0` → tag `v0.2.0`).
+
+```powershell
+# 1. Bump version in pyproject.toml
+# 2. Commit and push
+git commit -am "Bump version to 0.2.0"
+git push origin main
+
+# 3. Tag and push — CI builds Windows, macOS, and Linux installers
+git tag v0.2.0 && git push origin v0.2.0
+```
 
 Local Windows bundle:
 

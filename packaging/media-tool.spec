@@ -35,6 +35,7 @@ hiddenimports: list[str] = [
     "app",
     "core",
     "core.runtime",
+    "core.version",
     "core.ffmpeg_bootstrap",
     "core.updates",
     "cli",

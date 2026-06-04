@@ -1,8 +1,13 @@
 ; Inno Setup script for Media Tool (unsigned Windows installer)
 ; Requires PyInstaller output at ..\dist\MediaTool\
 
+; MyAppVersion is injected by build scripts, e.g.:
+;   iscc /DMyAppVersion=0.2.0 packaging/windows/setup.iss
+#ifndef MyAppVersion
+#define MyAppVersion "dev"
+#endif
+
 #define MyAppName "Media Tool"
-#define MyAppVersion "0.1.0"
 #define MyAppPublisher "Media Tool"
 #define MyAppExeName "MediaTool.exe"
 

@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Callable, Literal
 
 from .runtime import app_data_dir, is_frozen
+from .version import app_version
 
 logger = logging.getLogger(__name__)
 
@@ -38,15 +39,6 @@ _state: dict = {
 def register_quit_callback(fn: Callable[[], None]) -> None:
     global _quit_callback
     _quit_callback = fn
-
-
-def app_version() -> str:
-    try:
-        from importlib.metadata import PackageNotFoundError, version
-
-        return version("media-tool")
-    except Exception:
-        return "0.1.0"
 
 
 def _parse_version(raw: str) -> tuple[int, int, int]:

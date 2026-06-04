@@ -3,7 +3,11 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-VERSION="${1:-0.1.0}"
+if [[ -n "${1:-}" ]]; then
+  VERSION="$1"
+else
+  VERSION="$(PYTHONPATH="$ROOT" python -c "from core.version import read_pyproject_version; print(read_pyproject_version())")"
+fi
 DIST="$ROOT/dist"
 OUT="$ROOT/packaging/dist"
 APP_NAME="Media Tool.app"

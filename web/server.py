@@ -9,7 +9,8 @@ from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
 from core.tools import bootstrap_ffmpeg, get_tools_status
-from core.updates import app_version, check_for_update, get_apply_status, start_apply_update
+from core.updates import check_for_update, get_apply_status, start_apply_update
+from core.version import app_version
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse

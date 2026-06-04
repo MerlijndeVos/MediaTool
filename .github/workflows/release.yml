@@ -37,26 +37,41 @@ jobs:
           cache: npm
           cache-dependency-path: web/frontend/package-lock.json
 
+      - name: Install Python dependencies
+        run: pip install -e ".[desktop,pack]"
+
+      - name: Verify tag matches pyproject.toml
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          PY="$(python -c "from core.version import read_pyproject_version; print(read_pyproject_version())")"
+          if [ "$TAG" != "$PY" ]; then
+            echo "Tag v$TAG does not match pyproject.toml version $PY"
+            exit 1
+          fi
+
+      - name: Sync frontend package version
+        shell: bash
+        run: |
+          VERSION="$(python -c "from core.version import read_pyproject_version; print(read_pyproject_version())")"
+          npm pkg set "version=${VERSION}" --prefix web/frontend
+
       - name: Build frontend
         working-directory: web/frontend
         run: |
           npm ci
           npm run build
 
-      - name: Install Python dependencies
-        run: pip install -e ".[desktop,pack]"
-
       - name: PyInstaller bundle
         run: pyinstaller packaging/media-tool.spec --noconfirm --clean
 
       - name: Platform installer
         shell: bash
-        env:
-          APP_VERSION: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '0.1.0' }}
         run: |
-          VERSION="${APP_VERSION#v}"
+          VERSION="$(python -c "from core.version import read_pyproject_version; print(read_pyproject_version())")"
           case "${{ runner.os }}" in
-            Windows) choco install innosetup -y && iscc packaging/windows/setup.iss ;;
+            Windows) choco install innosetup -y && iscc "/DMyAppVersion=${VERSION}" packaging/windows/setup.iss ;;
             macOS) bash packaging/macos/build-dmg.sh "$VERSION" ;;
             Linux)
               sudo apt-get update
