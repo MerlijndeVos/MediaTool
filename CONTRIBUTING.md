@@ -5,7 +5,8 @@ Thanks for your interest in Media Tool. New features should land in `core/` firs
 ## Development setup
 
 ```powershell
-git clone <repo-url> && cd media-tool
+git clone https://github.com/MerlijndeVos/MediaTool.git
+cd MediaTool
 python -m venv .venv
 .venv\Scripts\activate          # Windows
 pip install -e ".[desktop,pack]"

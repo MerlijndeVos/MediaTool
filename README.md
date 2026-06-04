@@ -22,7 +22,7 @@ The UI includes drag-and-drop paths, live logs, per-job progress, dark mode, and
 
 ## Install (end users)
 
-Download the installer for your OS from **GitHub Releases** (tag `v0.1.0` or newer).
+Download the installer for your OS from **[GitHub Releases](https://github.com/MerlijndeVos/MediaTool/releases)** (tag `v0.1.0` or newer).
 
 | Platform | File |
 |----------|------|
@@ -39,7 +39,8 @@ Installers are **unsigned**. Windows SmartScreen and macOS Gatekeeper may ask yo
 Requires **Python 3.11+** and **Node.js 20+** (for building the UI).
 
 ```powershell
-git clone <repo-url> && cd media-tool
+git clone https://github.com/MerlijndeVos/MediaTool.git
+cd MediaTool
 pip install -e ".[desktop]"
 cd web/frontend && npm install && npm run build
 cd ../..
@@ -92,6 +93,8 @@ Push a version tag to trigger CI builds for all three platforms:
 ```bash
 git tag v0.1.0 && git push origin v0.1.0
 ```
+
+Builds appear at https://github.com/MerlijndeVos/MediaTool/releases.
 
 ## Command line
 
