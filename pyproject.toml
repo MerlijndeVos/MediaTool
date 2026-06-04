@@ -9,17 +9,16 @@ description = "Cross-platform desktop app for local video conversion, library or
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
+dependencies = [
+    "yt-dlp>=2024.0.0",
+    "yt-dlp-ejs>=0.8.0",
+]
 
 [project.urls]
 Homepage = "https://github.com/MerlijndeVos/MediaTool"
 Repository = "https://github.com/MerlijndeVos/MediaTool"
 Issues = "https://github.com/MerlijndeVos/MediaTool/issues"
 Changelog = "https://github.com/MerlijndeVos/MediaTool/releases"
-
-dependencies = [
-    "yt-dlp>=2024.0.0",
-    "yt-dlp-ejs>=0.8.0",
-]
 
 [project.optional-dependencies]
 web = [
