@@ -71,7 +71,11 @@ jobs:
         run: |
           VERSION="$(python -c "from core.version import read_pyproject_version; print(read_pyproject_version())")"
           case "${{ runner.os }}" in
-            Windows) choco install innosetup -y && iscc "/DMyAppVersion=${VERSION}" packaging/windows/setup.iss ;;
+            Windows)
+              choco install innosetup -y
+              # Git Bash rewrites /D... switches as paths; pass them through unchanged.
+              MSYS2_ARG_CONV_EXCL='*' iscc "/DMyAppVersion=${VERSION}" packaging/windows/setup.iss
+              ;;
             macOS) bash packaging/macos/build-dmg.sh "$VERSION" ;;
             Linux)
               sudo apt-get update
