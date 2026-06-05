@@ -129,18 +129,15 @@ export default function App() {
       <ToolsBanner />
       <header className="sticky top-0 z-30 border-b bg-card/80 backdrop-blur-md">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2.5">
             <img
-              src="/app/favicon.svg"
+              src="/app/favicon-32.png"
               alt=""
-              className="h-9 w-9 rounded-lg"
-              width={36}
-              height={36}
+              className="size-8 shrink-0 rounded-[9px]"
+              width={32}
+              height={32}
             />
-            <div>
-              <h1 className="text-base font-semibold leading-tight">Media Tool</h1>
-              <p className="text-xs text-muted-foreground">Local processing</p>
-            </div>
+            <h1 className="text-base font-semibold leading-none">Media Tool</h1>
           </div>
           <div className="flex items-center gap-2">
             <UpdateButton />
