@@ -29,6 +29,8 @@ if not FRONTEND_DIST.is_dir():
 block_cipher = None
 
 datas: list[tuple[str, str]] = [(str(FRONTEND_DIST), "web/frontend/dist")]
+if ICON_DIR.is_dir():
+    datas.append((str(ICON_DIR), "packaging/icons"))
 _bundled_github_token = REPO_ROOT / "packaging" / "secrets" / "github_token"
 if _bundled_github_token.is_file():
     datas.append((str(_bundled_github_token), "."))

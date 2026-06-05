@@ -8,6 +8,7 @@ import sys
 import threading
 from pathlib import Path
 
+from core.runtime import install_root, resource_root
 from core.tools import bootstrap_ffmpeg
 from core.updates import register_quit_callback
 
@@ -15,7 +16,7 @@ from .desktop_api import DesktopApi
 from .paths import FRONTEND_DIST
 from .run import pick_port, run_uvicorn, wait_for_server
 
-_ICON_DIR = Path(__file__).resolve().parent.parent / "packaging" / "icons"
+_ICON_DIR = resource_root() / "packaging" / "icons"
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
@@ -24,12 +25,37 @@ WINDOW_TITLE = "Media Tool"
 
 def _app_icon_path() -> Path | None:
     if sys.platform == "win32":
-        candidate = _ICON_DIR / "media-tool.ico"
+        candidates = (
+            _ICON_DIR / "media-tool.ico",
+            install_root() / "media-tool.ico",
+        )
     elif sys.platform == "darwin":
-        candidate = _ICON_DIR / "media-tool.icns"
+        candidates = (
+            _ICON_DIR / "media-tool.icns",
+            install_root() / "media-tool.icns",
+        )
     else:
-        candidate = _ICON_DIR / "media-tool.png"
-    return candidate if candidate.is_file() else None
+        candidates = (
+            _ICON_DIR / "media-tool.png",
+            install_root() / "media-tool.png",
+        )
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def _configure_windows_app_id() -> None:
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
+            "MerlijndeVos.MediaTool"
+        )
+    except Exception:
+        pass
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -75,6 +101,7 @@ def main(argv: list[str] | None = None) -> None:
         )
 
     bootstrap_ffmpeg(auto_download=True)
+    _configure_windows_app_id()
 
     port = pick_port(args.port, args.host) if args.host == DEFAULT_HOST else args.port
     base_url = f"http://{args.host}:{port}"

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Film, Moon, ScrollText, Sun, Wifi, WifiOff } from "lucide-react";
+import { Moon, ScrollText, Sun, Wifi, WifiOff } from "lucide-react";
 import { checkHealth, fetchSettings } from "@/api/client";
 import { LogDrawer } from "@/components/LogDrawer";
 import { ToolsBanner } from "@/components/ToolsBanner";
@@ -130,9 +130,13 @@ export default function App() {
       <header className="sticky top-0 z-30 border-b bg-card/80 backdrop-blur-md">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3">
           <div className="flex items-center gap-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              <Film className="h-5 w-5" />
-            </div>
+            <img
+              src="/app/favicon.svg"
+              alt=""
+              className="h-9 w-9 rounded-lg"
+              width={36}
+              height={36}
+            />
             <div>
               <h1 className="text-base font-semibold leading-tight">Media Tool</h1>
               <p className="text-xs text-muted-foreground">Local processing</p>

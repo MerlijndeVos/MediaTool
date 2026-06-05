@@ -60,6 +60,9 @@ jobs:
           npm ci
           npm run build
 
+      - name: Render app icons
+        run: python packaging/icons/render_icons.py
+
       - name: Embed GitHub token for in-app updates (private repo)
         shell: bash
         env:

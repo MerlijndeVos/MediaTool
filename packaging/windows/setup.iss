@@ -24,6 +24,7 @@ OutputBaseFilename=MediaTool-Setup-{#MyAppVersion}-win64
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
+SetupIconFile=..\..\packaging\icons\media-tool.ico
 PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
