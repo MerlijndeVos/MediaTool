@@ -5,6 +5,58 @@ function stripMarkdownInline(text: string): string {
   return text.replace(/\*\*(.+?)\*\*/g, "$1").replace(/`(.+?)`/g, "$1");
 }
 
+function isTableSeparator(line: string): boolean {
+  return /^\|[\s\-:|]+\|$/.test(line.trim());
+}
+
+function parseTableRow(line: string): string[] | null {
+  const trimmed = line.trim();
+  if (!trimmed.startsWith("|") || !trimmed.endsWith("|")) return null;
+  if (isTableSeparator(trimmed)) return null;
+  return trimmed
+    .slice(1, -1)
+    .split("|")
+    .map((cell) => stripMarkdownInline(cell.trim()));
+}
+
+function ReleaseNotesTable({ rows }: { rows: string[][] }) {
+  if (rows.length === 0) return null;
+
+  const [header, ...body] = rows;
+
+  return (
+    <div className="overflow-x-auto rounded-md border">
+      <table className="w-full min-w-[16rem] border-collapse text-sm">
+        {header && (
+          <thead>
+            <tr className="border-b bg-muted/50">
+              {header.map((cell, index) => (
+                <th
+                  key={index}
+                  className="px-3 py-2 text-left font-semibold text-foreground"
+                >
+                  {cell}
+                </th>
+              ))}
+            </tr>
+          </thead>
+        )}
+        <tbody>
+          {body.map((row, rowIndex) => (
+            <tr key={rowIndex} className="border-b last:border-b-0">
+              {row.map((cell, cellIndex) => (
+                <td key={cellIndex} className="px-3 py-2 text-muted-foreground">
+                  {cell}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export function ReleaseNotes({
   text,
   className,
@@ -13,10 +65,35 @@ export function ReleaseNotes({
   className?: string;
 }) {
   const items: ReactNode[] = [];
+  const lines = text.split("\n");
+  let index = 0;
 
-  for (const [index, line] of text.split("\n").entries()) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
+  while (index < lines.length) {
+    const trimmed = lines[index].trim();
+    if (!trimmed) {
+      index += 1;
+      continue;
+    }
+
+    const tableRow = parseTableRow(trimmed);
+    if (tableRow) {
+      const tableRows: string[][] = [tableRow];
+      index += 1;
+      while (index < lines.length) {
+        const next = lines[index].trim();
+        if (!next || isTableSeparator(next)) {
+          index += 1;
+          if (isTableSeparator(next)) continue;
+          break;
+        }
+        const parsed = parseTableRow(next);
+        if (!parsed) break;
+        tableRows.push(parsed);
+        index += 1;
+      }
+      items.push(<ReleaseNotesTable key={`table-${index}`} rows={tableRows} />);
+      continue;
+    }
 
     if (trimmed.startsWith("### ")) {
       items.push(
@@ -24,6 +101,7 @@ export function ReleaseNotes({
           {stripMarkdownInline(trimmed.slice(4))}
         </h4>,
       );
+      index += 1;
       continue;
     }
 
@@ -33,6 +111,7 @@ export function ReleaseNotes({
           {stripMarkdownInline(trimmed.slice(3))}
         </h3>,
       );
+      index += 1;
       continue;
     }
 
@@ -42,6 +121,7 @@ export function ReleaseNotes({
           {stripMarkdownInline(trimmed.slice(2))}
         </h2>,
       );
+      index += 1;
       continue;
     }
 
@@ -52,6 +132,7 @@ export function ReleaseNotes({
           <span>{stripMarkdownInline(trimmed.replace(/^[-*]\s+/, ""))}</span>
         </div>,
       );
+      index += 1;
       continue;
     }
 
@@ -64,6 +145,7 @@ export function ReleaseNotes({
           <span>{stripMarkdownInline(trimmed.replace(/^\d+\.\s+/, ""))}</span>
         </div>,
       );
+      index += 1;
       continue;
     }
 
@@ -72,6 +154,7 @@ export function ReleaseNotes({
         {stripMarkdownInline(trimmed)}
       </p>,
     );
+    index += 1;
   }
 
   return <div className={cn("space-y-2", className)}>{items}</div>;

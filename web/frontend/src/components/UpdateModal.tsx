@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { Download, Loader2, Sparkles } from "lucide-react";
+import { Download, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ReleaseNotes } from "@/components/ReleaseNotes";
@@ -55,9 +55,13 @@ export function UpdateModal({
       >
         <CardHeader className="shrink-0 border-b pb-4">
           <div className="flex items-start gap-3">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-              <Sparkles className="h-5 w-5" />
-            </div>
+            <img
+              src="/app/favicon-32.png"
+              alt=""
+              className="size-11 shrink-0 rounded-[10px]"
+              width={44}
+              height={44}
+            />
             <div className="min-w-0 space-y-1">
               <CardTitle id="update-modal-title">Update available</CardTitle>
               <CardDescription id="update-modal-description">
@@ -70,9 +74,6 @@ export function UpdateModal({
         <CardContent className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden pt-4">
           {notes ? (
             <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border bg-muted/30 p-4">
-              <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                What&apos;s new
-              </p>
               <ReleaseNotes text={notes} />
               {releaseUrl && (
                 <a

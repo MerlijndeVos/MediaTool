@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Moon, ScrollText, Sun, Wifi, WifiOff } from "lucide-react";
+import { Download, Palette, ScrollText, Wifi, WifiOff } from "lucide-react";
 import { checkHealth, fetchSettings } from "@/api/client";
+import { AppearancePanel } from "@/components/AppearancePanel";
 import { LogDrawer } from "@/components/LogDrawer";
 import { ToolsBanner } from "@/components/ToolsBanner";
 import { LoggingPanel } from "@/components/LoggingPanel";
 import { ToolPanel } from "@/components/ToolPanel";
-import { UpdateButton } from "@/components/UpdateButton";
-import { Button } from "@/components/ui/button";
+import { UpdateModal } from "@/components/UpdateModal";
+import { UpdatesPanel } from "@/components/UpdatesPanel";
 import { cn } from "@/lib/utils";
+import { isDesktopApp } from "@/lib/desktop";
+import { useUpdates } from "@/hooks/useUpdates";
 import {
   PRIMARY_TOOLS,
   SECONDARY_TOOLS,
@@ -17,9 +20,11 @@ import {
 } from "@/lib/types";
 import { useJobRunner } from "@/hooks/useJobRunner";
 
-type AppView = "tools" | "logs";
+type AppView = "tools" | "logs" | "updates" | "appearance";
 
 export default function App() {
+  const updates = useUpdates();
+  const desktop = isDesktopApp();
   const [view, setView] = useState<AppView>("tools");
   const [tool, setTool] = useState<ToolId>("convert");
   const [fileLogging, setFileLogging] = useState(true);
@@ -140,7 +145,6 @@ export default function App() {
             <h1 className="text-base font-semibold leading-none">Media Tool</h1>
           </div>
           <div className="flex items-center gap-2">
-            <UpdateButton />
             <span
               className={cn(
                 "flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium",
@@ -152,9 +156,6 @@ export default function App() {
               {apiOk ? <Wifi className="h-3.5 w-3.5" /> : <WifiOff className="h-3.5 w-3.5" />}
               {apiOk === true ? "API connected" : apiOk === false ? "API offline" : "Checking…"}
             </span>
-            <Button variant="ghost" size="icon" onClick={() => setDark((d) => !d)} aria-label="Toggle theme">
-              {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-            </Button>
           </div>
         </div>
       </header>
@@ -224,6 +225,46 @@ export default function App() {
               <ScrollText className="h-4 w-4" />
               Logs
             </button>
+            {desktop && (
+              <button
+                type="button"
+                onClick={() => setView("updates")}
+                className={cn(
+                  "flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors",
+                  view === "updates"
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                )}
+              >
+                <Download className="h-4 w-4" />
+                Updates
+                {updates.showUpdate && (
+                  <span
+                    className={cn(
+                      "ml-auto rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase",
+                      view === "updates"
+                        ? "bg-primary-foreground/20 text-primary-foreground"
+                        : "bg-primary/15 text-primary",
+                    )}
+                  >
+                    New
+                  </span>
+                )}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setView("appearance")}
+              className={cn(
+                "flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors",
+                view === "appearance"
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:bg-accent hover:text-foreground",
+              )}
+            >
+              <Palette className="h-4 w-4" />
+              Appearance
+            </button>
           </nav>
         </aside>
 
@@ -238,6 +279,10 @@ export default function App() {
           )}
           {view === "logs" ? (
             <LoggingPanel onFileLoggingChange={setFileLogging} />
+          ) : view === "updates" ? (
+            <UpdatesPanel {...updates} />
+          ) : view === "appearance" ? (
+            <AppearancePanel dark={dark} onDarkChange={setDark} />
           ) : (
             <ToolPanel
               tool={tool}
@@ -252,6 +297,20 @@ export default function App() {
           )}
         </main>
       </div>
+
+      {desktop && updates.showUpdate && updates.check?.latest_version && (
+        <UpdateModal
+          open={updates.modalOpen}
+          currentVersion={updates.check.current_version}
+          latestVersion={updates.check.latest_version}
+          releaseNotes={updates.check.release_notes}
+          releaseUrl={updates.check.release_url}
+          applying={updates.applying}
+          applyMessage={updates.applyStatus?.message}
+          onSkip={updates.handleSkip}
+          onUpdate={updates.handleApply}
+        />
+      )}
 
       <LogDrawer
         open={logOpen}
