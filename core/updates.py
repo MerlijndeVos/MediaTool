@@ -364,7 +364,6 @@ def _quit_app() -> None:
     if _quit_callback is not None:
         try:
             _quit_callback()
-            return
         except Exception:
             logger.debug("Quit callback failed", exc_info=True)
     os._exit(0)
@@ -390,7 +389,7 @@ def _apply_update_worker(info: UpdateInfo) -> None:
         _download_file(info.download_url, dest)
         _set_state(phase="installing", progress=100.0, message="Launching installer…")
         _launch_installer(dest)
-        threading.Timer(1.0, _quit_app).start()
+        threading.Timer(0.5, _quit_app).start()
     except Exception as exc:
         logger.exception("Update apply failed")
         _set_state(phase="error", error=str(exc))

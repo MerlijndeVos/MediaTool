@@ -126,10 +126,9 @@ def main(argv: list[str] | None = None) -> None:
     )
 
     def _quit_for_update() -> None:
-        try:
-            window.destroy()
-        except Exception:
-            pass
+        # Hard-exit only. Do not call window.destroy() — pywebview raises
+        # KeyError('master') on FormClosed when the window is already gone
+        # (e.g. Inno Setup /CLOSEAPPLICATIONS closes us first).
         os._exit(0)
 
     register_quit_callback(_quit_for_update)
