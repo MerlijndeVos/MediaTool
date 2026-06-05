@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { Download, Loader2, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -26,13 +28,19 @@ export function UpdateModal({
   onSkip,
   onUpdate,
 }: UpdateModalProps) {
-  if (!open) return null;
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!open || !mounted) return null;
 
   const notes = releaseNotes?.trim();
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
       role="presentation"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget && !applying) onSkip();
@@ -43,7 +51,7 @@ export function UpdateModal({
         aria-modal="true"
         aria-labelledby="update-modal-title"
         aria-describedby="update-modal-description"
-        className="flex max-h-[min(90vh,640px)] w-full max-w-lg flex-col shadow-xl"
+        className="flex max-h-[min(calc(100vh-2rem),640px)] w-full max-w-lg flex-col shadow-xl"
       >
         <CardHeader className="shrink-0 border-b pb-4">
           <div className="flex items-start gap-3">
@@ -96,11 +104,11 @@ export function UpdateModal({
             </p>
           )}
 
-          <div className="flex shrink-0 justify-end gap-2 border-t pt-4">
-            <Button type="button" variant="outline" disabled={applying} onClick={onSkip}>
+          <div className="flex shrink-0 items-center justify-end gap-2 border-t pt-4">
+            <Button type="button" variant="outline" size="default" disabled={applying} onClick={onSkip}>
               Skip for now
             </Button>
-            <Button type="button" disabled={applying} onClick={onUpdate} className="gap-1.5">
+            <Button type="button" size="default" disabled={applying} onClick={onUpdate} className="gap-1.5">
               {applying ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -116,6 +124,7 @@ export function UpdateModal({
           </div>
         </CardContent>
       </Card>
-    </div>
+    </div>,
+    document.body,
   );
 }

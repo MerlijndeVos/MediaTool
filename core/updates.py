@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Callable, Literal
 
 from .runtime import app_data_dir, is_frozen, resource_root
-from .version import app_version
+from .version import app_version, normalize_version
 
 logger = logging.getLogger(__name__)
 
@@ -97,7 +97,7 @@ def _github_get(url: str, timeout: float) -> tuple[int, dict | None, str | None]
 
 
 def _parse_version(raw: str) -> tuple[int, int, int]:
-    text = raw.strip().lstrip("vV")
+    text = normalize_version(raw)
     parts: list[int] = []
     for segment in text.split(".")[:3]:
         digits = ""
@@ -114,6 +114,10 @@ def _parse_version(raw: str) -> tuple[int, int, int]:
 
 def _is_newer(latest: str, current: str) -> bool:
     return _parse_version(latest) > _parse_version(current)
+
+
+def _versions_equal(left: str, right: str) -> bool:
+    return _parse_version(left) == _parse_version(right)
 
 
 def _linux_arch() -> str:
@@ -256,14 +260,19 @@ def check_for_update(timeout: float = 15.0) -> UpdateInfo:
             status_message=None,
         )
 
-    tag = str(payload.get("tag_name", "")).lstrip("vV")
+    tag = normalize_version(str(payload.get("tag_name", "")))
     latest_version = tag or None
     asset = _pick_asset(list(payload.get("assets") or []))
     download_url = _asset_download_url(asset) if asset else None
     asset_name = str(asset.get("name")) if asset else None
     release_url = str(payload.get("html_url") or f"https://github.com/{GITHUB_REPO}/releases")
     release_notes = str(payload.get("body") or "").strip() or None
-    update_available = bool(latest_version and _is_newer(latest_version, current) and download_url)
+    update_available = bool(
+        latest_version
+        and not _versions_equal(latest_version, current)
+        and _is_newer(latest_version, current)
+        and download_url
+    )
     error = None
     status_message = _status_message(
         current=current,

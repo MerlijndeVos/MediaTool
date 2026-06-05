@@ -14,6 +14,8 @@ from pathlib import Path
 
 from PyInstaller.utils.hooks import collect_all, collect_submodules, copy_metadata
 
+import tomllib
+
 REPO_ROOT = Path(SPECPATH).resolve().parent
 FRONTEND_DIST = REPO_ROOT / "web" / "frontend" / "dist"
 ICON_DIR = REPO_ROOT / "packaging" / "icons"
@@ -31,6 +33,13 @@ block_cipher = None
 datas: list[tuple[str, str]] = [(str(FRONTEND_DIST), "web/frontend/dist")]
 if ICON_DIR.is_dir():
     datas.append((str(ICON_DIR), "packaging/icons"))
+_bundled_version_file = REPO_ROOT / "packaging" / ".bundled-version"
+with (REPO_ROOT / "pyproject.toml").open("rb") as _pf:
+    _bundled_version_file.write_text(
+        tomllib.load(_pf)["project"]["version"] + "\n",
+        encoding="utf-8",
+    )
+datas.append((str(_bundled_version_file), "."))
 _bundled_github_token = REPO_ROOT / "packaging" / "secrets" / "github_token"
 if _bundled_github_token.is_file():
     datas.append((str(_bundled_github_token), "."))

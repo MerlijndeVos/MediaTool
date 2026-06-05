@@ -11,6 +11,7 @@ import { UpdateModal } from "@/components/UpdateModal";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { isDesktopApp } from "@/lib/desktop";
+import { isNewerVersionAvailable } from "@/lib/version";
 
 const CHECK_INTERVAL_MS = 60 * 60 * 1000;
 const SKIPPED_UPDATE_KEY = "media-tool-skipped-update";
@@ -74,7 +75,10 @@ export function UpdateButton() {
 
   const applying = applyStatus?.phase === "downloading" || applyStatus?.phase === "installing";
   const showUpdate = Boolean(
-    check?.update_available && check.can_install && check.latest_version,
+    check &&
+      check.can_install &&
+      check.latest_version &&
+      isNewerVersionAvailable(check.current_version, check.latest_version, check.update_available),
   );
 
   useEffect(() => {
