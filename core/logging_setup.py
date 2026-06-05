@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Optional, Tuple
 
 from . import config
+from .log_storage import operation_log_path
 from .paths import ext_path
 
 
@@ -50,8 +51,8 @@ def close_log_handlers(*names: str) -> None:
 
 def setup_logging(output_root: Path) -> Tuple[logging.Logger, logging.Logger]:
     output_root.mkdir(parents=True, exist_ok=True)
-    log_file = output_root / "convert.log"
-    fail_log_file = output_root / "failures.log"
+    log_file = operation_log_path("convert")
+    fail_log_file = operation_log_path("failures")
 
     logger = logging.getLogger("dv_to_mp4")
     logger.setLevel(logging.INFO)
@@ -77,13 +78,13 @@ def setup_logging(output_root: Path) -> Tuple[logging.Logger, logging.Logger]:
     logger.info("Logging initialized.")
     if config.FILE_LOGGING_ENABLED:
         # Main log file
-        fh = logging.FileHandler(log_file, encoding="utf-8")
+        fh = logging.FileHandler(log_file, mode="a", encoding="utf-8")
         fh.setLevel(logging.INFO)
         fh.setFormatter(formatter)
         logger.addHandler(fh)
 
         # Failures log file
-        fh_fail = logging.FileHandler(fail_log_file, encoding="utf-8")
+        fh_fail = logging.FileHandler(fail_log_file, mode="a", encoding="utf-8")
         fh_fail.setLevel(logging.WARNING)
         fh_fail.setFormatter(formatter)
         failure_logger.addHandler(fh_fail)
@@ -120,7 +121,7 @@ def setup_simple_logging(name: str, log_path: Optional[Path]) -> logging.Logger:
     if log_path is not None and config.FILE_LOGGING_ENABLED:
         try:
             os.makedirs(ext_path(log_path.parent), exist_ok=True)
-            fh = logging.FileHandler(log_path, encoding="utf-8")
+            fh = logging.FileHandler(log_path, mode="a", encoding="utf-8")
             fh.setLevel(logging.INFO)
             fh.setFormatter(formatter)
             logger.addHandler(fh)

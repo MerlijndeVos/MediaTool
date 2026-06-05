@@ -32,6 +32,7 @@ from core.progress import (
     detach_log_callback,
     set_active_hooks,
 )
+from core.rename import run_undo_from_journal
 from core.rename_folders import process_root
 
 from .schemas import (
@@ -140,6 +141,7 @@ def _to_namespace(command: str, params: Any) -> argparse.Namespace:
         return argparse.Namespace(
             input=[Path(x) for x in p.input],
             output=Path(p.output),
+            output_format=p.output_format,
             input_format=p.input_format,
             no_recursive=p.no_recursive,
             reencode=p.reencode,
@@ -161,12 +163,30 @@ class Job:
     file_logging: bool = True
     params: Any = None
     namespace: Optional[argparse.Namespace] = None
+    undo_manifest: Optional[dict] = None
+    undo_used: bool = False
+    undo_of: Optional[str] = None
     events: queue.Queue = field(default_factory=queue.Queue)
     cancel_event: threading.Event = field(default_factory=threading.Event)
     _thread: Optional[threading.Thread] = field(default=None, repr=False)
 
     def emit(self, event_type: str, payload: dict[str, Any]) -> None:
         self.events.put({"type": event_type, "data": {**payload, "job_id": self.id}})
+
+    def undo_op_count(self) -> Optional[int]:
+        if not self.undo_manifest:
+            return None
+        ops = self.undo_manifest.get("operations")
+        return len(ops) if isinstance(ops, list) else None
+
+    def undo_available(self) -> bool:
+        return (
+            self.command == "rename"
+            and self.undo_of is None
+            and self.status == "completed"
+            and bool(self.undo_manifest)
+            and not self.undo_used
+        )
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -178,6 +198,10 @@ class Job:
             "finished_at": self.finished_at,
             "error": self.error,
             "exit_code": self.exit_code,
+            "undo_available": self.undo_available(),
+            "undo_used": self.undo_used,
+            "undo_op_count": self.undo_op_count(),
+            "undo_of": self.undo_of,
         }
 
 
@@ -238,6 +262,53 @@ class JobManager:
             job.events.put(None)
         return True
 
+    def undo_rename(self, source_job_id: str, *, file_logging: bool = True) -> Job:
+        with self._lock:
+            source = self._jobs.get(source_job_id)
+        if source is None:
+            raise KeyError("Job not found")
+        if source.command != "rename" or source.undo_of is not None:
+            raise ValueError("Only rename apply jobs can be undone")
+        if source.status != "completed":
+            raise ValueError("Job has not completed")
+        if source.undo_used:
+            raise ValueError("This rename has already been undone")
+        if not source.undo_manifest:
+            raise ValueError("Nothing to undo (preview run or no files changed)")
+
+        job = Job(
+            id=str(uuid.uuid4()),
+            command="rename",
+            file_logging=file_logging,
+            undo_of=source_job_id,
+        )
+        with self._lock:
+            self._jobs[job.id] = job
+
+        thread = threading.Thread(
+            target=self._run_job,
+            args=(job,),
+            daemon=True,
+            name=f"web-job-{job.id[:8]}",
+        )
+        job._thread = thread
+        thread.start()
+        return job
+
+    def _status_payload(self, job: Job) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "status": job.status,
+            "error": job.error,
+            "exit_code": job.exit_code,
+            "undo_available": job.undo_available(),
+            "undo_used": job.undo_used,
+            "undo_op_count": job.undo_op_count(),
+        }
+        if job.undo_of and job.status == "completed":
+            payload["undo_source_job_id"] = job.undo_of
+            payload["source_undo_used"] = True
+        return payload
+
     def _run_job(self, job: Job) -> None:
         job.status = "running"
         job.started_at = utc_now_iso()
@@ -263,7 +334,9 @@ class JobManager:
         )
 
         try:
-            if job.command == "download":
+            if job.undo_of:
+                self._run_rename_undo(job)
+            elif job.command == "download":
                 self._run_download(job)
             elif job.command == "rename_folders":
                 self._run_rename_folders(job)
@@ -297,15 +370,11 @@ class JobManager:
                 close_log_handlers(*loggers)
             if job.status in ("completed", "failed", "cancelled"):
                 job.finished_at = utc_now_iso()
-                job.emit("status", {
-                    "status": job.status,
-                    "error": job.error,
-                    "exit_code": job.exit_code,
-                })
+                job.emit("status", self._status_payload(job))
             job.events.put(None)
 
     def _run_core(self, job: Job) -> None:
-        handlers: dict[str, Callable[[argparse.Namespace], None]] = {
+        handlers: dict[str, Callable[..., Any]] = {
             "convert": run_convert,
             "vts": run_vts,
             "rename": run_rename,
@@ -318,7 +387,45 @@ class JobManager:
         if job.cancel_event.is_set():
             job.status = "cancelled"
             return
-        handler(job.namespace)
+        if job.command == "rename":
+            manifest = run_rename(job.namespace)
+            if manifest:
+                job.undo_manifest = manifest
+        else:
+            handler(job.namespace)
+
+    def _run_rename_undo(self, job: Job) -> None:
+        source = self.get(job.undo_of or "")
+        if source is None:
+            raise ValueError(f"Source job not found: {job.undo_of}")
+        if not source.undo_manifest:
+            raise ValueError("Source job has no undo manifest")
+        if source.undo_used:
+            raise ValueError("Rename already undone")
+
+        logger = logging.getLogger("video_rename")
+        restored, failed, skipped = run_undo_from_journal(
+            source.undo_manifest, apply=True, logger=logger
+        )
+        if failed > 0:
+            job.status = "failed"
+            job.exit_code = 1
+            job.error = f"Undo failed for {failed} operation(s)"
+        elif restored == 0:
+            job.status = "failed"
+            job.exit_code = 1
+            job.error = "Nothing to undo (files missing or already restored)"
+        else:
+            with self._lock:
+                source.undo_used = True
+            if skipped:
+                job.emit(
+                    "log",
+                    {
+                        "message": f"Undo complete with {skipped} skipped operation(s).",
+                        "level": logging.WARNING,
+                    },
+                )
 
     def _run_download(self, job: Job) -> None:
         p: DownloadParams = job.params
@@ -340,6 +447,9 @@ class JobManager:
                 audio_bitrate=p.audio_bitrate,
                 playlist=p.playlist,
                 no_playlist_index=p.no_playlist_index,
+                output_name=p.output_name,
+                playlist_subdir=p.playlist_subdir,
+                playlist_index=p.playlist_index,
                 progress_callback=progress_cb,
                 cancel_event=job.cancel_event,
                 tag=job.id[:8],

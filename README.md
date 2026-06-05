@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="packaging/icons/media-tool.png" alt="Media Tool" width="128" height="128" />
+</p>
+
 # Media Tool
 
 Cross-platform desktop app for local video processing — convert, trim, stitch, organize libraries, download from YouTube, and more. Everything runs on your machine; nothing is uploaded.

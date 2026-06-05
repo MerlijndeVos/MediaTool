@@ -8,16 +8,37 @@ import urllib.error
 import urllib.request
 
 
-def pick_port(preferred: int, host: str = "127.0.0.1") -> int:
-    """Return *preferred* if bindable, otherwise an ephemeral port on *host*."""
+def port_available(port: int, host: str = "127.0.0.1") -> bool:
+    """Return whether *port* can be bound on *host*."""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
-            sock.bind((host, preferred))
-            return preferred
+            sock.bind((host, port))
+            return True
         except OSError:
-            sock.bind((host, 0))
-            return sock.getsockname()[1]
+            return False
+
+
+def require_port(port: int, host: str = "127.0.0.1") -> int:
+    """Return *port* or raise if it is already in use."""
+    if port_available(port, host):
+        return port
+    raise SystemExit(
+        f"Port {port} is already in use on {host}.\n"
+        "Another Media Tool server is probably still running with older code.\n"
+        "Stop that process, then start the server again.\n"
+        "On Windows: netstat -ano | findstr :{port}  then  taskkill /PID <pid> /F"
+    )
+
+
+def pick_port(preferred: int, host: str = "127.0.0.1") -> int:
+    """Return *preferred* if bindable, otherwise an ephemeral port on *host*."""
+    if port_available(preferred, host):
+        return preferred
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.bind((host, 0))
+        return sock.getsockname()[1]
 
 
 def wait_for_server(base_url: str, timeout: float = 30.0) -> None:

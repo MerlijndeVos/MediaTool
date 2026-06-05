@@ -2,14 +2,24 @@
 
 import argparse
 import logging
+import re
 import shutil
 import sys
 import threading
 from pathlib import Path
 from typing import Callable, Optional
 
+from .log_storage import operation_log_path
 from .logging_setup import close_log_handlers, setup_simple_logging
 from .progress import get_active_hooks
+
+_INVALID_WIN_PATH_CHARS = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
+
+
+def _user_output_stem(name: str) -> str:
+    """Keep user-provided spacing; drop only characters Windows paths cannot contain."""
+    stem = _INVALID_WIN_PATH_CHARS.sub("", name.strip()).rstrip(". ")
+    return stem or "download"
 
 
 class _YtdlpLogger:
@@ -91,7 +101,86 @@ def make_ytdlp_progress_hook(logger: Optional[logging.Logger] = None):
     return hook
 
 
-def _youtube_outtmpl(output_dir: Path, playlist: bool, no_playlist_index: bool) -> str:
+def _download_target_dirs(
+    output_dir: Path,
+    *,
+    playlist_subdir: Optional[str] = None,
+) -> list[Path]:
+    dirs = [output_dir]
+    if playlist_subdir:
+        dirs.append(output_dir / _user_output_stem(playlist_subdir))
+    return dirs
+
+
+def _cleanup_cancelled_download(
+    tracked: set[Path],
+    dirs: list[Path],
+    *,
+    output_name: Optional[str] = None,
+    playlist_index: Optional[int] = None,
+    no_playlist_index: bool = False,
+    logger: Optional[logging.Logger] = None,
+    prefix: str = "",
+) -> None:
+    """Remove partial yt-dlp artifacts left behind after a cancelled download."""
+    candidates: set[Path] = set()
+    for path in tracked:
+        candidates.add(path)
+        part = Path(f"{path}.part")
+        if part != path:
+            candidates.add(part)
+
+    stem_prefix: Optional[str] = None
+    if output_name:
+        stem = _user_output_stem(output_name)
+        if playlist_index is not None and not no_playlist_index:
+            stem_prefix = f"{playlist_index:03d} - {stem}"
+        else:
+            stem_prefix = stem
+
+    for directory in dirs:
+        directory = Path(directory)
+        if not directory.is_dir():
+            continue
+        for pattern in ("*.part", "*.ytdl", "*.frag"):
+            candidates.update(directory.glob(pattern))
+        if stem_prefix:
+            for path in directory.iterdir():
+                if not path.is_file():
+                    continue
+                name = path.name
+                if name == stem_prefix or name.startswith(f"{stem_prefix}."):
+                    candidates.add(path)
+
+    for path in sorted(candidates, key=lambda p: len(p.name), reverse=True):
+        if not path.is_file():
+            continue
+        try:
+            path.unlink()
+            if logger is not None:
+                logger.info("%sRemoved partial file: %s", prefix, path.name)
+        except OSError as exc:
+            if logger is not None:
+                logger.warning("%sCould not remove %s: %s", prefix, path.name, exc)
+
+
+def _youtube_outtmpl(
+    output_dir: Path,
+    playlist: bool,
+    no_playlist_index: bool,
+    *,
+    output_name: Optional[str] = None,
+    playlist_subdir: Optional[str] = None,
+    playlist_index: Optional[int] = None,
+) -> str:
+    if output_name:
+        stem = _user_output_stem(output_name)
+        if playlist_subdir:
+            sub = _user_output_stem(playlist_subdir)
+            if playlist_index is not None and not no_playlist_index:
+                return str(output_dir / sub / f"{playlist_index:03d} - {stem}.%(ext)s")
+            return str(output_dir / sub / f"{stem}.%(ext)s")
+        return str(output_dir / f"{stem}.%(ext)s")
     if playlist:
         if no_playlist_index:
             return str(output_dir / "%(playlist_title|Playlist)s" / "%(title)s.%(ext)s")
@@ -173,6 +262,99 @@ def _youtube_format_opts(
     return opts
 
 
+def _entry_filesize(info: dict) -> Optional[int]:
+    size = info.get("filesize") or info.get("filesize_approx")
+    if size:
+        return int(size)
+    for fmt in info.get("formats") or []:
+        fmt_size = fmt.get("filesize") or fmt.get("filesize_approx")
+        if fmt_size:
+            return int(fmt_size)
+    return None
+
+
+def probe_url(
+    *,
+    url: str,
+    out_format: str = "mp4",
+    video_quality: str = "best",
+    audio_bitrate: int = 192,
+) -> dict:
+    """Extract metadata for a URL without downloading."""
+    try:
+        import yt_dlp
+    except ImportError as exc:
+        raise RuntimeError(
+            "yt-dlp is not installed. Install it with: pip install yt-dlp "
+            "(or: pip install -e .)."
+        ) from exc
+
+    ydl_opts: dict = {
+        "quiet": True,
+        "no_warnings": True,
+        "skip_download": True,
+        "noplaylist": False,
+        "extract_flat": "in_playlist",
+        "js_runtimes": _youtube_js_runtimes(),
+    }
+    ydl_opts.update(_youtube_format_opts(out_format, video_quality, int(audio_bitrate)))
+
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        info = ydl.extract_info(url, download=False)
+
+    if info is None:
+        raise RuntimeError("Could not extract information for this URL.")
+
+    entries_raw = info.get("entries")
+    is_playlist = info.get("_type") == "playlist" or (
+        entries_raw is not None and len(entries_raw) > 1
+    )
+    playlist_title = info.get("playlist_title") or info.get("title")
+
+    entries: list[dict] = []
+    if entries_raw:
+        for idx, entry in enumerate(entries_raw, start=1):
+            if entry is None:
+                continue
+            if entry.get("_type") == "url" and not entry.get("title"):
+                continue
+            entry_url = entry.get("webpage_url") or entry.get("url") or url
+            title = entry.get("title") or f"Video {idx}"
+            playlist_index = entry.get("playlist_index") or idx
+            entries.append(
+                {
+                    "id": str(entry.get("id") or playlist_index),
+                    "title": title,
+                    "url": entry_url,
+                    "duration": entry.get("duration"),
+                    "filesize": _entry_filesize(entry),
+                    "playlist_index": playlist_index,
+                }
+            )
+    else:
+        entries.append(
+            {
+                "id": str(info.get("id") or "1"),
+                "title": info.get("title") or "Video",
+                "url": info.get("webpage_url") or url,
+                "duration": info.get("duration"),
+                "filesize": _entry_filesize(info),
+                "playlist_index": 1,
+            }
+        )
+        is_playlist = False
+
+    if not entries:
+        raise RuntimeError("No downloadable videos found at this URL.")
+
+    return {
+        "url": url,
+        "is_playlist": is_playlist,
+        "playlist_title": playlist_title if is_playlist else None,
+        "entries": entries,
+    }
+
+
 def download_url(
     *,
     url: str,
@@ -182,6 +364,9 @@ def download_url(
     audio_bitrate: int = 192,
     playlist: bool = False,
     no_playlist_index: bool = False,
+    output_name: Optional[str] = None,
+    playlist_subdir: Optional[str] = None,
+    playlist_index: Optional[int] = None,
     progress_callback: Optional[Callable[[dict], None]] = None,
     cancel_event: Optional[threading.Event] = None,
     tag: str = "",
@@ -211,13 +396,21 @@ def download_url(
         )
 
     logger_name = f"youtube_download_{tag or url}"
-    logger = setup_simple_logging(logger_name, output_dir / "download.log")
+    logger = setup_simple_logging(logger_name, operation_log_path("download"))
     prefix = (tag + " ") if tag else ""
     logger.info("%sDownloading %s as %s", prefix, url, out_format.upper())
+
+    tracked_paths: set[Path] = set()
+    target_dirs = _download_target_dirs(output_dir, playlist_subdir=playlist_subdir)
+    cancelled = False
 
     def progress_hook(d: dict) -> None:
         if cancel_event is not None and cancel_event.is_set():
             raise _YtCancel()
+        for key in ("filename", "tmpfilename"):
+            value = d.get(key)
+            if value:
+                tracked_paths.add(Path(value))
         if progress_callback is None:
             return
         try:
@@ -225,9 +418,35 @@ def download_url(
         except Exception:
             pass
 
+    def handle_cancel() -> None:
+        nonlocal cancelled
+        if cancelled:
+            return
+        cancelled = True
+        logger.info("%sDownload cancelled.", prefix)
+        _cleanup_cancelled_download(
+            tracked_paths,
+            target_dirs,
+            output_name=output_name,
+            playlist_index=playlist_index,
+            no_playlist_index=no_playlist_index,
+            logger=logger,
+            prefix=prefix,
+        )
+
+    single_item = output_name is not None or not playlist
     ydl_opts: dict = {
-        "outtmpl": _youtube_outtmpl(output_dir, playlist, no_playlist_index),
-        "noplaylist": not playlist,
+        "restrictfilenames": False,
+        "windowsfilenames": False,
+        "outtmpl": _youtube_outtmpl(
+            output_dir,
+            playlist and not output_name,
+            no_playlist_index,
+            output_name=output_name,
+            playlist_subdir=playlist_subdir,
+            playlist_index=playlist_index,
+        ),
+        "noplaylist": single_item,
         "ffmpeg_location": ffmpeg_path,
         "progress_hooks": [progress_hook],
         "logger": _YtdlpLogger(logger, prefix=tag),
@@ -242,19 +461,23 @@ def download_url(
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ret = ydl.download([url])
     except _YtCancel:
-        logger.info("%sDownload cancelled.", prefix)
+        handle_cancel()
         raise DownloadCancelled()
     except DownloadCancelled:
-        logger.info("%sDownload cancelled.", prefix)
+        handle_cancel()
         raise
     except Exception as exc:
         if cancel_event is not None and cancel_event.is_set():
-            logger.info("%sDownload cancelled.", prefix)
+            handle_cancel()
             raise DownloadCancelled()
         logger.error("%sDownload failed: %s", prefix, exc)
         raise RuntimeError(str(exc)) from exc
     finally:
         close_log_handlers(logger_name)
+
+    if cancel_event is not None and cancel_event.is_set():
+        handle_cancel()
+        raise DownloadCancelled()
 
     if ret and not playlist:
         raise RuntimeError(f"yt-dlp reported one or more errors (exit code {ret}).")
@@ -278,7 +501,7 @@ def run_download(args: argparse.Namespace) -> None:
         print(f"Could not create output folder '{output_dir}': {exc}", file=sys.stderr)
         sys.exit(1)
 
-    logger = setup_simple_logging("youtube_download", output_dir / "download.log")
+    logger = setup_simple_logging("youtube_download", operation_log_path("download"))
     logger.info("Downloading %s as %s", url, out_format.upper())
     logger.info("Output folder: %s", output_dir)
     logger.info("Playlist mode: %s", "on" if playlist else "off (single video)")
@@ -301,6 +524,8 @@ def run_download(args: argparse.Namespace) -> None:
         sys.exit(1)
 
     ydl_opts: dict = {
+        "restrictfilenames": False,
+        "windowsfilenames": False,
         "outtmpl": _youtube_outtmpl(output_dir, playlist, no_playlist_index),
         "noplaylist": not playlist,
         "ffmpeg_location": ffmpeg_path,

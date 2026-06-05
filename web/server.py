@@ -8,6 +8,9 @@ import queue
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
+from core.download import probe_url
+from core.log_storage import clear_logs, logs_stats
+from core.settings_store import load_settings, save_settings
 from core.tools import bootstrap_ffmpeg, get_tools_status
 from core.updates import check_for_update, get_apply_status, start_apply_update
 from core.version import app_version
@@ -18,13 +21,20 @@ from fastapi.staticfiles import StaticFiles
 
 from .jobs import job_manager
 from .schemas import (
+    ClearLogsResponse,
     CommandInfo,
     CommandsResponse,
+    DownloadProbeRequest,
+    DownloadProbeResponse,
     HealthResponse,
     JobCreateRequest,
     JobCreateResponse,
     JobSummary,
+    JobUndoResponse,
+    LogsStatsResponse,
     PARAM_MODELS,
+    SettingsResponse,
+    SettingsUpdateRequest,
     UpdateApplyResponse,
     UpdateApplyStatusResponse,
     UpdateCheckResponse,
@@ -62,7 +72,7 @@ COMMAND_DESCRIPTIONS: dict[str, str] = {
     "rename": "Organize TV/movie files and subtitles (Plex/Jellyfin style).",
     "audio": "Set default audio language in MKV files (MKVToolNix).",
     "dedup": "Strip duplicate (N) suffixes from filenames.",
-    "download": "Download YouTube/other URLs as MP4 or MP3 (yt-dlp).",
+    "download": "Download URLs from yt-dlp supported sites as MP4 or MP3.",
     "trim": "Cut seconds off the start and/or end of videos.",
     "stitch": "Join multiple videos end-to-end.",
     "rename_folders": "Date-stamp subfolders (YYYY maand DD - Description).",
@@ -96,6 +106,33 @@ def tools_status() -> dict:
     return get_tools_status(auto_bootstrap=False)
 
 
+def _settings_response() -> SettingsResponse:
+    settings = load_settings()
+    return SettingsResponse(
+        file_logging=bool(settings.get("file_logging", True)),
+        logs=LogsStatsResponse(**logs_stats()),
+    )
+
+
+@app.get("/api/settings", response_model=SettingsResponse)
+def get_settings() -> SettingsResponse:
+    return _settings_response()
+
+
+@app.patch("/api/settings", response_model=SettingsResponse)
+def update_settings(body: SettingsUpdateRequest) -> SettingsResponse:
+    updates = body.model_dump(exclude_unset=True)
+    if updates:
+        save_settings(**updates)
+    return _settings_response()
+
+
+@app.delete("/api/settings/logs", response_model=ClearLogsResponse)
+def delete_logs() -> ClearLogsResponse:
+    deleted = clear_logs()
+    return ClearLogsResponse(deleted_count=deleted, logs=LogsStatsResponse(**logs_stats()))
+
+
 @app.get("/api/commands", response_model=CommandsResponse)
 def list_commands() -> CommandsResponse:
     commands = [
@@ -127,6 +164,20 @@ def get_job(job_id: str) -> JobSummary:
     return JobSummary(**job.to_dict())
 
 
+@app.post("/api/download/probe", response_model=DownloadProbeResponse)
+def download_probe(body: DownloadProbeRequest) -> DownloadProbeResponse:
+    try:
+        result = probe_url(
+            url=body.url,
+            out_format=body.format,
+            video_quality=body.video_quality,
+            audio_bitrate=body.audio_bitrate,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return DownloadProbeResponse(**result)
+
+
 @app.post("/api/jobs", response_model=JobCreateResponse, status_code=201)
 def create_job(body: JobCreateRequest) -> JobCreateResponse:
     try:
@@ -154,6 +205,23 @@ def cancel_job(job_id: str) -> dict:
             raise HTTPException(status_code=404, detail="Job not found")
         raise HTTPException(status_code=409, detail=f"Job cannot be cancelled (status={job.status})")
     return {"ok": True, "job_id": job_id}
+
+
+@app.post("/api/jobs/{job_id}/undo", response_model=JobUndoResponse, status_code=201)
+def undo_rename_job(job_id: str) -> JobUndoResponse:
+    try:
+        job = job_manager.undo_rename(job_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Job not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    summary = JobSummary(**job.to_dict())
+    return JobUndoResponse(
+        job=summary,
+        events_url=f"/api/jobs/{job.id}/events",
+        source_job_id=job_id,
+    )
 
 
 async def _sse_stream(job_id: str) -> AsyncIterator[str]:

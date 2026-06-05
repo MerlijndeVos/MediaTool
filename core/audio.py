@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+from .log_storage import operation_log_path
 from .logging_setup import setup_simple_logging
 from .paths import ext_path, path_exists
 from .tools import ensure_mkvtoolnix
@@ -214,8 +215,7 @@ def run_audio(args: argparse.Namespace) -> None:
         )
         sys.exit(1)
 
-    log_path = (input_path if input_path.is_dir() else input_path.parent) / "audio_default.log"
-    logger = setup_simple_logging("video_audio", log_path if apply else None)
+    logger = setup_simple_logging("video_audio", operation_log_path("audio") if apply else None)
 
     mode = "APPLY" if apply else "DRY-RUN"
     logger.info("Audio mode (%s).", mode)

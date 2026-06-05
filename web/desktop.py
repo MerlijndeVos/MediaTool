@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import argparse
 import os
+import sys
 import threading
+from pathlib import Path
 
 from core.tools import bootstrap_ffmpeg
 from core.updates import register_quit_callback
@@ -13,9 +15,21 @@ from .desktop_api import DesktopApi
 from .paths import FRONTEND_DIST
 from .run import pick_port, run_uvicorn, wait_for_server
 
+_ICON_DIR = Path(__file__).resolve().parent.parent / "packaging" / "icons"
+
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
 WINDOW_TITLE = "Media Tool"
+
+
+def _app_icon_path() -> Path | None:
+    if sys.platform == "win32":
+        candidate = _ICON_DIR / "media-tool.ico"
+    elif sys.platform == "darwin":
+        candidate = _ICON_DIR / "media-tool.icns"
+    else:
+        candidate = _ICON_DIR / "media-tool.png"
+    return candidate if candidate.is_file() else None
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -92,7 +106,8 @@ def main(argv: list[str] | None = None) -> None:
         os._exit(0)
 
     register_quit_callback(_quit_for_update)
-    webview.start(debug=args.debug)
+    icon = _app_icon_path()
+    webview.start(debug=args.debug, icon=str(icon) if icon else None)
 
 
 if __name__ == "__main__":

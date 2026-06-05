@@ -44,8 +44,8 @@ def is_valid_output(ffprobe_bin: str, path: Path) -> bool:
 
 
 def parse_time_to_seconds(value: str) -> Optional[float]:
-    """Parse a duration given as plain seconds (``10``, ``2.5``) or as a
-    timestamp (``0:10``, ``1:02:03``, ``1:02:03.5``).
+    """Parse a duration given as plain seconds (``10``, ``2.5``, ``0.5``),
+    milliseconds (``500ms``), or a timestamp (``0:10``, ``1:02:03``, ``1:02:03.5``).
 
     Returns the number of seconds as a float, or None if it can't be parsed or
     is negative.
@@ -56,7 +56,10 @@ def parse_time_to_seconds(value: str) -> Optional[float]:
     if not text:
         return 0.0
     try:
-        if ":" in text:
+        lowered = text.lower()
+        if lowered.endswith("ms"):
+            seconds = float(lowered[:-2].strip()) / 1000.0
+        elif ":" in text:
             parts = text.split(":")
             if len(parts) > 3:
                 return None

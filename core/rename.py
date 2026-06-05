@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
+from .log_storage import operation_log_path, rename_undo_journal_path
 from .logging_setup import setup_simple_logging
 from .paths import copy_path, ext_path, make_dirs, move_path, path_exists
 
@@ -226,7 +227,11 @@ def parse_media_info(
     """Parse a video file stem into TV or movie info. Returns None if unclassifiable."""
     strip_words = strip_words or set()
     if forced_type in ("auto", "tv"):
-        info = _parse_tv(stem, titlecase_enabled, strip_words, bare_numbers)
+        # Auto and TV modes accept bare episode numbers (e.g. 'Show Name 47 Title')
+        # after standard SxxExx / 1x01 patterns. The CLI --bare-episode-numbers flag
+        # is kept for explicit opt-in when calling _parse_tv in isolation.
+        use_bare = bare_numbers or forced_type in ("auto", "tv")
+        info = _parse_tv(stem, titlecase_enabled, strip_words, bare_numbers=use_bare)
         if info is not None:
             return info
         if forced_type == "tv":
@@ -689,13 +694,85 @@ def execute_rename(
     return succeeded, failed, done
 
 
-# Name of the journal file written next to the destination on every --apply
-# run, recording what moved where so a subsequent --undo can reverse it.
-UNDO_JOURNAL_NAME = "rename_undo.json"
+# Legacy name when journals lived next to the destination (removed on write/migrate).
+LEGACY_UNDO_JOURNAL_NAME = "rename_undo.json"
+UNDO_JOURNAL_NAME = LEGACY_UNDO_JOURNAL_NAME  # backwards compat for imports/tests
 
 
 def undo_journal_path(dest_root: Path) -> Path:
-    return dest_root / UNDO_JOURNAL_NAME
+    return rename_undo_journal_path(dest_root)
+
+
+def legacy_undo_journal_path(dest_root: Path) -> Path:
+    return dest_root / LEGACY_UNDO_JOURNAL_NAME
+
+
+def build_undo_journal(
+    done: List[RenameOp],
+    use_copy: bool,
+    *,
+    dest_root: Optional[Path] = None,
+    input_root: Optional[Path] = None,
+) -> dict:
+    """Build a structured undo manifest from completed rename operations."""
+    return {
+        "version": 1,
+        "created": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "action": "copy" if use_copy else "move",
+        "dest_root": str(dest_root) if dest_root is not None else None,
+        "input_root": str(input_root) if input_root is not None else None,
+        "operations": [
+            {"src": str(op.src), "dst": str(op.dst), "kind": op.kind} for op in done
+        ],
+    }
+
+
+def _write_undo_journal_file(path: Path, data: dict, logger: logging.Logger) -> None:
+    try:
+        make_dirs(path.parent)
+        with open(ext_path(path), "w", encoding="utf-8") as fh:
+            json.dump(data, fh, ensure_ascii=False, indent=2)
+        logger.info("Wrote undo journal (%d op(s)): %s", len(data.get("operations", [])), path)
+    except Exception as exc:  # journal is best-effort, never fail the run over it
+        logger.warning("Could not write undo journal '%s': %s", path, exc)
+
+
+def _remove_legacy_undo_journal(dest_root: Path, logger: logging.Logger) -> None:
+    legacy = legacy_undo_journal_path(dest_root)
+    if not path_exists(legacy):
+        return
+    try:
+        os.remove(ext_path(legacy))
+        logger.info("Removed legacy undo journal from media folder: %s", legacy)
+    except Exception as exc:
+        logger.warning("Could not remove legacy undo journal '%s': %s", legacy, exc)
+
+
+def load_undo_journal(dest_root: Path, logger: logging.Logger) -> Optional[dict]:
+    """Load the undo journal for *dest_root*, migrating legacy media-folder copies."""
+    path = undo_journal_path(dest_root)
+    legacy = legacy_undo_journal_path(dest_root)
+
+    if not path_exists(path) and path_exists(legacy):
+        logger.info("Migrating undo journal from media folder to app data.")
+        try:
+            with open(ext_path(legacy), "r", encoding="utf-8") as fh:
+                data = json.load(fh)
+        except Exception as exc:
+            logger.error("Could not read legacy undo journal '%s': %s", legacy, exc)
+            return None
+        _write_undo_journal_file(path, data, logger)
+        _remove_legacy_undo_journal(dest_root, logger)
+        return data
+
+    if not path_exists(path):
+        return None
+    try:
+        with open(ext_path(path), "r", encoding="utf-8") as fh:
+            return json.load(fh)
+    except Exception as exc:
+        logger.error("Could not read undo journal '%s': %s", path, exc)
+        return None
 
 
 def write_undo_journal(
@@ -703,30 +780,66 @@ def write_undo_journal(
     done: List[RenameOp],
     use_copy: bool,
     logger: logging.Logger,
+    *,
+    input_root: Optional[Path] = None,
 ) -> None:
-    """Record the completed operations so they can be reversed later.
+    """Record completed operations so they can be reversed later.
 
-    Overwrites any previous journal so it always describes the most recent
-    apply run ("undo the last rename").
+    Stored under the per-user app data directory, not in the media library.
+    Overwrites any previous journal for the same destination root.
     """
     if not done:
         return
     path = undo_journal_path(dest_root)
-    data = {
-        "version": 1,
-        "created": time.strftime("%Y-%m-%d %H:%M:%S"),
-        "action": "copy" if use_copy else "move",
-        "operations": [
-            {"src": str(op.src), "dst": str(op.dst), "kind": op.kind} for op in done
-        ],
-    }
-    try:
-        make_dirs(path.parent)
-        with open(ext_path(path), "w", encoding="utf-8") as fh:
-            json.dump(data, fh, ensure_ascii=False, indent=2)
-        logger.info("Wrote undo journal (%d op(s)): %s", len(done), path)
-    except Exception as exc:  # journal is best-effort, never fail the run over it
-        logger.warning("Could not write undo journal '%s': %s", path, exc)
+    data = build_undo_journal(
+        done, use_copy, dest_root=dest_root, input_root=input_root
+    )
+    _write_undo_journal_file(path, data, logger)
+    _remove_legacy_undo_journal(dest_root, logger)
+
+
+def prune_empty_dirs_after_undo(journal: dict, logger: logging.Logger) -> None:
+    """Remove empty folders left behind after undoing a rename/copy layout."""
+    dirs: Set[Path] = set()
+    for entry in journal.get("operations", []):
+        dst = Path(entry["dst"])
+        for parent in dst.parents:
+            dirs.add(parent)
+
+    for current in sorted(dirs, key=lambda p: len(p.parts), reverse=True):
+        try:
+            if not path_exists(current):
+                continue
+            if not os.path.isdir(ext_path(current)):
+                continue
+            if os.listdir(ext_path(current)):
+                continue
+            os.rmdir(ext_path(current))
+            logger.info("Removed empty folder: %s", current)
+        except OSError as exc:
+            logger.warning("Could not remove '%s': %s", current, exc)
+
+
+def run_undo_from_journal(
+    journal: dict,
+    apply: bool,
+    logger: logging.Logger,
+) -> Tuple[int, int, int]:
+    """Reverse rename operations from a structured undo manifest."""
+    ops = journal.get("operations", [])
+    action = journal.get("action", "move")
+    logger.info("Undo rename (%s).", "APPLY" if apply else "DRY-RUN")
+    logger.info(
+        "Reversing %d %s operation(s) from job manifest (created %s).",
+        len(ops),
+        action,
+        journal.get("created", "?"),
+    )
+    restored, failed, skipped = execute_undo(journal, apply, logger)
+    logger.info("Undo result: restored=%d, failed=%d, skipped=%d.", restored, failed, skipped)
+    if apply and restored > 0:
+        prune_empty_dirs_after_undo(journal, logger)
+    return restored, failed, skipped
 
 
 def execute_undo(
@@ -795,30 +908,28 @@ def run_rename_undo(args: argparse.Namespace, logger: logging.Logger) -> None:
     """Reverse the most recent --apply rename run using its undo journal."""
     dest_root: Path = args.output if args.output is not None else args.input
     apply = bool(args.apply)
-    path = undo_journal_path(dest_root)
 
     logger.info("Undo rename (%s).", "APPLY" if apply else "DRY-RUN")
-    if not path_exists(path):
+    journal = load_undo_journal(dest_root, logger)
+    if journal is None:
+        legacy = legacy_undo_journal_path(dest_root)
         logger.error(
-            "No undo journal found at '%s'. Nothing to undo "
-            "(only --apply runs create one, and an undo removes it).",
-            path,
+            "No undo journal found for destination '%s'. Nothing to undo "
+            "(only --apply runs create one, and a successful undo removes it). "
+            "Journals are stored under app data, not in the media folder.",
+            dest_root,
         )
-        return
-    try:
-        with open(ext_path(path), "r", encoding="utf-8") as fh:
-            journal = json.load(fh)
-    except Exception as exc:
-        logger.error("Could not read undo journal '%s': %s", path, exc)
+        if path_exists(legacy):
+            logger.error("Found a legacy journal at '%s' but could not load it.", legacy)
         return
 
+    path = undo_journal_path(dest_root)
     ops = journal.get("operations", [])
     action = journal.get("action", "move")
     logger.info("Journal: %s (created %s)", path, journal.get("created", "?"))
     logger.info("Reversing %d %s operation(s) from the last rename.", len(ops), action)
 
-    restored, failed, skipped = execute_undo(journal, apply, logger)
-    logger.info("Undo result: restored=%d, failed=%d, skipped=%d.", restored, failed, skipped)
+    restored, failed, skipped = run_undo_from_journal(journal, apply, logger)
 
     if not apply:
         logger.info("Dry-run complete. Re-run with --undo --apply to perform the undo.")
@@ -852,7 +963,7 @@ def prune_empty_dirs(root: Path, dry_run: bool, logger: logging.Logger) -> None:
             logger.warning("Could not remove '%s': %s", current, exc)
 
 
-def run_rename(args: argparse.Namespace) -> None:
+def run_rename(args: argparse.Namespace) -> Optional[dict]:
     input_root: Path = args.input
     dest_root: Path = args.output if args.output is not None else args.input
     apply = bool(args.apply)
@@ -880,13 +991,12 @@ def run_rename(args: argparse.Namespace) -> None:
         )
         sys.exit(1)
 
-    # Put the log next to the destination so it is easy to find; best-effort.
-    log_path = (dest_root / "rename.log") if apply else None
+    log_path = operation_log_path("rename") if apply else None
     logger = setup_simple_logging("video_rename", log_path)
 
     if getattr(args, "undo", False):
         run_rename_undo(args, logger)
-        return
+        return None
 
     mode = "APPLY" if apply else "DRY-RUN"
     action = "copy" if use_copy else "move"
@@ -915,13 +1025,20 @@ def run_rename(args: argparse.Namespace) -> None:
     subtitles = sum(1 for o in ops if o.kind == "subtitle")
     logger.info("Planned operations: %d (videos=%d, subtitles=%d).", len(ops), videos, subtitles)
 
+    undo_manifest: Optional[dict] = None
     if not apply:
         for op in ops:
             logger.info("[DRY-RUN] %s '%s' -> '%s'", op.kind, op.src, op.dst)
     else:
         succeeded, failed, done = execute_rename(ops, use_copy, logger)
         logger.info("Executed: succeeded=%d, failed=%d.", succeeded, failed)
-        write_undo_journal(dest_root, done, use_copy, logger)
+        if done:
+            undo_manifest = build_undo_journal(
+                done, use_copy, dest_root=dest_root, input_root=input_root
+            )
+            write_undo_journal(
+                dest_root, done, use_copy, logger, input_root=input_root
+            )
 
     if skipped:
         logger.info("Skipped %d file(s):", len(skipped))
@@ -937,6 +1054,7 @@ def run_rename(args: argparse.Namespace) -> None:
     if not apply:
         logger.info("Dry-run complete. Re-run with --apply to perform these changes.")
     logger.info("Done.")
+    return undo_manifest
 
 
 # =====================================================================
@@ -988,7 +1106,7 @@ def run_dedup(args: argparse.Namespace) -> None:
         )
         sys.exit(1)
 
-    log_path = (input_root / "dedup.log") if apply else None
+    log_path = operation_log_path("dedup") if apply else None
     logger = setup_simple_logging("video_dedup", log_path)
 
     logger.info("Dedup mode (%s).", "APPLY" if apply else "DRY-RUN")

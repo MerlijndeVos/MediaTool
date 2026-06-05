@@ -1,11 +1,21 @@
-import { useEffect, useRef, useState } from "react";
-import { AlertTriangle, Eye, FolderOpen, Loader2, Play } from "lucide-react";
+import { useEffect, useId, useRef, useState } from "react";
+import { AlertTriangle, ChevronDown, Eye, FolderOpen, Loader2, Play } from "lucide-react";
 import { isDesktopApp, pickFolder } from "@/lib/desktop";
 import { Button } from "@/components/ui/button";
+import { HelpTooltip } from "@/components/ui/help-tooltip";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
+
+function FieldLabel({ label, tooltip }: { label: string; tooltip?: string }) {
+  return (
+    <Label className="inline-flex items-center gap-1.5">
+      {label}
+      {tooltip && <HelpTooltip content={tooltip} />}
+    </Label>
+  );
+}
 
 function ApplyConfirmDialog({
   open,
@@ -30,13 +40,13 @@ function ApplyConfirmDialog({
   return (
     <dialog
       ref={dialogRef}
-      className="fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg border border-border bg-background p-0 shadow-lg backdrop:bg-black/50 open:animate-in"
+      className="app-dialog z-50"
       onClose={() => onOpenChange(false)}
       onClick={(e) => {
         if (e.target === dialogRef.current) onOpenChange(false);
       }}
     >
-      <div className="space-y-4 p-6">
+      <div className="space-y-4 p-6" onClick={(e) => e.stopPropagation()}>
         <div className="flex gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-500/15 text-red-700 dark:text-red-300">
             <AlertTriangle className="h-5 w-5" />
@@ -129,14 +139,16 @@ export function Field({
   label,
   children,
   hint,
+  tooltip,
 }: {
   label: string;
   children: React.ReactNode;
   hint?: string;
+  tooltip?: string;
 }) {
   return (
     <div className="space-y-1.5">
-      <Label>{label}</Label>
+      <FieldLabel label={label} tooltip={tooltip} />
       {children}
       {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
     </div>
@@ -149,6 +161,7 @@ export function PathField({
   onChange,
   placeholder = "C:\\path\\to\\folder",
   hint,
+  tooltip,
   browse = "folder",
 }: {
   label: string;
@@ -156,6 +169,7 @@ export function PathField({
   onChange: (v: string) => void;
   placeholder?: string;
   hint?: string;
+  tooltip?: string;
   /** Show a native Browse button in the desktop app (`folder` only for now). */
   browse?: "folder" | false;
 }) {
@@ -173,7 +187,7 @@ export function PathField({
   };
 
   return (
-    <Field label={label} hint={hint}>
+    <Field label={label} hint={hint} tooltip={tooltip}>
       <div className="flex gap-2">
         <Input
           value={value}
@@ -203,20 +217,59 @@ export function CheckField({
   checked,
   onChange,
   hint,
+  tooltip,
+  disabled = false,
 }: {
   label: string;
   checked: boolean;
   onChange: (v: boolean) => void;
   hint?: string;
+  tooltip?: string;
+  disabled?: boolean;
 }) {
+  const switchId = useId();
+  const Wrapper = disabled ? "div" : "label";
+  const wrapperProps = disabled ? {} : { htmlFor: switchId };
+
   return (
-    <div className="flex items-center justify-between gap-4 rounded-md border border-border/60 bg-muted/30 px-3 py-2.5">
-      <div>
-        <p className="text-sm font-medium">{label}</p>
-        {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
+    <Wrapper
+      {...wrapperProps}
+      className={cn(
+        "flex items-center gap-2.5 rounded-md border px-2.5 py-2 transition-colors",
+        disabled ? "cursor-default" : "cursor-pointer",
+        checked
+          ? "border-primary/50 bg-primary/10 shadow-sm"
+          : "border-border/60 bg-muted/30",
+      )}
+    >
+      <Switch
+        id={switchId}
+        checked={checked}
+        onCheckedChange={onChange}
+        disabled={disabled}
+        className="shrink-0"
+      />
+      <div className="min-w-0 flex-1">
+        <p
+          className={cn(
+            "flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-sm",
+            checked && "text-foreground",
+          )}
+        >
+          <span className="font-medium">{label}</span>
+          {hint && <span className="text-xs font-normal text-muted-foreground">{hint}</span>}
+          {tooltip && (
+            <span
+              className="inline-flex shrink-0"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <HelpTooltip content={tooltip} />
+            </span>
+          )}
+        </p>
       </div>
-      <Switch checked={checked} onCheckedChange={onChange} />
-    </div>
+    </Wrapper>
   );
 }
 
@@ -225,25 +278,33 @@ export function SelectField({
   value,
   onChange,
   options,
+  tooltip,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   options: { value: string; label: string }[];
+  tooltip?: string;
 }) {
   return (
-    <Field label={label}>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        {options.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
+    <Field label={label} tooltip={tooltip}>
+      <div className="relative">
+        <select
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="flex h-10 w-full appearance-none rounded-md border border-input bg-background pl-3 pr-8 text-left text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          {options.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+        <ChevronDown
+          className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+          aria-hidden
+        />
+      </div>
     </Field>
   );
 }

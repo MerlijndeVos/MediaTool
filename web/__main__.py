@@ -11,7 +11,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from .run import pick_port, run_uvicorn
+from .run import require_port, run_uvicorn
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
@@ -40,7 +40,7 @@ def main() -> None:
             '  pip install -e ".[web]"'
         ) from exc
 
-    port = pick_port(args.port, args.host) if args.host == DEFAULT_HOST else args.port
+    port = require_port(args.port, args.host) if args.host == DEFAULT_HOST else args.port
     print(f"Media Tool API: http://{args.host}:{port}")
     print(f"  OpenAPI docs: http://{args.host}:{port}/docs")
     frontend_dist = Path(__file__).resolve().parent / "frontend" / "dist"

@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
-import { Film, Moon, Sun, Wifi, WifiOff } from "lucide-react";
-import { checkHealth } from "@/api/client";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Film, Moon, ScrollText, Sun, Wifi, WifiOff } from "lucide-react";
+import { checkHealth, fetchSettings } from "@/api/client";
 import { LogDrawer } from "@/components/LogDrawer";
 import { ToolsBanner } from "@/components/ToolsBanner";
+import { LoggingPanel } from "@/components/LoggingPanel";
 import { ToolPanel } from "@/components/ToolPanel";
 import { UpdateButton } from "@/components/UpdateButton";
 import { Button } from "@/components/ui/button";
@@ -11,13 +12,19 @@ import {
   PRIMARY_TOOLS,
   SECONDARY_TOOLS,
   TOOL_LABELS,
+  type DownloadJobMeta,
   type ToolId,
 } from "@/lib/types";
 import { useJobRunner } from "@/hooks/useJobRunner";
 
+type AppView = "tools" | "logs";
+
 export default function App() {
+  const [view, setView] = useState<AppView>("tools");
   const [tool, setTool] = useState<ToolId>("convert");
+  const [fileLogging, setFileLogging] = useState(true);
   const [logOpen, setLogOpen] = useState(true);
+  const [logHeight, setLogHeight] = useState(256);
   const [dark, setDark] = useState(() =>
     typeof window !== "undefined"
       ? window.matchMedia("(prefers-color-scheme: dark)").matches
@@ -25,7 +32,31 @@ export default function App() {
   );
   const [apiOk, setApiOk] = useState<boolean | null>(null);
   const [running, setRunning] = useState(false);
-  const { jobs, logs, startJob, cancel, clearLogs, dismissFinishedDownloads } = useJobRunner();
+  const logClosedByUser = useRef(false);
+  const {
+    jobs,
+    logs,
+    startJob,
+    startJobs,
+    cancel,
+    clearLogs,
+    dismissFinishedDownloads,
+    undoRename,
+    undoing,
+  } = useJobRunner();
+
+  const undoableRenameJobs = useMemo(
+    () =>
+      jobs.filter(
+        (j) =>
+          j.command === "rename" &&
+          !j.undo_of &&
+          j.status === "completed" &&
+          j.undo_available &&
+          !j.undo_used,
+      ),
+    [jobs],
+  );
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);
@@ -36,6 +67,12 @@ export default function App() {
     tick();
     const id = setInterval(tick, 5000);
     return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    fetchSettings()
+      .then((s) => setFileLogging(s.file_logging))
+      .catch(() => undefined);
   }, []);
 
   const activeJob = useMemo(
@@ -51,28 +88,44 @@ export default function App() {
     [jobs],
   );
 
+  const handleQueueDownloads = async (
+    items: Array<{ params: Record<string, unknown>; downloadMeta: DownloadJobMeta }>,
+  ) => {
+    await startJobs(
+      "download",
+      items.map((item) => ({
+        params: item.params,
+        downloadMeta: item.downloadMeta,
+      })),
+      fileLogging,
+    );
+  };
+
   const handleRun = async (params: Record<string, unknown>) => {
-    setLogOpen(true);
+    if (tool !== "download" && !logClosedByUser.current) {
+      setLogOpen(true);
+    }
     if (tool === "download") {
-      await startJob(tool, params, true, {
+      await startJob(tool, params, fileLogging, {
         downloadMeta: {
           url: String(params.url),
           format: String(params.format ?? "mp4"),
           output: String(params.output),
+          displayName: params.output_name ? String(params.output_name) : undefined,
         },
       });
       return;
     }
     setRunning(true);
     try {
-      await startJob(tool, params);
+      await startJob(tool, params, fileLogging);
     } finally {
       setRunning(false);
     }
   };
 
   return (
-    <div className="min-h-screen pb-16">
+    <div className="min-h-screen" style={{ paddingBottom: logHeight }}>
       <ToolsBanner />
       <header className="sticky top-0 z-30 border-b bg-card/80 backdrop-blur-md">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3">
@@ -82,7 +135,7 @@ export default function App() {
             </div>
             <div>
               <h1 className="text-base font-semibold leading-tight">Media Tool</h1>
-              <p className="text-xs text-muted-foreground">Local processing only</p>
+              <p className="text-xs text-muted-foreground">Local processing</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -115,10 +168,13 @@ export default function App() {
               <button
                 key={id}
                 type="button"
-                onClick={() => setTool(id)}
+                onClick={() => {
+                  setView("tools");
+                  setTool(id);
+                }}
                 className={cn(
                   "w-full rounded-md px-3 py-2 text-left text-sm font-medium transition-colors",
-                  tool === id
+                  view === "tools" && tool === id
                     ? "bg-primary text-primary-foreground"
                     : "text-foreground hover:bg-accent",
                 )}
@@ -129,16 +185,19 @@ export default function App() {
           </nav>
           <nav className="space-y-1">
             <p className="px-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              More tools
+              Experimental
             </p>
             {SECONDARY_TOOLS.map((id) => (
               <button
                 key={id}
                 type="button"
-                onClick={() => setTool(id)}
+                onClick={() => {
+                  setView("tools");
+                  setTool(id);
+                }}
                 className={cn(
                   "w-full rounded-md px-3 py-2 text-left text-sm transition-colors",
-                  tool === id
+                  view === "tools" && tool === id
                     ? "bg-primary text-primary-foreground"
                     : "text-muted-foreground hover:bg-accent hover:text-foreground",
                 )}
@@ -146,6 +205,24 @@ export default function App() {
                 {TOOL_LABELS[id]}
               </button>
             ))}
+          </nav>
+          <nav className="space-y-1 border-t border-border/60 pt-4">
+            <p className="px-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Settings
+            </p>
+            <button
+              type="button"
+              onClick={() => setView("logs")}
+              className={cn(
+                "flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors",
+                view === "logs"
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:bg-accent hover:text-foreground",
+              )}
+            >
+              <ScrollText className="h-4 w-4" />
+              Logs
+            </button>
           </nav>
         </aside>
 
@@ -158,19 +235,42 @@ export default function App() {
               )}
             </div>
           )}
-          <ToolPanel
-            tool={tool}
-            onRun={handleRun}
-            running={running}
-            activeJob={activeJob}
-            downloadJobs={downloadJobs}
-            onCancelDownload={cancel}
-            onDismissFinishedDownloads={dismissFinishedDownloads}
-          />
+          {view === "logs" ? (
+            <LoggingPanel onFileLoggingChange={setFileLogging} />
+          ) : (
+            <ToolPanel
+              tool={tool}
+              onRun={handleRun}
+              onQueueDownloads={handleQueueDownloads}
+              running={running}
+              activeJob={activeJob}
+              downloadJobs={downloadJobs}
+              onCancelDownload={cancel}
+              onDismissFinishedDownloads={dismissFinishedDownloads}
+            />
+          )}
         </main>
       </div>
 
-      <LogDrawer open={logOpen} onToggle={() => setLogOpen((o) => !o)} logs={logs} onClear={clearLogs} />
+      <LogDrawer
+        open={logOpen}
+        onToggle={() => {
+          setLogOpen((open) => {
+            const next = !open;
+            logClosedByUser.current = !next;
+            return next;
+          });
+        }}
+        logs={logs}
+        onClear={clearLogs}
+        onHeightChange={setLogHeight}
+        undoableJobs={undoableRenameJobs}
+        onUndoRename={async (jobId) => {
+          if (!logClosedByUser.current) setLogOpen(true);
+          await undoRename(jobId);
+        }}
+        undoing={undoing}
+      />
     </div>
   );
 }

@@ -16,6 +16,9 @@ from PyInstaller.utils.hooks import collect_all, collect_submodules, copy_metada
 
 REPO_ROOT = Path(SPECPATH).resolve().parent
 FRONTEND_DIST = REPO_ROOT / "web" / "frontend" / "dist"
+ICON_DIR = REPO_ROOT / "packaging" / "icons"
+WINDOWS_ICON = ICON_DIR / "media-tool.ico"
+MACOS_ICON = ICON_DIR / "media-tool.icns"
 
 if not FRONTEND_DIST.is_dir():
     raise SystemExit(
@@ -125,6 +128,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon=str(WINDOWS_ICON) if sys.platform == "win32" and WINDOWS_ICON.is_file() else None,
 )
 
 coll = COLLECT(
@@ -142,6 +146,6 @@ if sys.platform == "darwin":
     app = BUNDLE(
         coll,
         name="Media Tool.app",
-        icon=None,
+        icon=str(MACOS_ICON) if MACOS_ICON.is_file() else None,
         bundle_identifier="local.mediatool.app",
     )

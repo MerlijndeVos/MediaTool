@@ -87,6 +87,32 @@ class DownloadParams(BaseModel):
     audio_bitrate: int = Field(default=192, ge=64, le=320)
     playlist: bool = False
     no_playlist_index: bool = False
+    output_name: Optional[str] = None
+    playlist_subdir: Optional[str] = None
+    playlist_index: Optional[int] = Field(default=None, ge=1)
+
+
+class DownloadProbeRequest(BaseModel):
+    url: str
+    format: Literal["mp4", "mp3"] = "mp4"
+    video_quality: Literal["best", "2160", "1440", "1080", "720", "480", "360"] = "best"
+    audio_bitrate: int = Field(default=192, ge=64, le=320)
+
+
+class DownloadProbeEntry(BaseModel):
+    id: str
+    title: str
+    url: str
+    duration: Optional[int] = None
+    filesize: Optional[int] = None
+    playlist_index: int = 1
+
+
+class DownloadProbeResponse(BaseModel):
+    url: str
+    is_playlist: bool
+    playlist_title: Optional[str] = None
+    entries: list[DownloadProbeEntry]
 
 
 class TrimParams(BaseModel):
@@ -104,6 +130,7 @@ class TrimParams(BaseModel):
 class StitchParams(BaseModel):
     input: list[str] = Field(min_length=1)
     output: str
+    output_format: Literal["mp4", "mkv", "mov"] = "mp4"
     input_format: str = "mp4"
     no_recursive: bool = False
     reencode: bool = False
@@ -143,6 +170,16 @@ class JobSummary(BaseModel):
     finished_at: Optional[str] = None
     error: Optional[str] = None
     exit_code: Optional[int] = None
+    undo_available: bool = False
+    undo_used: bool = False
+    undo_op_count: Optional[int] = None
+    undo_of: Optional[str] = None
+
+
+class JobUndoResponse(BaseModel):
+    job: JobSummary
+    events_url: str
+    source_job_id: str
 
 
 class JobCreateResponse(BaseModel):
@@ -188,6 +225,33 @@ class CommandInfo(BaseModel):
 
 class CommandsResponse(BaseModel):
     commands: list[CommandInfo]
+
+
+class LogFileInfo(BaseModel):
+    name: str
+    size_bytes: int
+    modified_at: str
+
+
+class LogsStatsResponse(BaseModel):
+    path: str
+    total_bytes: int
+    file_count: int
+    files: list[LogFileInfo]
+
+
+class SettingsResponse(BaseModel):
+    file_logging: bool
+    logs: LogsStatsResponse
+
+
+class SettingsUpdateRequest(BaseModel):
+    file_logging: Optional[bool] = None
+
+
+class ClearLogsResponse(BaseModel):
+    deleted_count: int
+    logs: LogsStatsResponse
 
 
 def utc_now_iso() -> str:

@@ -20,6 +20,9 @@ Pop-Location
 Write-Host "==> Installing Python build deps"
 python -m pip install -e ".[desktop,pack]" -q
 
+Write-Host "==> Rendering app icons"
+python packaging/icons/render_icons.py
+
 Write-Host "==> Running PyInstaller"
 pyinstaller packaging/media-tool.spec --noconfirm --clean
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

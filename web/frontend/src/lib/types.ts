@@ -20,11 +20,21 @@ export interface JobSummary {
   finished_at?: string | null;
   error?: string | null;
   exit_code?: number | null;
+  undo_available?: boolean;
+  undo_used?: boolean;
+  undo_op_count?: number | null;
+  undo_of?: string | null;
 }
 
 export interface JobCreateResponse {
   job: JobSummary;
   events_url: string;
+}
+
+export interface JobUndoResponse {
+  job: JobSummary;
+  events_url: string;
+  source_job_id: string;
 }
 
 export interface LogLine {
@@ -38,6 +48,23 @@ export interface DownloadJobMeta {
   url: string;
   format: string;
   output: string;
+  displayName?: string;
+  expectedSize?: number | null;
+}
+
+export interface StartJobRequest {
+  params: Record<string, unknown>;
+  downloadMeta?: DownloadJobMeta;
+}
+
+export interface DownloadProgress {
+  pct?: number | null;
+  downloaded?: number | null;
+  total?: number | null;
+  speed?: number | null;
+  eta?: number | null;
+  status?: string;
+  title?: string;
 }
 
 export interface ActiveJob extends JobSummary {
@@ -45,27 +72,47 @@ export interface ActiveJob extends JobSummary {
   progress?: number | null;
   progressLabel?: string;
   downloadMeta?: DownloadJobMeta;
+  downloadProgress?: DownloadProgress;
+}
+
+export interface DownloadProbeEntry {
+  id: string;
+  title: string;
+  url: string;
+  duration?: number | null;
+  filesize?: number | null;
+  playlist_index: number;
+}
+
+export interface DownloadProbeResult {
+  url: string;
+  is_playlist: boolean;
+  playlist_title?: string | null;
+  entries: DownloadProbeEntry[];
 }
 
 export type ToolId = CommandName;
 
-export const PRIMARY_TOOLS: ToolId[] = ["convert", "trim", "stitch", "download"];
-export const SECONDARY_TOOLS: ToolId[] = [
-  "vts",
-  "rename",
-  "audio",
-  "dedup",
-  "rename_folders",
-];
+export const PRIMARY_TOOLS: ToolId[] = ["convert", "trim", "stitch", "download", "rename"];
+export const SECONDARY_TOOLS: ToolId[] = ["vts", "audio", "dedup", "rename_folders"];
 
 export const TOOL_LABELS: Record<ToolId, string> = {
   convert: "Convert",
   trim: "Trim",
   stitch: "Stitch",
-  download: "YouTube",
+  download: "Download",
   vts: "DVD (VTS)",
-  rename: "Rename Media",
+  rename: "Rename",
   audio: "Audio Default",
   dedup: "Fix Duplicates",
   rename_folders: "Rename Folders",
 };
+
+const DEFAULT_TOOL_DESCRIPTION = "All processing runs locally on your machine.";
+
+export function toolDescription(tool: ToolId): string {
+  if (tool === "rename") {
+    return "Organize TV shows, movies, and subtitles into a Plex/Jellyfin-friendly layout.";
+  }
+  return DEFAULT_TOOL_DESCRIPTION;
+}

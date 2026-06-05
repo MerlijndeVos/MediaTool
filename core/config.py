@@ -13,11 +13,12 @@ import re
 DEFAULT_CRF = 19                  # CPU (libx264): lower = better quality, bigger files
 DEFAULT_X264_PRESET = "slow"      # CPU preset: ultrafast..placebo; "slow" is good archival default
 
-# Whether operations write a per-folder log file (convert.log, download.log, ...).
+# Whether operations write log files under the app data logs directory.
 # Default off so the GUI never holds an open file handle (which locks the file on
-# Windows). When the CLI runs it is turned on so the historical log files are kept.
-# The GUI exposes a checkbox that flips this at runtime. Even when enabled, the
-# file handle is closed as soon as the operation finishes so the log is deletable.
+# Windows). When the CLI runs it is turned on so historical log files are kept.
+# The web UI exposes a settings toggle. Even when enabled, the file handle is
+# closed as soon as the operation finishes so logs can be cleared while the app
+# is open.
 FILE_LOGGING_ENABLED = False
 
 NVENC_CQ_TARGET = 19              # Roughly similar to CRF 18-19 visually for SD

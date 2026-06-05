@@ -19,10 +19,12 @@ from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
 from .config import DEFAULT_CRF, DEFAULT_X264_PRESET
+from .log_storage import operation_log_path
 from .logging_setup import setup_logging, setup_simple_logging
 from .naming import generate_unique_name, parse_dutch_name_from_stem, sanitize_filename
 from .paths import ext_path, make_dirs, move_path, path_exists
 from .probe import get_media_duration, has_audio_stream, is_valid_output, parse_time_to_seconds
+from .rename import VIDEO_EXTENSIONS
 from .tools import (
     build_nvenc_video_args,
     build_x264_video_args,
@@ -34,6 +36,67 @@ from .tools import (
 # =====================================================================
 # Convert mode: batch format conversion (DV -> MP4, AVI -> MKV, ...)
 # =====================================================================
+
+CONVERT_SOURCE_EXTENSIONS = frozenset(VIDEO_EXTENSIONS | {".dv"})
+
+
+def normalize_input_format(value: str) -> str:
+    return value.strip().lstrip(".").lower() or "dv"
+
+
+def resolve_deinterlace(mode: str, src_path: Path) -> bool:
+    if mode == "on":
+        return True
+    if mode == "off":
+        return False
+    return src_path.suffix.lower() == ".dv"
+
+
+def collect_trim_sources(
+    input_path: Path,
+    input_format: str,
+    recursive: bool,
+) -> List[Path]:
+    if input_path.is_file():
+        return [input_path]
+    if recursive:
+        candidates = input_path.rglob("*")
+    else:
+        candidates = input_path.glob("*")
+    if input_format == "auto":
+        return sorted(
+            [p for p in candidates if p.is_file() and p.suffix.lower() in CONVERT_SOURCE_EXTENSIONS],
+            key=lambda p: str(p).lower(),
+        )
+    input_ext = "." + input_format
+    return sorted(
+        [p for p in candidates if p.is_file() and p.suffix.lower() == input_ext],
+        key=lambda p: str(p).lower(),
+    )
+
+
+def collect_convert_sources(
+    input_root: Path,
+    input_format: str,
+    output_format: str,
+) -> List[Path]:
+    output_ext = "." + output_format
+    if input_format == "auto":
+        return sorted(
+            [
+                p
+                for p in input_root.rglob("*")
+                if p.is_file()
+                and p.suffix.lower() in CONVERT_SOURCE_EXTENSIONS
+                and p.suffix.lower() != output_ext
+            ],
+            key=lambda p: str(p).lower(),
+        )
+    input_ext = "." + input_format
+    return sorted(
+        [p for p in input_root.rglob("*") if p.is_file() and p.suffix.lower() == input_ext],
+        key=lambda p: str(p).lower(),
+    )
 
 
 def build_ffmpeg_command(
@@ -249,19 +312,10 @@ def run_convert(args: argparse.Namespace) -> None:
     output_root: Path = args.output
 
     # Normalize formats: accept "dv" or ".DV", store as lowercase extensions.
-    input_format = getattr(args, "input_format", "dv").strip().lstrip(".").lower() or "dv"
+    input_format = normalize_input_format(getattr(args, "input_format", "dv"))
     output_format = getattr(args, "output_format", "mp4").strip().lstrip(".").lower() or "mp4"
-    input_ext = "." + input_format
     output_ext = "." + output_format
-
-    # Resolve deinterlace mode: 'auto' enables it only for interlaced DV sources.
     deinterlace_mode = getattr(args, "deinterlace", "auto")
-    if deinterlace_mode == "on":
-        deinterlace = True
-    elif deinterlace_mode == "off":
-        deinterlace = False
-    else:  # auto
-        deinterlace = input_format == "dv"
 
     if not input_root.is_dir():
         print(f"Input root '{input_root}' does not exist or is not a directory.", file=sys.stderr)
@@ -271,7 +325,19 @@ def run_convert(args: argparse.Namespace) -> None:
 
     logger.info("Input root: %s", input_root)
     logger.info("Output root: %s", output_root)
-    logger.info("Converting: %s -> %s (deinterlace=%s)", input_ext, output_ext, deinterlace)
+    if input_format == "auto":
+        logger.info(
+            "Converting: all video formats -> %s (deinterlace=%s, per-file for DV)",
+            output_ext,
+            deinterlace_mode,
+        )
+    else:
+        logger.info(
+            "Converting: .%s -> %s (deinterlace=%s)",
+            input_format,
+            output_ext,
+            deinterlace_mode,
+        )
     logger.info("Options: use_gpu=%s, crf=%s, preset=%s, dry_run=%s, prune_output=%s, copy_useful_only=%s",
                 args.use_gpu, args.crf, args.preset, args.dry_run, args.prune_output, args.copy_useful_only)
 
@@ -300,16 +366,21 @@ def run_convert(args: argparse.Namespace) -> None:
     else:
         video_args = build_x264_video_args(args.crf, args.preset, logger)
 
-    # Collect source files matching the requested input format (case-insensitive).
-    src_files = sorted(
-        [p for p in input_root.rglob("*") if p.is_file() and p.suffix.lower() == input_ext],
-        key=lambda p: str(p).lower(),
-    )
+    src_files = collect_convert_sources(input_root, input_format, output_format)
     if not src_files:
-        logger.info("No %s files found under input root. Nothing to do.", input_ext)
+        if input_format == "auto":
+            logger.info(
+                "No convertible video files found under input root (already %s or unsupported). Nothing to do.",
+                output_ext,
+            )
+        else:
+            logger.info("No .%s files found under input root. Nothing to do.", input_format)
         return
 
-    logger.info("Found %d %s files to consider.", len(src_files), input_ext)
+    if input_format == "auto":
+        logger.info("Found %d video files to convert to %s.", len(src_files), output_ext)
+    else:
+        logger.info("Found %d .%s files to consider.", len(src_files), input_format)
 
     src_dirs: Set[Path] = set()
     for f in src_files:
@@ -337,7 +408,7 @@ def run_convert(args: argparse.Namespace) -> None:
                 ffprobe_bin=ffprobe_bin,
                 video_args=video_args,
                 output_ext=output_ext,
-                deinterlace=deinterlace,
+                deinterlace=resolve_deinterlace(deinterlace_mode, src),
                 output_format=output_format,
                 dry_run=args.dry_run,
                 used_names_by_dir=used_names_by_dir,
@@ -479,7 +550,7 @@ def run_trim(args: argparse.Namespace) -> None:
     reencode = bool(args.reencode)
     replace = bool(args.replace)
     recursive = not bool(args.no_recursive)
-    input_ext = "." + str(args.input_format).lower().lstrip(".")
+    input_format = normalize_input_format(str(args.input_format))
 
     # In replace mode the trimmed file overwrites the source, so an output
     # folder makes no sense; ignore it rather than silently doing both.
@@ -511,22 +582,8 @@ def run_trim(args: argparse.Namespace) -> None:
         )
         sys.exit(1)
 
-    # Build the list of source files (single file or folder scan).
-    if input_path.is_dir():
-        if recursive:
-            candidates = input_path.rglob("*")
-        else:
-            candidates = input_path.glob("*")
-        src_files = sorted(
-            [p for p in candidates if p.is_file() and p.suffix.lower() == input_ext],
-            key=lambda p: str(p).lower(),
-        )
-        log_dir = output_dir if output_dir is not None else input_path
-    else:
-        src_files = [input_path]
-        log_dir = output_dir if output_dir is not None else input_path.parent
-
-    log_path = (log_dir / "trim.log") if not dry_run else None
+    src_files = collect_trim_sources(input_path, input_format, recursive)
+    log_path = operation_log_path("trim") if not dry_run else None
     logger = setup_simple_logging("video_trim", log_path)
 
     logger.info("Trim mode (%s).", "DRY-RUN" if dry_run else "APPLY")
@@ -540,9 +597,15 @@ def run_trim(args: argparse.Namespace) -> None:
     )
 
     if not src_files:
-        logger.warning(
-            "No '%s' files found under '%s'. Nothing to trim.", input_ext, input_path
-        )
+        if input_path.is_dir():
+            if input_format == "auto":
+                logger.warning(
+                    "No supported video files found under '%s'. Nothing to trim.", input_path
+                )
+            else:
+                logger.warning(
+                    "No '.%s' files found under '%s'. Nothing to trim.", input_format, input_path
+                )
         return
 
     ffmpeg_bin, ffprobe_bin = ensure_tools_available(logger)
@@ -796,7 +859,7 @@ def run_stitch(args: argparse.Namespace) -> None:
         )
         sys.exit(1)
 
-    log_path = (output.parent / "stitch.log") if not dry_run else None
+    log_path = operation_log_path("stitch") if not dry_run else None
     logger = setup_simple_logging("video_stitch", log_path)
 
     logger.info("Stitch mode (%s).", "DRY-RUN" if dry_run else "APPLY")
@@ -817,7 +880,24 @@ def run_stitch(args: argparse.Namespace) -> None:
 
     ffmpeg_bin, ffprobe_bin = ensure_tools_available(logger)
     make_dirs(output.parent)
-    output_format = output.suffix.lower().lstrip(".")
+
+    output_format_arg = getattr(args, "output_format", None)
+    if output_format_arg:
+        output_format = str(output_format_arg).strip().lstrip(".").lower() or "mp4"
+        if output.suffix.lower().lstrip(".") != output_format:
+            output = output.with_suffix("." + output_format)
+    else:
+        output_format = output.suffix.lower().lstrip(".") or "mp4"
+
+    part_formats = sorted({p.suffix.lower().lstrip(".") or "?" for p in parts})
+    if len(part_formats) > 1:
+        logger.info("Input formats: %s", ", ".join(part_formats))
+        if not reencode:
+            logger.warning(
+                "Parts use different formats (%s). Stream copy usually fails across "
+                "formats — use --reencode to join them.",
+                ", ".join(part_formats),
+            )
 
     if reencode:
         # Concat filter needs consistent audio handling: only mux audio when

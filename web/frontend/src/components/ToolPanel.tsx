@@ -1,12 +1,19 @@
-import { useState } from "react";
-import { Button } from "@/components/ui/button";
+import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { CheckField, Field, PathField, SelectField, ToolRunActions } from "@/components/fields";
 import { Input } from "@/components/ui/input";
-import { YouTubeDownloadPanel } from "@/components/YouTubeDownloadPanel";
-import type { ActiveJob, ToolId } from "@/lib/types";
-import { TOOL_LABELS } from "@/lib/types";
+import { OrderedFileList, type FileListItem } from "@/components/OrderedFileList";
+import { DownloadPanel } from "@/components/DownloadPanel";
+import type { ActiveJob, DownloadJobMeta, ToolId } from "@/lib/types";
+import { toolDescription, TOOL_LABELS } from "@/lib/types";
+import { fileExtension, normalizeFilePath, withFileExtension } from "@/lib/utils";
+
+const OUTPUT_FORMAT_OPTS = [
+  { value: "mp4", label: "MP4" },
+  { value: "mkv", label: "MKV" },
+  { value: "mov", label: "MOV" },
+];
 
 const GPU_OPTS = [
   { value: "auto", label: "Auto" },
@@ -21,10 +28,35 @@ const DEINTERLACE_OPTS = [
 const PRESETS = [
   "ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow", "slower", "veryslow", "placebo",
 ];
+const VIDEO_FORMAT_OPTS = [
+  { value: "auto", label: "Auto (all videos)" },
+  ...[
+  "dv",
+  "avi",
+  "divx",
+  "flv",
+  "m2ts",
+  "m4v",
+  "mkv",
+  "mov",
+  "mp4",
+  "mpeg",
+  "mpg",
+  "mts",
+  "ogm",
+  "ts",
+  "vob",
+  "webm",
+  "wmv",
+  ].map((ext) => ({ value: ext, label: ext.toUpperCase() })),
+];
 
 interface ToolPanelProps {
   tool: ToolId;
   onRun: (params: Record<string, unknown>) => Promise<void>;
+  onQueueDownloads?: (
+    items: Array<{ params: Record<string, unknown>; downloadMeta: DownloadJobMeta }>,
+  ) => Promise<void>;
   running: boolean;
   activeJob?: ActiveJob;
   downloadJobs?: ActiveJob[];
@@ -35,6 +67,7 @@ interface ToolPanelProps {
 export function ToolPanel({
   tool,
   onRun,
+  onQueueDownloads,
   running,
   activeJob,
   downloadJobs = [],
@@ -52,15 +85,28 @@ export function ToolPanel({
     }
   };
 
-  if (tool === "download" && onCancelDownload && onDismissFinishedDownloads) {
+  const queueDownloads = async (
+    items: Array<{ params: Record<string, unknown>; downloadMeta: DownloadJobMeta }>,
+  ) => {
+    if (!onQueueDownloads) return;
+    setError(null);
+    try {
+      await onQueueDownloads(items);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  if (tool === "download" && onCancelDownload && onDismissFinishedDownloads && onQueueDownloads) {
     return (
       <Card className="border-0 shadow-md">
-        <YouTubeDownloadPanel
+        <DownloadPanel
           jobs={downloadJobs}
-          onQueue={run}
+          onQueueDownloads={queueDownloads}
           onCancel={onCancelDownload}
           onDismissFinished={onDismissFinishedDownloads}
         />
+        {error && <p className="px-6 pb-4 text-sm text-red-600 dark:text-red-400">{error}</p>}
       </Card>
     );
   }
@@ -69,7 +115,7 @@ export function ToolPanel({
     <Card className="border-0 shadow-md">
       <CardHeader>
         <CardTitle>{TOOL_LABELS[tool]}</CardTitle>
-        <CardDescription>All processing runs locally on your machine.</CardDescription>
+        <CardDescription>{toolDescription(tool)}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         {tool === "convert" && <ConvertForm onRun={run} disabled={running} />}
@@ -112,8 +158,6 @@ function ConvertForm({
   const [deinterlace, setDeinterlace] = useState("auto");
   const [crf, setCrf] = useState("19");
   const [preset, setPreset] = useState("slow");
-  const [prune, setPrune] = useState(false);
-  const [useful, setUseful] = useState(false);
 
   const runParams = (dryRun: boolean) => ({
     input,
@@ -125,38 +169,75 @@ function ConvertForm({
     crf: Number(crf),
     preset,
     dry_run: dryRun,
-    prune_output: prune,
-    copy_useful_only: useful,
   });
 
   return (
     <div className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-2">
-        <PathField label="Input folder" value={input} onChange={setInput} />
-        <PathField label="Output folder" value={output} onChange={setOutput} />
+        <PathField
+          label="Input folder"
+          value={input}
+          onChange={setInput}
+          tooltip="Root folder scanned recursively for source files."
+        />
+        <PathField
+          label="Output folder"
+          value={output}
+          onChange={setOutput}
+          tooltip="Converted files are written here, mirroring the input folder structure."
+        />
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Input format">
-          <Input value={inputFormat} onChange={(e) => setInputFormat(e.target.value)} placeholder="dv" />
-        </Field>
-        <SelectField label="Output format" value={outputFormat} onChange={setOutputFormat} options={[
-          { value: "mp4", label: "MP4" },
-          { value: "mkv", label: "MKV" },
-          { value: "mov", label: "MOV" },
-        ]} />
+        <SelectField
+          label="Input format"
+          value={inputFormat}
+          onChange={setInputFormat}
+          tooltip="Auto converts every supported video in the folder. Or pick one extension to scan for."
+          options={VIDEO_FORMAT_OPTS}
+        />
+        <SelectField
+          label="Output format"
+          value={outputFormat}
+          onChange={setOutputFormat}
+          tooltip="Container format for the converted files."
+          options={[
+            { value: "mp4", label: "MP4" },
+            { value: "mkv", label: "MKV" },
+            { value: "mov", label: "MOV" },
+          ]}
+        />
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
-        <SelectField label="GPU" value={useGpu} onChange={setUseGpu} options={GPU_OPTS} />
-        <SelectField label="Deinterlace" value={deinterlace} onChange={setDeinterlace} options={DEINTERLACE_OPTS} />
+        <SelectField
+          label="GPU"
+          value={useGpu}
+          onChange={setUseGpu}
+          tooltip="Auto tries NVENC; On requires GPU encoding; Off uses CPU (libx264)."
+          options={GPU_OPTS}
+        />
+        <SelectField
+          label="Deinterlace"
+          value={deinterlace}
+          onChange={setDeinterlace}
+          tooltip="Auto enables bwdif only for interlaced sources like DV."
+          options={DEINTERLACE_OPTS}
+        />
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="CRF">
+        <Field
+          label="CRF"
+          tooltip="Quality for CPU encoding. Lower means better quality and larger files (typical range 18–23)."
+        >
           <Input type="number" value={crf} onChange={(e) => setCrf(e.target.value)} />
         </Field>
-        <SelectField label="Preset" value={preset} onChange={setPreset} options={PRESETS.map((p) => ({ value: p, label: p }))} />
+        <SelectField
+          label="Preset"
+          value={preset}
+          onChange={setPreset}
+          tooltip="Encoding speed vs compression. Slower presets squeeze more quality per bit."
+          options={PRESETS.map((p) => ({ value: p, label: p }))}
+        />
       </div>
-      <CheckField label="Prune non-matching from output" checked={prune} onChange={setPrune} />
-      <CheckField label="Copy useful-only tree" checked={useful} onChange={setUseful} />
       <ToolRunActions
         loading={disabled}
         disabled={disabled || !input || !output}
@@ -172,7 +253,7 @@ function TrimForm({ onRun, disabled }: { onRun: (p: Record<string, unknown>) => 
   const [output, setOutput] = useState("");
   const [trimStart, setTrimStart] = useState("0");
   const [trimEnd, setTrimEnd] = useState("0");
-  const [fmt, setFmt] = useState("mp4");
+  const [fmt, setFmt] = useState("auto");
   const [reencode, setReencode] = useState(false);
   const [replace, setReplace] = useState(false);
   const [noRec, setNoRec] = useState(false);
@@ -191,22 +272,68 @@ function TrimForm({ onRun, disabled }: { onRun: (p: Record<string, unknown>) => 
 
   return (
     <div className="space-y-4">
-      <PathField label="Input file or folder" value={input} onChange={setInput} />
-      <PathField label="Output folder (optional)" value={output} onChange={setOutput} placeholder="Leave empty for 'name - trimmed.ext'" />
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Field label="Trim start (sec or 0:10)">
-          <Input value={trimStart} onChange={(e) => setTrimStart(e.target.value)} />
+      <div className="grid gap-4 sm:grid-cols-2">
+        <PathField
+          label="Input file or folder"
+          value={input}
+          onChange={setInput}
+          tooltip="A single video file, or a folder of videos matching the format below."
+        />
+        <PathField
+          label="Output folder (optional)"
+          value={output}
+          onChange={setOutput}
+          placeholder="Leave empty for 'name - trimmed.ext'"
+          tooltip="Leave empty to write each trimmed file next to its source as name - trimmed.ext."
+        />
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field
+          label="Trim start"
+          tooltip="Seconds (10, 0.5), milliseconds (500ms), or a timestamp (0:10, 1:02:03)."
+        >
+          <Input
+            value={trimStart}
+            onChange={(e) => setTrimStart(e.target.value)}
+            placeholder="0, 0.5, 500ms, 0:10"
+          />
         </Field>
-        <Field label="Trim end">
-          <Input value={trimEnd} onChange={(e) => setTrimEnd(e.target.value)} />
-        </Field>
-        <Field label="Folder format">
-          <Input value={fmt} onChange={(e) => setFmt(e.target.value)} />
+        <Field
+          label="Trim end"
+          tooltip="Seconds (5, 0.25), milliseconds (250ms), or a timestamp (0:05)."
+        >
+          <Input
+            value={trimEnd}
+            onChange={(e) => setTrimEnd(e.target.value)}
+            placeholder="0, 0.25, 250ms, 0:05"
+          />
         </Field>
       </div>
-      <CheckField label="Re-encode (frame-accurate)" checked={reencode} onChange={setReencode} />
-      <CheckField label="Replace original" checked={replace} onChange={setReplace} hint="Overwrites source when trim succeeds." />
-      <CheckField label="No recursion" checked={noRec} onChange={setNoRec} />
+      <SelectField
+        label="Folder format"
+        value={fmt}
+        onChange={setFmt}
+        tooltip="When input is a folder, Auto trims every supported video. Or pick one extension."
+        options={VIDEO_FORMAT_OPTS}
+      />
+      <CheckField
+        label="Re-encode (frame-accurate)"
+        checked={reencode}
+        onChange={setReencode}
+        tooltip="Re-encode for an exact cut. Off copies streams (faster, but snaps to keyframes)."
+      />
+      <CheckField
+        label="Replace original"
+        checked={replace}
+        onChange={setReplace}
+        tooltip="Overwrite each source with its trimmed version once the trim succeeds."
+      />
+      <CheckField
+        label="No recursion"
+        checked={noRec}
+        onChange={setNoRec}
+        tooltip="When input is a folder, only scan that folder, not subfolders."
+      />
       <ToolRunActions
         loading={disabled}
         disabled={disabled || !input}
@@ -218,37 +345,71 @@ function TrimForm({ onRun, disabled }: { onRun: (p: Record<string, unknown>) => 
 }
 
 function StitchForm({ onRun, disabled }: { onRun: (p: Record<string, unknown>) => void; disabled?: boolean }) {
-  const [parts, setParts] = useState<string[]>(["", ""]);
+  const [parts, setParts] = useState<FileListItem[]>([]);
   const [output, setOutput] = useState("");
+  const [outputFormat, setOutputFormat] = useState("mp4");
   const [reencode, setReencode] = useState(false);
 
+  const hasMixedFormats = useMemo(() => {
+    const exts = parts.map((part) => fileExtension(part.path)).filter(Boolean);
+    return new Set(exts).size > 1;
+  }, [parts]);
+
+  useEffect(() => {
+    if (hasMixedFormats) setReencode(true);
+  }, [hasMixedFormats]);
+
+  const handleOutputFormatChange = (format: string) => {
+    setOutputFormat(format);
+    if (output.trim()) setOutput(withFileExtension(output, format));
+  };
+
   const runParams = (dryRun: boolean) => ({
-    input: parts.filter(Boolean),
-    output,
+    input: parts.map((part) => normalizeFilePath(part.path)),
+    output: withFileExtension(output, outputFormat),
+    output_format: outputFormat,
     dry_run: dryRun,
-    reencode,
+    reencode: hasMixedFormats || reencode,
     input_format: "mp4",
     no_recursive: false,
   });
 
-  const setPart = (i: number, v: string) => {
-    setParts((prev) => prev.map((p, j) => (j === i ? v : p)));
-  };
-
   return (
     <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">Parts in order (full paths):</p>
-      {parts.map((p, i) => (
-        <PathField key={i} label={`Part ${i + 1}`} value={p} onChange={(v) => setPart(i, v)} placeholder="C:\\path\\part.mp4" />
-      ))}
-      <Button variant="outline" size="sm" onClick={() => setParts((prev) => [...prev, ""])}>
-        Add part
-      </Button>
-      <PathField label="Output file" value={output} onChange={setOutput} placeholder="C:\\out\\joined.mp4" />
-      <CheckField label="Re-encode" checked={reencode} onChange={setReencode} />
+      <OrderedFileList
+        label="Parts to join"
+        tooltip="Parts are joined in list order. Mixed formats turn on Re-encode automatically."
+        items={parts}
+        onChange={setParts}
+        showFormat
+      />
+      <div className="grid gap-4 sm:grid-cols-2">
+        <SelectField
+          label="Output format"
+          value={outputFormat}
+          onChange={handleOutputFormatChange}
+          tooltip="Container for the joined video. The output path extension updates to match."
+          options={OUTPUT_FORMAT_OPTS}
+        />
+        <PathField
+          label="Output file"
+          value={output}
+          onChange={setOutput}
+          placeholder={`C:\\out\\joined.${outputFormat}`}
+          tooltip="Path for the combined file. Extension should match the output format above."
+        />
+      </div>
+      <CheckField
+        label="Re-encode"
+        checked={reencode}
+        onChange={setReencode}
+        disabled={hasMixedFormats}
+        hint={hasMixedFormats ? "Required when parts use different formats." : undefined}
+        tooltip="Transcode to H.264 + AAC before joining. Locked on when formats in the list differ."
+      />
       <ToolRunActions
         loading={disabled}
-        disabled={disabled || parts.filter(Boolean).length < 2 || !output}
+        disabled={disabled || parts.length < 2 || !output}
         onPreview={() => onRun(runParams(true))}
         onApply={() => onRun(runParams(false))}
       />
@@ -279,13 +440,31 @@ function VtsForm({ onRun, disabled }: { onRun: (p: Record<string, unknown>) => v
   return (
     <div className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-2">
-        <PathField label="Input folder" value={input} onChange={setInput} />
-        <PathField label="Output folder" value={output} onChange={setOutput} />
+        <PathField
+          label="Input folder"
+          value={input}
+          onChange={setInput}
+          tooltip="Folder with VIDEO_TS rips or VTS_xx_x.VOB files, scanned recursively."
+        />
+        <PathField
+          label="Output folder"
+          value={output}
+          onChange={setOutput}
+          tooltip="One joined file per DVD title is written here."
+        />
       </div>
-      <Field label="Min title size (MB)">
+      <Field
+        label="Min title size (MB)"
+        tooltip="Skip title sets smaller than this (menus, junk). Use 0 to convert everything."
+      >
         <Input type="number" value={minMb} onChange={(e) => setMinMb(e.target.value)} />
       </Field>
-      <CheckField label="Re-encode to H.264" checked={reencode} onChange={setReencode} />
+      <CheckField
+        label="Re-encode to H.264"
+        checked={reencode}
+        onChange={setReencode}
+        tooltip="Transcode to H.264 instead of a fast lossless remux. Slower, but smaller files."
+      />
       <ToolRunActions
         loading={disabled}
         disabled={disabled || !input || !output}
@@ -296,19 +475,97 @@ function VtsForm({ onRun, disabled }: { onRun: (p: Record<string, unknown>) => v
   );
 }
 
+function RenameFormatInfo() {
+  return (
+    <details className="group rounded-lg border bg-muted/30 text-sm open:bg-muted/40">
+      <summary className="cursor-pointer select-none px-4 py-3 font-medium text-foreground marker:content-none [&::-webkit-details-marker]:hidden">
+        <span className="inline-flex items-center gap-2">
+          Supported filename formats
+          <span className="text-xs font-normal text-muted-foreground group-open:hidden">(click to expand)</span>
+        </span>
+      </summary>
+      <div className="space-y-4 border-t px-4 py-3 text-muted-foreground">
+        <div>
+          <p className="mb-1.5 font-medium text-foreground">TV episodes</p>
+          <ul className="list-inside list-disc space-y-1 text-xs leading-relaxed">
+            <li>
+              Standard codes: <code className="rounded bg-muted px-1">S01E01</code>,{" "}
+              <code className="rounded bg-muted px-1">1x01</code>,{" "}
+              <code className="rounded bg-muted px-1">Season 1 Episode 5</code> (dots, dashes, and
+              underscores are normalized)
+            </li>
+            <li>
+              Double episodes: <code className="rounded bg-muted px-1">S01E01-E02</code>,{" "}
+              <code className="rounded bg-muted px-1">S01E01&amp;E02</code>,{" "}
+              <code className="rounded bg-muted px-1">1x01x02</code>
+            </li>
+            <li>
+              Episode titles after the code:{" "}
+              <code className="rounded bg-muted px-1">Breaking Bad S01E01 Pilot</code>
+            </li>
+            <li>
+              Bare episode numbers (season 1):{" "}
+              <code className="rounded bg-muted px-1">Show Name 47 Episode Title</code>
+            </li>
+          </ul>
+        </div>
+        <div>
+          <p className="mb-1.5 font-medium text-foreground">Movies</p>
+          <ul className="list-inside list-disc space-y-1 text-xs leading-relaxed">
+            <li>
+              Requires a year (19xx or 20xx):{" "}
+              <code className="rounded bg-muted px-1">Movie Name 2008</code> or{" "}
+              <code className="rounded bg-muted px-1">Movie Name (2008)</code>
+            </li>
+            <li>Release tags after the year are ignored; the year must be near the end of the name</li>
+          </ul>
+        </div>
+        <div>
+          <p className="mb-1.5 font-medium text-foreground">Cleaned automatically</p>
+          <p className="text-xs leading-relaxed">
+            Bracket tags like <code className="rounded bg-muted px-1">[RARBG]</code>, quality/source
+            tokens (<code className="rounded bg-muted px-1">1080p</code>,{" "}
+            <code className="rounded bg-muted px-1">WEB-DL</code>,{" "}
+            <code className="rounded bg-muted px-1">x265</code>), and scene groups are stripped from
+            titles. Subtitle language tags (<code className="rounded bg-muted px-1">.en</code>,{" "}
+            <code className="rounded bg-muted px-1">.forced</code>) are kept.
+          </p>
+        </div>
+        <div>
+          <p className="mb-1.5 font-medium text-foreground">Output layout</p>
+          <ul className="list-inside list-disc space-y-1 text-xs leading-relaxed">
+            <li>
+              TV: <code className="rounded bg-muted px-1">Show Name/Season 01/Show Name - S01E01 - Title.mkv</code>
+            </li>
+            <li>
+              Movie: <code className="rounded bg-muted px-1">Movie Name (2008)/Movie Name (2008).mkv</code>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </details>
+  );
+}
+
+const RENAME_TYPE_OPTS = [
+  { value: "auto", label: "Auto" },
+  { value: "tv", label: "TV" },
+  { value: "movie", label: "Movie" },
+];
+
 function RenameForm({ onRun, disabled }: { onRun: (p: Record<string, unknown>) => void; disabled?: boolean }) {
   const [input, setInput] = useState("");
   const [output, setOutput] = useState("");
+  const [mediaType, setMediaType] = useState("auto");
   const [copy, setCopy] = useState(false);
-  const [undo, setUndo] = useState(false);
 
   const runParams = (apply: boolean) => ({
     input,
     output: output || null,
     apply,
     copy,
-    undo,
-    type: "auto",
+    undo: false,
+    type: mediaType,
     prune_empty_dirs: false,
     no_titlecase: false,
     strip_words: [],
@@ -317,10 +574,35 @@ function RenameForm({ onRun, disabled }: { onRun: (p: Record<string, unknown>) =
 
   return (
     <div className="space-y-4">
-      <PathField label="Input folder" value={input} onChange={setInput} />
-      <PathField label="Output (optional)" value={output} onChange={setOutput} hint="Leave empty to reorganize in place." />
-      <CheckField label="Copy instead of move" checked={copy} onChange={setCopy} />
-      <CheckField label="Undo last apply" checked={undo} onChange={setUndo} />
+      <div className="grid gap-4 sm:grid-cols-2">
+        <PathField
+          label="Input folder"
+          value={input}
+          onChange={setInput}
+          tooltip="Media library root scanned recursively for TV shows, movies, and subtitles."
+        />
+        <PathField
+          label="Output folder"
+          value={output}
+          onChange={setOutput}
+          hint="Leave empty to reorganize in place."
+          tooltip="Destination for the organized layout. Omit to reorganize under the input folder."
+        />
+      </div>
+      <SelectField
+        label="Media type"
+        value={mediaType}
+        onChange={setMediaType}
+        tooltip="Auto detects TV (SxxExx or bare episode numbers) and movies (with a year). TV or Movie skips the other type."
+        options={RENAME_TYPE_OPTS}
+      />
+      <RenameFormatInfo />
+      <CheckField
+        label="Copy instead of move"
+        checked={copy}
+        onChange={setCopy}
+        tooltip="Copy files into the new layout and keep the originals."
+      />
       <ToolRunActions
         loading={disabled}
         disabled={disabled || !input}
@@ -344,8 +626,16 @@ function AudioForm({ onRun, disabled }: { onRun: (p: Record<string, unknown>) =>
 
   return (
     <div className="space-y-4">
-      <PathField label="MKV file or folder" value={input} onChange={setInput} />
-      <Field label="Language">
+      <PathField
+        label="MKV file or folder"
+        value={input}
+        onChange={setInput}
+        tooltip="An .mkv file or folder of MKV files, scanned recursively."
+      />
+      <Field
+        label="Language"
+        tooltip="Desired default audio track: 2-letter (en), 3-letter (eng), or name (english)."
+      >
         <Input value={lang} onChange={(e) => setLang(e.target.value)} placeholder="eng" />
       </Field>
       <ToolRunActions
@@ -364,7 +654,12 @@ function DedupForm({ onRun, disabled }: { onRun: (p: Record<string, unknown>) =>
 
   return (
     <div className="space-y-4">
-      <PathField label="Folder" value={input} onChange={setInput} />
+      <PathField
+        label="Folder"
+        value={input}
+        onChange={setInput}
+        tooltip="Scans recursively for files named like name (2).ext and renames them back to name.ext."
+      />
       <ToolRunActions
         loading={disabled}
         disabled={disabled || !input}
@@ -380,7 +675,12 @@ function RenameFoldersForm({ onRun, disabled }: { onRun: (p: Record<string, unkn
 
   return (
     <div className="space-y-4">
-      <PathField label="Root folder" value={root} onChange={setRoot} />
+      <PathField
+        label="Root folder"
+        value={root}
+        onChange={setRoot}
+        tooltip='Renames direct subfolders to "YYYY maand DD - Description" using dates from video filenames.'
+      />
       <ToolRunActions
         loading={disabled}
         disabled={disabled || !root}

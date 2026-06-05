@@ -46,7 +46,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default="dv",
         help=(
             "Input file extension to scan for, with or without a leading dot "
-            "(e.g. dv, avi, mov, mp4, ts). Default: dv."
+            "(e.g. dv, avi, mov, mp4, ts), or 'auto' to convert every supported "
+            "video in the folder that is not already the output format. Default: dv."
         ),
     )
     convert.add_argument(
@@ -229,8 +230,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--undo",
         action="store_true",
         help=(
-            "Reverse the most recent --apply run using the undo journal written "
-            "next to the destination. Dry-run by default; add --apply to perform it. "
+            "Reverse the most recent --apply run using the undo journal stored "
+            "under app data. Dry-run by default; add --apply to perform it. "
             "Use the same --input/--output as the original run."
         ),
     )
@@ -360,7 +361,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--output",
         required=True,
         type=Path,
-        help="Output folder where the downloaded file (and download.log) will be written.",
+        help="Output folder where the downloaded file will be written.",
     )
     download.add_argument(
         "--format",
@@ -436,22 +437,27 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--trim-start",
         default="0",
         help=(
-            "How much to cut off the START. Accepts seconds (e.g. 10) or a timestamp "
-            "(e.g. 0:10, 1:02:03). Default: 0 (cut nothing off the start)."
+            "How much to cut off the START. Accepts seconds (e.g. 10, 0.5), "
+            "milliseconds (e.g. 500ms), or a timestamp (e.g. 0:10, 1:02:03). "
+            "Default: 0 (cut nothing off the start)."
         ),
     )
     trim.add_argument(
         "--trim-end",
         default="0",
         help=(
-            "How much to cut off the END. Accepts seconds (e.g. 5) or a timestamp "
-            "(e.g. 0:05). Default: 0 (cut nothing off the end)."
+            "How much to cut off the END. Accepts seconds (e.g. 5, 0.25), "
+            "milliseconds (e.g. 250ms), or a timestamp (e.g. 0:05). "
+            "Default: 0 (cut nothing off the end)."
         ),
     )
     trim.add_argument(
         "--input-format",
         default="mp4",
-        help="When --input is a folder, the file extension to look for. Default: mp4.",
+        help=(
+            "When --input is a folder, the file extension to look for, or 'auto' "
+            "to trim every supported video in the folder. Default: mp4."
+        ),
     )
     trim.add_argument(
         "--no-recursive",
@@ -513,6 +519,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         required=True,
         type=Path,
         help="Output file to write the stitched video to (e.g. D:\\out\\joined.mp4).",
+    )
+    stitch.add_argument(
+        "--output-format",
+        default=None,
+        choices=["mp4", "mkv", "mov"],
+        help=(
+            "Output container format. When set, the output path extension is adjusted "
+            "to match. If omitted, the extension on --output is used (default: mp4)."
+        ),
     )
     stitch.add_argument(
         "--input-format",
