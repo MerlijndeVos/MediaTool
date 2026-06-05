@@ -4,6 +4,8 @@ import { Download, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ReleaseNotes } from "@/components/ReleaseNotes";
+import { UpdateProgress } from "@/components/UpdateProgress";
+import type { UpdateApplyStatus } from "@/api/client";
 
 interface UpdateModalProps {
   open: boolean;
@@ -12,6 +14,7 @@ interface UpdateModalProps {
   releaseNotes?: string | null;
   releaseUrl?: string | null;
   applying: boolean;
+  applyStatus?: UpdateApplyStatus | null;
   applyMessage?: string | null;
   onSkip: () => void;
   onUpdate: () => void;
@@ -24,6 +27,7 @@ export function UpdateModal({
   releaseNotes,
   releaseUrl,
   applying,
+  applyStatus,
   applyMessage,
   onSkip,
   onUpdate,
@@ -56,7 +60,7 @@ export function UpdateModal({
         <CardHeader className="shrink-0 border-b pb-4">
           <div className="flex items-start gap-3">
             <img
-              src="/app/favicon-32.png"
+              src="/app/favicon.svg"
               alt=""
               className="size-11 shrink-0 rounded-[10px]"
               width={44}
@@ -104,6 +108,8 @@ export function UpdateModal({
               )}
             </p>
           )}
+
+          <UpdateProgress applyStatus={applyStatus ?? null} applying={applying} />
 
           <div className="flex shrink-0 items-center justify-end gap-2 border-t pt-4">
             <Button type="button" variant="outline" size="default" disabled={applying} onClick={onSkip}>

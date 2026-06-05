@@ -352,7 +352,7 @@ def _launch_installer(path: Path) -> None:
         subprocess.Popen(
             [
                 str(path),
-                "/VERYSILENT",
+                "/SILENT",
                 "/CLOSEAPPLICATIONS",
                 "/RESTARTAPPLICATIONS",
             ],
@@ -396,7 +396,7 @@ def _apply_update_worker(info: UpdateInfo) -> None:
     try:
         _set_state(phase="downloading", progress=0.0, message="Downloading update…", clear_error=True)
         _download_file(info.download_url, dest)
-        _set_state(phase="installing", progress=100.0, message="Launching installer…")
+        _set_state(phase="installing", progress=100.0, message="Installing update — follow the setup progress window…")
         _launch_installer(dest)
         threading.Timer(0.5, _quit_app).start()
     except Exception as exc:

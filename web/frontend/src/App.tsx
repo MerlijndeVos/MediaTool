@@ -136,7 +136,7 @@ export default function App() {
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3">
           <div className="flex items-center gap-2.5">
             <img
-              src="/app/favicon-32.png"
+              src="/app/favicon.svg"
               alt=""
               className="size-8 shrink-0 rounded-[9px]"
               width={32}
@@ -306,6 +306,7 @@ export default function App() {
           releaseNotes={updates.check.release_notes}
           releaseUrl={updates.check.release_url}
           applying={updates.applying}
+          applyStatus={updates.applyStatus}
           applyMessage={updates.applyStatus?.message}
           onSkip={updates.handleSkip}
           onUpdate={updates.handleApply}

@@ -108,11 +108,18 @@ export const TOOL_LABELS: Record<ToolId, string> = {
   rename_folders: "Rename Folders",
 };
 
-const DEFAULT_TOOL_DESCRIPTION = "All processing runs locally on your machine.";
+export const TOOL_DESCRIPTIONS: Record<ToolId, string> = {
+  convert: "Batch-convert videos between formats with optional deinterlace and GPU encoding.",
+  trim: "Remove seconds from the start and/or end of one or more files.",
+  stitch: "Join multiple clips into a single output file in order.",
+  download: "Download videos or playlists from yt-dlp-supported sites as MP4 or MP3.",
+  rename: "Organize TV shows, movies, and subtitles into a Plex/Jellyfin-friendly layout.",
+  vts: "Merge DVD VIDEO_TS VOB files into one file per title.",
+  audio: "Set the default audio track language in MKV files (requires MKVToolNix).",
+  dedup: "Remove duplicate (2), (3), … suffixes from filenames.",
+  rename_folders: "Rename subfolders to YYYY month DD - Description using video dates.",
+};
 
 export function toolDescription(tool: ToolId): string {
-  if (tool === "rename") {
-    return "Organize TV shows, movies, and subtitles into a Plex/Jellyfin-friendly layout.";
-  }
-  return DEFAULT_TOOL_DESCRIPTION;
+  return TOOL_DESCRIPTIONS[tool];
 }

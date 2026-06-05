@@ -1,4 +1,5 @@
 import { Download, Loader2, RefreshCw } from "lucide-react";
+import { UpdateProgress } from "@/components/UpdateProgress";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -70,6 +71,8 @@ export function UpdatesPanel({
           )}
         </div>
 
+        <UpdateProgress applyStatus={applyStatus} applying={applying} />
+
         {check && (
           <p className="text-sm text-muted-foreground">
             Installed version: <span className="font-medium text-foreground">v{check.current_version}</span>
@@ -86,11 +89,8 @@ export function UpdatesPanel({
         {error && (
           <p className={cn("text-sm", "text-red-600 dark:text-red-400")}>{error}</p>
         )}
-        {!error && status && (
+        {!error && status && !applying && (
           <p className="text-sm text-muted-foreground">{status}</p>
-        )}
-        {applying && applyStatus?.message && !error && (
-          <p className="text-sm text-muted-foreground">{applyStatus.message}</p>
         )}
       </CardContent>
     </Card>
