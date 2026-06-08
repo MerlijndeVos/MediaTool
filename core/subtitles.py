@@ -1,0 +1,639 @@
+"""SRT subtitle translation and junk-line cleanup."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import logging
+import os
+import re
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Callable, Iterable, Optional, Sequence, Set
+
+from . import config
+from .log_storage import operation_log_path
+from .logging_setup import setup_simple_logging
+from .paths import clean_path_string, path_exists, path_is_dir, path_is_file
+from .progress import get_active_hooks
+from .rename import SUB_FLAG_TOKENS, split_subtitle_suffix
+from .settings_store import load_settings
+from .subtitle_languages import (
+    LANGUAGE_LABELS,
+    normalize_lang_code,
+)
+
+SRT_EXTENSION = ".srt"
+DEFAULT_OPENAI_MODEL = "gpt-4o-mini"
+TRANSLATE_BATCH_SIZE = 25
+CONTEXT_CUES = 4
+
+URL_RE = re.compile(
+    r"(https?://|www\.)[^\s]+",
+    re.IGNORECASE,
+)
+EMAIL_RE = re.compile(r"\b[\w.+-]+@[\w-]+\.[\w.-]+\b")
+BRACKET_LINE_RE = re.compile(r"^\s*[\[\{].*[\]\}]\s*$")
+CREDIT_RE = re.compile(
+    r"(?i)\b("
+    r"sync(?:ed|hronized)?\s+by|subtitles?\s+by|translated?\s+by|"
+    r"translation\s+by|ripped?\s+by|encoded?\s+by|brought?\s+to\s+you\s+by|"
+    r"download(?:ed)?\s+from|visit\s+us\s+at|"
+    r"opensubtitles|subscene|addic7ed|yify|yts|rarbg|ettv|eztv"
+    r")\b",
+)
+RELEASE_TAG_RE = re.compile(
+    r"(?i)^[\[\{\(<].*(?:yify|yts|rarbg|ettv|eztv|sync|subtitles?)[\]\}\)>]?$",
+)
+NOISE_LINE_RE = re.compile(r"^[\W_]+$")
+
+JUNK_REASON_LABELS = {
+    "url": "URL or web address",
+    "email": "Email address",
+    "bracket_watermark": "Bracket watermark",
+    "credit_line": "Credits or site promotion",
+    "release_tag": "Release group tag",
+    "noise": "Non-dialogue noise line",
+}
+
+
+@dataclass
+class SubtitleCue:
+    index: int
+    start: str
+    end: str
+    lines: list[str] = field(default_factory=list)
+
+    @property
+    def text(self) -> str:
+        return "\n".join(self.lines)
+
+
+@dataclass
+class JunkCandidate:
+    id: str
+    file: str
+    cue_index: int
+    line_index: int
+    text: str
+    reason: str
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "file": self.file,
+            "cue_index": self.cue_index,
+            "line_index": self.line_index,
+            "text": self.text,
+            "reason": self.reason,
+            "reason_label": JUNK_REASON_LABELS.get(self.reason, self.reason),
+        }
+
+
+def detect_lang_from_path(path: Path) -> Optional[str]:
+    """Detect source language from subtitle filename suffix tokens."""
+    _base, suffix = split_subtitle_suffix(path.stem)
+    for tok in suffix.split("."):
+        if tok and tok.lower() in SUB_FLAG_TOKENS:
+            continue
+        code = normalize_lang_code(tok)
+        if code:
+            return code
+    return None
+
+
+def resolve_source_lang(path: Path, source_lang: str) -> str:
+    """Resolve 'auto' to a filename token or fall back to English."""
+    if source_lang and source_lang.lower() != "auto":
+        code = normalize_lang_code(source_lang)
+        if code:
+            return code
+        return source_lang.lower()
+    detected = detect_lang_from_path(path)
+    return detected or "en"
+
+
+def build_output_path(src: Path, target_lang: str) -> Path:
+    """Build translated output path with target language suffix."""
+    base, suffix = split_subtitle_suffix(src.stem)
+    flag_parts = [p for p in suffix.split(".") if p and p.lower() in SUB_FLAG_TOKENS]
+    new_suffix = ".".join([target_lang, *flag_parts]) if flag_parts else target_lang
+    return src.with_name(f"{base}.{new_suffix}{src.suffix}")
+
+
+def collect_srt_files(input_path: Path) -> list[Path]:
+    input_path = Path(clean_path_string(str(input_path)))
+    if path_is_file(input_path):
+        if input_path.suffix.lower() != SRT_EXTENSION:
+            raise ValueError(f"Not an SRT file: {input_path}")
+        return [input_path]
+    if not path_is_dir(input_path):
+        raise ValueError(f"Input path not found: {input_path}")
+    files = sorted(
+        p for p in input_path.rglob("*") if path_is_file(p) and p.suffix.lower() == SRT_EXTENSION
+    )
+    if not files:
+        raise ValueError(f"No .srt files found under {input_path}")
+    return files
+
+
+def parse_srt(content: str) -> list[SubtitleCue]:
+    text = content.lstrip("\ufeff").replace("\r\n", "\n").replace("\r", "\n").strip()
+    if not text:
+        return []
+
+    blocks = re.split(r"\n\s*\n", text)
+    cues: list[SubtitleCue] = []
+    for block in blocks:
+        lines = [ln for ln in block.split("\n") if ln.strip() or ln == ""]
+        if len(lines) < 2:
+            continue
+        try:
+            index = int(lines[0].strip())
+        except ValueError:
+            continue
+        timing = lines[1]
+        if "-->" not in timing:
+            continue
+        start, end = [part.strip() for part in timing.split("-->", 1)]
+        body = lines[2:]
+        while body and not body[-1].strip():
+            body.pop()
+        cues.append(SubtitleCue(index=index, start=start, end=end, lines=body))
+    return cues
+
+
+def format_srt(cues: Sequence[SubtitleCue]) -> str:
+    parts: list[str] = []
+    for i, cue in enumerate(cues, start=1):
+        parts.append(str(i))
+        parts.append(f"{cue.start} --> {cue.end}")
+        parts.extend(cue.lines)
+        parts.append("")
+    return "\n".join(parts).rstrip() + "\n"
+
+
+def _junk_reason(line: str) -> Optional[str]:
+    stripped = line.strip()
+    if not stripped:
+        return None
+    if URL_RE.search(stripped):
+        return "url"
+    if EMAIL_RE.search(stripped):
+        return "email"
+    if BRACKET_LINE_RE.match(stripped) and len(stripped) <= 120:
+        return "bracket_watermark"
+    if RELEASE_TAG_RE.match(stripped):
+        return "release_tag"
+    if CREDIT_RE.search(stripped):
+        return "credit_line"
+    if NOISE_LINE_RE.match(stripped) and len(stripped) >= 3:
+        return "noise"
+    return None
+
+
+def junk_line_id(file_path: Path, cue_index: int, line_index: int) -> str:
+    return f"{os.path.normcase(os.path.abspath(str(file_path)))}:{cue_index}:{line_index}"
+
+
+def scan_junk_in_file(path: Path) -> list[JunkCandidate]:
+    content = path.read_text(encoding="utf-8-sig", errors="replace")
+    cues = parse_srt(content)
+    results: list[JunkCandidate] = []
+    file_str = str(path)
+    for cue_index, cue in enumerate(cues):
+        for line_index, line in enumerate(cue.lines):
+            reason = _junk_reason(line)
+            if reason:
+                results.append(
+                    JunkCandidate(
+                        id=junk_line_id(path, cue_index, line_index),
+                        file=file_str,
+                        cue_index=cue_index,
+                        line_index=line_index,
+                        text=line,
+                        reason=reason,
+                    )
+                )
+    return results
+
+
+def scan_junk(input_path: Path) -> list[JunkCandidate]:
+    return [item for path in collect_srt_files(input_path) for item in scan_junk_in_file(path)]
+
+
+def apply_junk_removals(
+    cues: list[SubtitleCue],
+    file_path: Path,
+    confirmed_ids: Set[str],
+) -> tuple[list[SubtitleCue], int]:
+    """Return cues with confirmed junk lines removed."""
+    removed = 0
+    cleaned: list[SubtitleCue] = []
+    for cue_index, cue in enumerate(cues):
+        kept_lines: list[str] = []
+        for line_index, line in enumerate(cue.lines):
+            line_id = junk_line_id(file_path, cue_index, line_index)
+            if line_id in confirmed_ids and _junk_reason(line):
+                removed += 1
+                continue
+            kept_lines.append(line)
+        if kept_lines:
+            cleaned.append(
+                SubtitleCue(index=cue.index, start=cue.start, end=cue.end, lines=kept_lines)
+            )
+    return cleaned, removed
+
+
+def _openai_api_key() -> str:
+    settings = load_settings()
+    key = (settings.get("openai_api_key") or os.environ.get("OPENAI_API_KEY") or "").strip()
+    if not key:
+        raise ValueError(
+            "OpenAI API key not configured. Add it in Logging settings or set OPENAI_API_KEY."
+        )
+    return key
+
+
+def _openai_model(explicit: Optional[str] = None) -> str:
+    if explicit:
+        return explicit
+    settings = load_settings()
+    return str(settings.get("openai_model") or DEFAULT_OPENAI_MODEL)
+
+
+def _language_name(code: str) -> str:
+    return LANGUAGE_LABELS.get(code, code)
+
+
+def _truncate_sample(text: str, max_len: int = 140) -> str:
+    compact = " ".join(text.replace("\n", " ").split())
+    if len(compact) <= max_len:
+        return compact
+    return compact[: max_len - 1] + "…"
+
+
+def _translation_samples(batch: Sequence[SubtitleCue], by_id: dict[int, str]) -> list[dict[str, str]]:
+    if not batch:
+        return []
+    indices = [0]
+    if len(batch) > 2:
+        indices.append(len(batch) // 2)
+    samples: list[dict[str, str]] = []
+    for idx in indices:
+        cue = batch[idx]
+        target = by_id.get(idx + 1, cue.text)
+        samples.append(
+            {
+                "source": _truncate_sample(cue.text),
+                "target": _truncate_sample(target),
+            }
+        )
+    return samples
+
+
+def _build_translation_prompts(
+    batch: Sequence[SubtitleCue],
+    *,
+    source_lang: str,
+    target_lang: str,
+    context_pairs: Sequence[tuple[str, str]],
+) -> tuple[str, str]:
+    source_name = _language_name(source_lang)
+    target_name = _language_name(target_lang)
+    system_prompt = (
+        f"You are an expert subtitle translator for film and television.\n\n"
+        f"Translate from {source_name} ({source_lang}) into natural, fluent "
+        f"{target_name} ({target_lang}) dialogue.\n\n"
+        "Quality rules:\n"
+        "- Write how native speakers would actually say it: idiomatic, grammatical, "
+        "and natural — never stiff, awkward, or word-for-word literal.\n"
+        "- Consecutive cues are continuous dialogue; keep tone, register, and story "
+        "context consistent across lines.\n"
+        "- Each subtitle must read as a correct sentence or natural spoken phrase.\n"
+        "- Fix clumsy source phrasing when needed so the target line still sounds right.\n"
+        "- Preserve meaning, emotion, humor, and subtext.\n"
+        "- Keep the same line breaks as the source (use \\n only where the source does).\n"
+        "- Keep lines concise and easy to read on screen.\n"
+        "- Do not add notes, speaker labels, or numbering.\n"
+        "- Return JSON only."
+    )
+
+    parts: list[str] = []
+    if context_pairs:
+        parts.append(
+            "Previously translated lines (for dialogue continuity — do NOT re-translate these):"
+        )
+        for src, tgt in context_pairs:
+            parts.append(f"  [{source_lang}] {src}")
+            parts.append(f"  [{target_lang}] {tgt}")
+        parts.append("")
+
+    payload = [{"id": i + 1, "text": cue.text} for i, cue in enumerate(batch)]
+    parts.extend(
+        [
+            "Translate ONLY the following cues (they appear in order):",
+            json.dumps(payload, ensure_ascii=False),
+            "",
+            'Return JSON: {"translations": [{"id": <matching id>, "text": "<translated subtitle>"}, ...]}',
+        ]
+    )
+    return system_prompt, "\n".join(parts)
+
+
+def translate_cues_batch(
+    cues: list[SubtitleCue],
+    *,
+    source_lang: str,
+    target_lang: str,
+    model: str,
+    logger: logging.Logger,
+    on_progress: Optional[Callable[[dict], None]] = None,
+) -> list[SubtitleCue]:
+    if not cues:
+        return []
+
+    try:
+        from openai import OpenAI
+    except ImportError as exc:
+        raise RuntimeError(
+            "The openai package is not installed. Reinstall Media Tool with web/desktop extras."
+        ) from exc
+
+    client = OpenAI(api_key=_openai_api_key())
+
+    translated: list[SubtitleCue] = []
+    total_batches = max(1, (len(cues) + TRANSLATE_BATCH_SIZE - 1) // TRANSLATE_BATCH_SIZE)
+    for batch_num, batch_start in enumerate(range(0, len(cues), TRANSLATE_BATCH_SIZE), start=1):
+        batch = cues[batch_start : batch_start + TRANSLATE_BATCH_SIZE]
+        context_pairs = [
+            (cues[i].text, translated[i].text)
+            for i in range(max(0, batch_start - CONTEXT_CUES), batch_start)
+            if i < len(translated)
+        ]
+        system_prompt, user_prompt = _build_translation_prompts(
+            batch,
+            source_lang=source_lang,
+            target_lang=target_lang,
+            context_pairs=context_pairs,
+        )
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.15,
+        )
+        raw = response.choices[0].message.content or "{}"
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(f"OpenAI returned invalid JSON: {raw[:200]}") from exc
+
+        items = parsed.get("translations") if isinstance(parsed, dict) else parsed
+        if isinstance(parsed, dict) and items is None:
+            # Accept {"1": "...", "2": "..."} or list under any key
+            for value in parsed.values():
+                if isinstance(value, list):
+                    items = value
+                    break
+        if not isinstance(items, list):
+            raise RuntimeError(f"Unexpected OpenAI response shape: {raw[:200]}")
+
+        by_id: dict[int, str] = {}
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            try:
+                cue_id = int(item.get("id"))
+            except (TypeError, ValueError):
+                continue
+            text = item.get("text")
+            if isinstance(text, str):
+                by_id[cue_id] = text
+
+        for i, cue in enumerate(batch):
+            new_text = by_id.get(i + 1, cue.text)
+            lines = new_text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+            translated.append(
+                SubtitleCue(index=cue.index, start=cue.start, end=cue.end, lines=lines)
+            )
+        logger.info(
+            "Translated cues %d–%d of %d.",
+            batch_start + 1,
+            batch_start + len(batch),
+            len(cues),
+        )
+        if on_progress is not None:
+            cues_done = batch_start + len(batch)
+            on_progress(
+                {
+                    "file_pct": cues_done / len(cues) * 100,
+                    "batch": batch_num,
+                    "total_batches": total_batches,
+                    "status": f"Batch {batch_num}/{total_batches}",
+                    "samples": _translation_samples(batch, by_id),
+                }
+            )
+
+    return translated
+
+
+def process_srt_file(
+    src: Path,
+    *,
+    target_lang: str,
+    source_lang: str,
+    model: str,
+    clean_junk: bool,
+    confirmed_removals: Set[str],
+    dry_run: bool,
+    overwrite: bool,
+    logger: logging.Logger,
+    file_index: int = 1,
+    total_files: int = 1,
+    on_progress: Optional[Callable[[dict], None]] = None,
+) -> Optional[Path]:
+    def emit_progress(payload: dict) -> None:
+        if on_progress is None:
+            return
+        file_pct = float(payload.get("file_pct", 0))
+        overall = ((file_index - 1) / total_files * 100) + (file_pct / total_files)
+        on_progress(
+            {
+                "pct": overall,
+                "title": src.name,
+                "status": payload.get("status", "Translating"),
+                "samples": payload.get("samples"),
+            }
+        )
+    dst = build_output_path(src, target_lang)
+    resolved_source = resolve_source_lang(src, source_lang)
+
+    if dst.resolve() == src.resolve():
+        logger.warning("Skip %s: output path equals input.", src.name)
+        return None
+    if path_exists(dst) and not overwrite:
+        logger.warning("Skip %s: output already exists (%s).", src.name, dst.name)
+        return None
+
+    content = src.read_text(encoding="utf-8-sig", errors="replace")
+    cues = parse_srt(content)
+    if not cues:
+        logger.warning("Skip %s: no cues parsed.", src.name)
+        return None
+
+    removed = 0
+    if clean_junk and confirmed_removals:
+        cues, removed = apply_junk_removals(cues, src, confirmed_removals)
+        if removed:
+            logger.info("%s: removing %d junk line(s).", src.name, removed)
+
+    if dry_run:
+        logger.info(
+            "Would translate %s -> %s (%d cues, %s -> %s).",
+            src.name,
+            dst.name,
+            len(cues),
+            resolved_source,
+            target_lang,
+        )
+        emit_progress({"file_pct": 100, "status": "Preview"})
+        return dst
+
+    emit_progress({"file_pct": 0, "status": "Starting"})
+    translated = translate_cues_batch(
+        cues,
+        source_lang=resolved_source,
+        target_lang=target_lang,
+        model=model,
+        logger=logger,
+        on_progress=emit_progress,
+    )
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    dst.write_text(format_srt(translated), encoding="utf-8")
+    logger.info("Wrote %s (%d cues).", dst.name, len(translated))
+    return dst
+
+
+def process_srt_cleanup_file(
+    src: Path,
+    *,
+    confirmed_removals: Set[str],
+    dry_run: bool,
+    logger: logging.Logger,
+) -> int:
+    """Remove confirmed junk lines from *src*. Returns lines removed."""
+    content = src.read_text(encoding="utf-8-sig", errors="replace")
+    cues = parse_srt(content)
+    if not cues:
+        logger.warning("Skip %s: no cues parsed.", src.name)
+        return 0
+
+    cues, removed = apply_junk_removals(cues, src, confirmed_removals)
+    if removed == 0:
+        logger.info("No junk lines to remove in %s.", src.name)
+        return 0
+
+    if dry_run:
+        logger.info("Would remove %d junk line(s) from %s.", removed, src.name)
+        return removed
+
+    src.write_text(format_srt(cues), encoding="utf-8")
+    logger.info("Wrote %s (%d junk line(s) removed).", src.name, removed)
+    return removed
+
+
+def run_subtitle_translate(args: argparse.Namespace) -> None:
+    input_path: Path = args.input
+    target_lang = normalize_lang_code(args.target_lang) or args.target_lang.lower()
+    if not target_lang or target_lang == "auto":
+        raise SystemExit("A concrete target language is required.")
+
+    logger = setup_simple_logging(
+        "subtitle_translate",
+        operation_log_path("subtitle_translate") if not args.dry_run else None,
+    )
+    logger.info("Subtitle translate: input=%s target=%s dry_run=%s", input_path, target_lang, args.dry_run)
+
+    model = _openai_model(getattr(args, "model", None))
+    files = collect_srt_files(input_path)
+    total = len(files)
+
+    hooks = get_active_hooks()
+    progress_cb = hooks.on_progress
+    for i, path in enumerate(files, start=1):
+        process_srt_file(
+            path,
+            target_lang=target_lang,
+            source_lang=args.source_lang,
+            model=model,
+            clean_junk=False,
+            confirmed_removals=set(),
+            dry_run=args.dry_run,
+            overwrite=args.overwrite,
+            logger=logger,
+            file_index=i,
+            total_files=total,
+            on_progress=progress_cb,
+        )
+        if progress_cb is not None:
+            progress_cb(
+                {
+                    "pct": i / total * 100,
+                    "title": path.name,
+                    "status": "File complete",
+                }
+            )
+
+    if args.dry_run:
+        logger.info("Dry run complete (%d file(s)).", total)
+    else:
+        logger.info("Translation complete (%d file(s)).", total)
+
+
+def run_subtitle_cleanup(args: argparse.Namespace) -> None:
+    input_path: Path = args.input
+    logger = setup_simple_logging(
+        "subtitle_cleanup",
+        operation_log_path("subtitle_cleanup") if not args.dry_run else None,
+    )
+    logger.info("Subtitle cleanup: input=%s dry_run=%s", input_path, args.dry_run)
+
+    confirmed: set[str] = set(getattr(args, "confirmed_removals", []) or [])
+    files = collect_srt_files(input_path)
+    total = len(files)
+
+    if not confirmed and not getattr(args, "junk_reviewed", False):
+        for path in files:
+            for item in scan_junk_in_file(path):
+                confirmed.add(item.id)
+        if confirmed:
+            logger.info("Removing %d junk line(s) (all detected).", len(confirmed))
+
+    if not confirmed:
+        logger.info("No junk lines selected for removal.")
+        return
+
+    removed_total = 0
+    hooks = get_active_hooks()
+    for i, path in enumerate(files, start=1):
+        if hooks.on_progress is not None:
+            hooks.on_progress(
+                {"pct": (i - 1) / total * 100, "title": path.name},
+            )
+        removed_total += process_srt_cleanup_file(
+            path,
+            confirmed_removals=confirmed,
+            dry_run=args.dry_run,
+            logger=logger,
+        )
+        if hooks.on_progress is not None:
+            hooks.on_progress({"pct": i / total * 100, "title": path.name})
+
+    if args.dry_run:
+        logger.info("Dry run complete (%d junk line(s) across %d file(s)).", removed_total, total)
+    else:
+        logger.info("Cleanup complete (%d junk line(s) across %d file(s)).", removed_total, total)

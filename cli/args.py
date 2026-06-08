@@ -577,5 +577,67 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Show planned renames without changing anything.",
     )
 
+    # ------------------------------------------------------------------
+    # subtitle_translate subcommand
+    # ------------------------------------------------------------------
+    subtitle_translate = subparsers.add_parser(
+        "subtitle_translate",
+        help="Translate SRT subtitles with OpenAI.",
+        description=(
+            "Translate .srt subtitle files using OpenAI. Output files use the target "
+            "language suffix (e.g. Show.en.srt -> Show.de.srt)."
+        ),
+    )
+    subtitle_translate.add_argument(
+        "--input",
+        required=True,
+        type=Path,
+        help="SRT file or folder containing .srt files.",
+    )
+    subtitle_translate.add_argument(
+        "--source-lang",
+        default="auto",
+        help="Source language code or 'auto' to detect from filename (default: auto).",
+    )
+    subtitle_translate.add_argument(
+        "--target-lang",
+        required=True,
+        help="Target language code (ISO 639-1, e.g. de, nl, en).",
+    )
+    subtitle_translate.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Overwrite existing translated output files.",
+    )
+    subtitle_translate.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show planned actions without calling OpenAI or writing files.",
+    )
+
+    # ------------------------------------------------------------------
+    # subtitle_cleanup subcommand
+    # ------------------------------------------------------------------
+    subtitle_cleanup = subparsers.add_parser(
+        "subtitle_cleanup",
+        help="Remove junk lines from SRT subtitles.",
+        description=(
+            "Remove URLs, credits, watermarks, and similar non-dialogue lines "
+            "from .srt files in place."
+        ),
+    )
+    subtitle_cleanup.add_argument(
+        "--input",
+        required=True,
+        type=Path,
+        help="SRT file or folder containing .srt files.",
+    )
+    subtitle_cleanup.set_defaults(confirmed_removals=[], junk_reviewed=True)
+    subtitle_cleanup.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show planned removals without writing files.",
+    )
+
     return parser.parse_args(argv)
 

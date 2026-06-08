@@ -279,20 +279,25 @@ export function SelectField({
   onChange,
   options,
   tooltip,
+  hint,
+  disabled = false,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   options: { value: string; label: string }[];
   tooltip?: string;
+  hint?: string;
+  disabled?: boolean;
 }) {
   return (
-    <Field label={label} tooltip={tooltip}>
+    <Field label={label} hint={hint} tooltip={tooltip}>
       <div className="relative">
         <select
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className="flex h-10 w-full appearance-none rounded-md border border-input bg-background pl-3 pr-8 text-left text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          disabled={disabled}
+          className="flex h-10 w-full appearance-none rounded-md border border-input bg-background pl-3 pr-8 text-left text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
         >
           {options.map((o) => (
             <option key={o.value} value={o.value}>
@@ -306,5 +311,48 @@ export function SelectField({
         />
       </div>
     </Field>
+  );
+}
+
+export function LanguageCombobox({
+  label,
+  value,
+  onChange,
+  languages,
+  includeAuto = false,
+  hint,
+  tooltip,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  languages: { code: string; label: string }[];
+  includeAuto?: boolean;
+  hint?: string;
+  tooltip?: string;
+}) {
+  const options = [
+    ...(includeAuto ? [{ value: "auto", label: "Auto (from filename)" }] : []),
+    ...languages.map((lang) => ({
+      value: lang.code,
+      label: `${lang.label} (${lang.code})`,
+    })),
+  ];
+
+  const selectValue = options.some((o) => o.value === value)
+    ? value
+    : includeAuto
+      ? "auto"
+      : (options[0]?.value ?? value);
+
+  return (
+    <SelectField
+      label={label}
+      value={selectValue}
+      onChange={onChange}
+      options={options}
+      hint={hint}
+      tooltip={tooltip}
+    />
   );
 }

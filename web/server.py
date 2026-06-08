@@ -6,9 +6,11 @@ import asyncio
 import json
 import queue
 from contextlib import asynccontextmanager
-from typing import AsyncIterator
+from typing import AsyncIterator, Optional
 
 from core.download import probe_url
+from core.subtitles import detect_lang_from_path, scan_junk
+from core.subtitle_languages import language_options
 from core.log_storage import clear_logs, logs_stats
 from core.settings_store import load_settings, save_settings
 from core.tools import get_tools_status, retry_bootstrap_background, start_bootstrap_background
@@ -35,6 +37,11 @@ from .schemas import (
     PARAM_MODELS,
     SettingsResponse,
     SettingsUpdateRequest,
+    SubtitleLanguagesResponse,
+    SubtitleScanJunkRequest,
+    SubtitleScanJunkResponse,
+    LanguageOption,
+    SubtitleJunkItem,
     UpdateApplyResponse,
     UpdateApplyStatusResponse,
     UpdateCheckResponse,
@@ -76,6 +83,8 @@ COMMAND_DESCRIPTIONS: dict[str, str] = {
     "trim": "Cut seconds off the start and/or end of videos.",
     "stitch": "Join multiple videos end-to-end.",
     "rename_folders": "Date-stamp subfolders (YYYY maand DD - Description).",
+    "subtitle_translate": "Translate SRT subtitles with OpenAI.",
+    "subtitle_cleanup": "Remove junk lines from SRT subtitles in place.",
 }
 
 
@@ -114,8 +123,11 @@ def tools_bootstrap_retry() -> dict:
 
 def _settings_response() -> SettingsResponse:
     settings = load_settings()
+    api_key = str(settings.get("openai_api_key") or "").strip()
     return SettingsResponse(
         file_logging=bool(settings.get("file_logging", True)),
+        openai_api_key_set=bool(api_key),
+        openai_model=str(settings.get("openai_model") or "gpt-4o-mini"),
         logs=LogsStatsResponse(**logs_stats()),
     )
 
@@ -128,9 +140,49 @@ def get_settings() -> SettingsResponse:
 @app.patch("/api/settings", response_model=SettingsResponse)
 def update_settings(body: SettingsUpdateRequest) -> SettingsResponse:
     updates = body.model_dump(exclude_unset=True)
+    if "openai_api_key" in updates:
+        key = updates["openai_api_key"]
+        if key is not None and not str(key).strip():
+            updates["openai_api_key"] = ""
     if updates:
         save_settings(**updates)
     return _settings_response()
+
+
+@app.get("/api/subtitles/languages", response_model=SubtitleLanguagesResponse)
+def subtitle_languages() -> SubtitleLanguagesResponse:
+    return SubtitleLanguagesResponse(
+        languages=[LanguageOption(**item) for item in language_options()],
+    )
+
+
+@app.post("/api/subtitles/scan-junk", response_model=SubtitleScanJunkResponse)
+def subtitle_scan_junk(body: SubtitleScanJunkRequest) -> SubtitleScanJunkResponse:
+    from pathlib import Path
+
+    from core.paths import clean_path_string, path_exists, path_is_dir, path_is_file
+
+    input_path = Path(clean_path_string(body.input))
+    if not path_exists(input_path):
+        raise HTTPException(status_code=422, detail=f"Input path not found: {input_path}")
+    try:
+        items = scan_junk(input_path)
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    detected: Optional[str] = None
+    if path_is_file(input_path):
+        detected = detect_lang_from_path(input_path)
+    elif path_is_dir(input_path):
+        for path in sorted(input_path.rglob("*.srt")):
+            detected = detect_lang_from_path(path)
+            if detected:
+                break
+
+    return SubtitleScanJunkResponse(
+        items=[SubtitleJunkItem(**item.to_dict()) for item in items],
+        detected_source_lang=detected,
+    )
 
 
 @app.delete("/api/settings/logs", response_model=ClearLogsResponse)

@@ -12,6 +12,7 @@ license = { text = "MIT" }
 dependencies = [
     "yt-dlp>=2024.0.0",
     "yt-dlp-ejs>=0.8.0",
+    "openai>=1.0.0",
 ]
 
 [project.urls]

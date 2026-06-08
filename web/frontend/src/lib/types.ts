@@ -7,7 +7,9 @@ export type CommandName =
   | "download"
   | "trim"
   | "stitch"
-  | "rename_folders";
+  | "rename_folders"
+  | "subtitle_translate"
+  | "subtitle_cleanup";
 
 export type JobStatus = "queued" | "running" | "completed" | "failed" | "cancelled";
 
@@ -67,12 +69,18 @@ export interface DownloadProgress {
   title?: string;
 }
 
+export interface TranslationSample {
+  source: string;
+  target: string;
+}
+
 export interface ActiveJob extends JobSummary {
   logs: LogLine[];
   progress?: number | null;
   progressLabel?: string;
   downloadMeta?: DownloadJobMeta;
   downloadProgress?: DownloadProgress;
+  translationSamples?: TranslationSample[];
 }
 
 export interface DownloadProbeEntry {
@@ -94,6 +102,7 @@ export interface DownloadProbeResult {
 export type ToolId = CommandName;
 
 export const PRIMARY_TOOLS: ToolId[] = ["convert", "trim", "stitch", "download", "rename"];
+export const SUBTITLE_TOOLS: ToolId[] = ["subtitle_translate", "subtitle_cleanup"];
 export const SECONDARY_TOOLS: ToolId[] = ["vts", "audio", "dedup", "rename_folders"];
 
 export const TOOL_LABELS: Record<ToolId, string> = {
@@ -106,6 +115,8 @@ export const TOOL_LABELS: Record<ToolId, string> = {
   audio: "Audio Default",
   dedup: "Fix Duplicates",
   rename_folders: "Rename Folders",
+  subtitle_translate: "Translate",
+  subtitle_cleanup: "Clean Up",
 };
 
 export const TOOL_DESCRIPTIONS: Record<ToolId, string> = {
@@ -118,6 +129,8 @@ export const TOOL_DESCRIPTIONS: Record<ToolId, string> = {
   audio: "Set the default audio track language in MKV files (ffmpeg stream copy).",
   dedup: "Remove duplicate (2), (3), … suffixes from filenames.",
   rename_folders: "Rename subfolders to YYYY month DD - Description using video dates.",
+  subtitle_translate: "Translate SRT subtitles to another language with OpenAI.",
+  subtitle_cleanup: "Remove URLs, credits, and other junk lines from SRT files in place.",
 };
 
 export function toolDescription(tool: ToolId): string {

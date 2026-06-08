@@ -5,7 +5,9 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any, Literal, Optional, Union
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from core.paths import clean_path_string
 
 CommandName = Literal[
     "convert",
@@ -17,6 +19,8 @@ CommandName = Literal[
     "trim",
     "stitch",
     "rename_folders",
+    "subtitle_translate",
+    "subtitle_cleanup",
 ]
 
 JobStatus = Literal["queued", "running", "completed", "failed", "cancelled"]
@@ -142,6 +146,64 @@ class RenameFoldersParams(BaseModel):
     dry_run: bool = True
 
 
+class SubtitleTranslateParams(BaseModel):
+    input: str
+    source_lang: str = "auto"
+    target_lang: str = "en"
+    overwrite: bool = False
+    dry_run: bool = True
+
+    @field_validator("input")
+    @classmethod
+    def normalize_input(cls, value: str) -> str:
+        return clean_path_string(value)
+
+
+class SubtitleCleanupParams(BaseModel):
+    input: str
+    confirmed_removals: list[str] = Field(default_factory=list)
+    junk_reviewed: bool = False
+    dry_run: bool = True
+
+    @field_validator("input")
+    @classmethod
+    def normalize_input(cls, value: str) -> str:
+        return clean_path_string(value)
+
+
+class SubtitleScanJunkRequest(BaseModel):
+    input: str
+
+    @field_validator("input")
+    @classmethod
+    def normalize_input(cls, value: str) -> str:
+        return clean_path_string(value)
+
+
+class SubtitleJunkItem(BaseModel):
+    id: str
+    file: str
+    cue_index: int
+    line_index: int
+    text: str
+    reason: str
+    reason_label: str
+
+
+class SubtitleScanJunkResponse(BaseModel):
+    items: list[SubtitleJunkItem]
+    detected_source_lang: Optional[str] = None
+
+
+class LanguageOption(BaseModel):
+    code: str
+    label: str
+
+
+class SubtitleLanguagesResponse(BaseModel):
+    languages: list[LanguageOption]
+
+
 PARAM_MODELS: dict[str, type[BaseModel]] = {
     "convert": ConvertParams,
     "vts": VtsParams,
@@ -152,6 +214,8 @@ PARAM_MODELS: dict[str, type[BaseModel]] = {
     "trim": TrimParams,
     "stitch": StitchParams,
     "rename_folders": RenameFoldersParams,
+    "subtitle_translate": SubtitleTranslateParams,
+    "subtitle_cleanup": SubtitleCleanupParams,
 }
 
 
@@ -242,11 +306,15 @@ class LogsStatsResponse(BaseModel):
 
 class SettingsResponse(BaseModel):
     file_logging: bool
+    openai_api_key_set: bool = False
+    openai_model: str = "gpt-4o-mini"
     logs: LogsStatsResponse
 
 
 class SettingsUpdateRequest(BaseModel):
     file_logging: Optional[bool] = None
+    openai_api_key: Optional[str] = None
+    openai_model: Optional[str] = None
 
 
 class ClearLogsResponse(BaseModel):

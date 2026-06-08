@@ -5,7 +5,8 @@ import { CheckField, Field, PathField, SelectField, ToolRunActions } from "@/com
 import { Input } from "@/components/ui/input";
 import { OrderedFileList, type FileListItem } from "@/components/OrderedFileList";
 import { DownloadPanel } from "@/components/DownloadPanel";
-import type { ActiveJob, DownloadJobMeta, ToolId } from "@/lib/types";
+import { SubtitleCleanupForm, SubtitleTranslateForm } from "@/components/SubtitlePanel";
+import type { ActiveJob, DownloadJobMeta, ToolId, TranslationSample } from "@/lib/types";
 import { toolDescription, TOOL_LABELS } from "@/lib/types";
 import { fileExtension, normalizeFilePath, withFileExtension } from "@/lib/utils";
 
@@ -126,20 +127,64 @@ export function ToolPanel({
         {tool === "audio" && <AudioForm onRun={run} disabled={running} />}
         {tool === "dedup" && <DedupForm onRun={run} disabled={running} />}
         {tool === "rename_folders" && <RenameFoldersForm onRun={run} disabled={running} />}
+        {tool === "subtitle_translate" && (
+          <SubtitleTranslateForm onRun={run} disabled={running} />
+        )}
+        {tool === "subtitle_cleanup" && (
+          <SubtitleCleanupForm onRun={run} disabled={running} />
+        )}
 
         {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
 
         {activeJob && (
-          <div className="space-y-2 rounded-lg border bg-muted/40 p-4">
-            <div className="flex justify-between text-sm">
-              <span className="font-medium capitalize">{activeJob.status}</span>
-              <span className="text-muted-foreground">{activeJob.progressLabel ?? ""}</span>
-            </div>
-            {activeJob.progress != null && <Progress value={activeJob.progress} />}
-          </div>
+          <SubtitleJobStatus job={activeJob} />
         )}
       </CardContent>
     </Card>
+  );
+}
+
+function SubtitleJobStatus({ job }: { job: ActiveJob }) {
+  const samples = job.translationSamples ?? [];
+  const showSamples = job.command === "subtitle_translate" && samples.length > 0;
+  const recentSamples = samples.slice(-6);
+
+  return (
+    <div className="space-y-3 rounded-lg border bg-muted/40 p-4">
+      <div className="flex justify-between gap-3 text-sm">
+        <span className="font-medium capitalize">{job.status}</span>
+        <span className="text-right text-muted-foreground">{job.progressLabel ?? ""}</span>
+      </div>
+      {job.progress != null && job.status === "running" && (
+        <Progress value={job.progress} />
+      )}
+      {job.status === "completed" && job.progress != null && (
+        <Progress value={job.progress} />
+      )}
+      {showSamples && (
+        <div className="space-y-2 border-t border-border/60 pt-3">
+          <p className="text-sm font-medium">
+            {job.status === "running" ? "Live translation samples" : "Translation samples"}
+          </p>
+          <div className="max-h-64 space-y-3 overflow-y-auto">
+            {recentSamples.map((sample: TranslationSample, index) => (
+              <div
+                key={`${sample.source}-${index}`}
+                className="space-y-1 rounded-md border border-border/60 bg-background/80 px-3 py-2 text-xs"
+              >
+                <p className="text-muted-foreground">{sample.source}</p>
+                <p className="text-foreground">{sample.target}</p>
+              </div>
+            ))}
+          </div>
+          {samples.length > recentSamples.length && (
+            <p className="text-xs text-muted-foreground">
+              Showing the latest {recentSamples.length} of {samples.length} samples.
+            </p>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 

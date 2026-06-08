@@ -8,8 +8,16 @@ long paths and avoids surprises on network shares.
 """
 
 import os
+import re
 import shutil
 from pathlib import Path
+
+_QUOTED_PATH_RE = re.compile(r'^["\']+|["\']+$')
+
+
+def clean_path_string(path: str) -> str:
+    """Strip whitespace and surrounding quotes from a user-supplied path."""
+    return _QUOTED_PATH_RE.sub("", path.strip())
 
 
 def ext_path(path: Path) -> str:
@@ -35,6 +43,14 @@ def ext_path(path: Path) -> str:
 
 def path_exists(path: Path) -> bool:
     return os.path.exists(ext_path(path))
+
+
+def path_is_file(path: Path) -> bool:
+    return os.path.isfile(ext_path(path))
+
+
+def path_is_dir(path: Path) -> bool:
+    return os.path.isdir(ext_path(path))
 
 
 def make_dirs(path: Path) -> None:

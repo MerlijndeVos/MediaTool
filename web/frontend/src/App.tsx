@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Download, Palette, ScrollText, Wifi, WifiOff } from "lucide-react";
+import { Bot, Download, Palette, ScrollText, Wifi, WifiOff } from "lucide-react";
 import { checkHealth, fetchSettings } from "@/api/client";
 import { AppearancePanel } from "@/components/AppearancePanel";
 import { LogDrawer } from "@/components/LogDrawer";
 import { ToolsBanner } from "@/components/ToolsBanner";
 import { LoggingPanel } from "@/components/LoggingPanel";
+import { OpenAiSettingsPanel } from "@/components/OpenAiSettingsPanel";
 import { ToolPanel } from "@/components/ToolPanel";
 import { UpdateModal } from "@/components/UpdateModal";
 import { UpdatesPanel } from "@/components/UpdatesPanel";
@@ -14,13 +15,14 @@ import { useUpdates } from "@/hooks/useUpdates";
 import {
   PRIMARY_TOOLS,
   SECONDARY_TOOLS,
+  SUBTITLE_TOOLS,
   TOOL_LABELS,
   type DownloadJobMeta,
   type ToolId,
 } from "@/lib/types";
 import { useJobRunner } from "@/hooks/useJobRunner";
 
-type AppView = "tools" | "logs" | "updates" | "appearance";
+type AppView = "tools" | "logs" | "openai" | "updates" | "appearance";
 
 export default function App() {
   const updates = useUpdates();
@@ -80,13 +82,17 @@ export default function App() {
       .catch(() => undefined);
   }, []);
 
-  const activeJob = useMemo(
-    () =>
-      tool === "download"
-        ? undefined
-        : jobs.find((j) => j.command === tool && (j.status === "running" || j.status === "queued")),
-    [jobs, tool],
-  );
+  const activeJob = useMemo(() => {
+    if (tool === "download") return undefined;
+    const running = jobs.find(
+      (j) => j.command === tool && (j.status === "running" || j.status === "queued"),
+    );
+    if (running) return running;
+    if (tool === "subtitle_translate" || tool === "subtitle_cleanup") {
+      return jobs.find((j) => j.command === tool && j.status === "completed");
+    }
+    return undefined;
+  }, [jobs, tool]);
 
   const downloadJobs = useMemo(
     () => jobs.filter((j) => j.command === "download"),
@@ -164,9 +170,32 @@ export default function App() {
         <aside className="space-y-6">
           <nav className="space-y-1">
             <p className="px-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Main
+              Video
             </p>
             {PRIMARY_TOOLS.map((id) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => {
+                  setView("tools");
+                  setTool(id);
+                }}
+                className={cn(
+                  "w-full rounded-md px-3 py-2 text-left text-sm font-medium transition-colors",
+                  view === "tools" && tool === id
+                    ? "bg-primary text-primary-foreground"
+                    : "text-foreground hover:bg-accent",
+                )}
+              >
+                {TOOL_LABELS[id]}
+              </button>
+            ))}
+          </nav>
+          <nav className="space-y-1">
+            <p className="px-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Subtitles
+            </p>
+            {SUBTITLE_TOOLS.map((id) => (
               <button
                 key={id}
                 type="button"
@@ -225,6 +254,19 @@ export default function App() {
               <ScrollText className="h-4 w-4" />
               Logs
             </button>
+            <button
+              type="button"
+              onClick={() => setView("openai")}
+              className={cn(
+                "flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors",
+                view === "openai"
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:bg-accent hover:text-foreground",
+              )}
+            >
+              <Bot className="h-4 w-4" />
+              OpenAI
+            </button>
             {desktop && (
               <button
                 type="button"
@@ -279,6 +321,8 @@ export default function App() {
           )}
           {view === "logs" ? (
             <LoggingPanel onFileLoggingChange={setFileLogging} />
+          ) : view === "openai" ? (
+            <OpenAiSettingsPanel />
           ) : view === "updates" ? (
             <UpdatesPanel {...updates} />
           ) : view === "appearance" ? (

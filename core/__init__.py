@@ -23,6 +23,7 @@ from .rename import run_rename, run_dedup
 from .audio import run_audio
 from .download import run_download, download_url, DownloadCancelled
 from .rename_folders import run_rename_folders
+from .subtitles import run_subtitle_cleanup, run_subtitle_translate
 from .progress import (
     CallbackLogHandler,
     LogHooks,
@@ -53,6 +54,8 @@ __all__ = [
     "download_url",
     "DownloadCancelled",
     "run_rename_folders",
+    "run_subtitle_translate",
+    "run_subtitle_cleanup",
     "CallbackLogHandler",
     "LogHooks",
     "LogCallback",

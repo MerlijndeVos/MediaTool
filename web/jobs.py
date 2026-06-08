@@ -22,6 +22,8 @@ from core import (
     run_dedup,
     run_rename,
     run_stitch,
+    run_subtitle_cleanup,
+    run_subtitle_translate,
     run_trim,
     run_vts,
 )
@@ -45,6 +47,8 @@ from .schemas import (
     RenameFoldersParams,
     RenameParams,
     StitchParams,
+    SubtitleCleanupParams,
+    SubtitleTranslateParams,
     TrimParams,
     VtsParams,
     utc_now_iso,
@@ -61,6 +65,8 @@ COMMAND_LOGGERS: dict[str, tuple[str, ...]] = {
     "trim": ("video_trim",),
     "stitch": ("video_stitch",),
     "rename_folders": (),
+    "subtitle_translate": ("subtitle_translate",),
+    "subtitle_cleanup": ("subtitle_cleanup",),
 }
 
 
@@ -145,6 +151,24 @@ def _to_namespace(command: str, params: Any) -> argparse.Namespace:
             input_format=p.input_format,
             no_recursive=p.no_recursive,
             reencode=p.reencode,
+            dry_run=p.dry_run,
+        )
+    if command == "subtitle_translate":
+        p: SubtitleTranslateParams = params
+        return argparse.Namespace(
+            input=Path(p.input),
+            source_lang=p.source_lang,
+            target_lang=p.target_lang,
+            overwrite=p.overwrite,
+            dry_run=p.dry_run,
+            model=None,
+        )
+    if command == "subtitle_cleanup":
+        p: SubtitleCleanupParams = params
+        return argparse.Namespace(
+            input=Path(p.input),
+            confirmed_removals=list(p.confirmed_removals),
+            junk_reviewed=p.junk_reviewed,
             dry_run=p.dry_run,
         )
     raise ValueError(f"No namespace mapping for command: {command}")
@@ -382,6 +406,8 @@ class JobManager:
             "dedup": run_dedup,
             "trim": run_trim,
             "stitch": run_stitch,
+            "subtitle_translate": run_subtitle_translate,
+            "subtitle_cleanup": run_subtitle_cleanup,
         }
         handler = handlers[job.command]
         if job.cancel_event.is_set():

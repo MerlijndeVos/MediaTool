@@ -12,6 +12,8 @@ from core import (
     run_rename,
     run_rename_folders,
     run_stitch,
+    run_subtitle_cleanup,
+    run_subtitle_translate,
     run_trim,
     run_vts,
 )
@@ -28,6 +30,8 @@ COMMANDS: dict[str, CommandHandler] = {
     "trim": run_trim,
     "stitch": run_stitch,
     "rename_folders": run_rename_folders,
+    "subtitle_translate": run_subtitle_translate,
+    "subtitle_cleanup": run_subtitle_cleanup,
 }
 
 

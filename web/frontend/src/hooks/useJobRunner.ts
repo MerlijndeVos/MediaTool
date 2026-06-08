@@ -6,6 +6,7 @@ import type {
   DownloadProgress,
   LogLine,
   StartJobRequest,
+  TranslationSample,
 } from "@/lib/types";
 
 export function useJobRunner() {
@@ -40,25 +41,39 @@ export function useJobRunner() {
           pct?: number | null;
           status?: string;
           title?: string;
+          samples?: TranslationSample[];
         };
         const pct = data.pct ?? null;
+        const statusPart = data.status ?? (pct != null ? `${Math.round(pct)}%` : null);
         const label =
-          data.title && pct != null
-            ? `${data.title} — ${Math.round(pct)}%`
-            : data.status ?? "Working…";
-        updateJob(jobId, {
-          progress: pct,
-          progressLabel: label,
-          downloadProgress: {
-            pct,
-            downloaded: data.downloaded ?? null,
-            total: data.total ?? null,
-            speed: data.speed ?? null,
-            eta: data.eta ?? null,
-            status: data.status,
-            title: data.title,
-          },
-        });
+          data.title && statusPart
+            ? `${data.title} — ${statusPart}`
+            : statusPart ?? data.title ?? "Working…";
+        setJobs((prev) =>
+          prev.map((j) => {
+            if (j.id !== jobId) return j;
+            const incoming = data.samples ?? [];
+            const translationSamples =
+              incoming.length > 0
+                ? [...(j.translationSamples ?? []), ...incoming].slice(-16)
+                : j.translationSamples;
+            return {
+              ...j,
+              progress: pct,
+              progressLabel: label,
+              translationSamples,
+              downloadProgress: {
+                pct,
+                downloaded: data.downloaded ?? null,
+                total: data.total ?? null,
+                speed: data.speed ?? null,
+                eta: data.eta ?? null,
+                status: data.status,
+                title: data.title,
+              },
+            };
+          }),
+        );
       });
 
       es.addEventListener("status", (e) => {
@@ -113,6 +128,7 @@ export function useJobRunner() {
         ...res.job,
         logs: [],
         progress: null,
+        translationSamples: [],
         downloadMeta: opts?.downloadMeta,
       };
       setJobs((prev) => [job, ...prev]);
@@ -139,6 +155,7 @@ export function useJobRunner() {
         created_at: new Date().toISOString(),
         logs: [],
         progress: null,
+        translationSamples: [],
         downloadMeta: req.downloadMeta,
       }));
 
@@ -153,6 +170,7 @@ export function useJobRunner() {
               ...res.job,
               logs: [],
               progress: null,
+              translationSamples: [],
               downloadMeta: req.downloadMeta,
             };
             setJobs((prev) => prev.map((j) => (j.id === tempId ? job : j)));
@@ -203,6 +221,7 @@ export function useJobRunner() {
           ...res.job,
           logs: [],
           progress: null,
+          translationSamples: [],
         };
         setJobs((prev) => [job, ...prev]);
         appendLog({

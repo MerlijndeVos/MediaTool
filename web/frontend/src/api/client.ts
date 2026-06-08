@@ -166,6 +166,8 @@ export interface LogsStats {
 
 export interface AppSettings {
   file_logging: boolean;
+  openai_api_key_set: boolean;
+  openai_model: string;
   logs: LogsStats;
 }
 
@@ -173,10 +175,45 @@ export function fetchSettings(): Promise<AppSettings> {
   return request<AppSettings>("/api/settings");
 }
 
-export function updateSettings(patch: { file_logging?: boolean }): Promise<AppSettings> {
+export function updateSettings(patch: {
+  file_logging?: boolean;
+  openai_api_key?: string;
+  openai_model?: string;
+}): Promise<AppSettings> {
   return request<AppSettings>("/api/settings", {
     method: "PATCH",
     body: JSON.stringify(patch),
+  });
+}
+
+export interface SubtitleLanguage {
+  code: string;
+  label: string;
+}
+
+export interface SubtitleJunkItem {
+  id: string;
+  file: string;
+  cue_index: number;
+  line_index: number;
+  text: string;
+  reason: string;
+  reason_label: string;
+}
+
+export interface SubtitleScanJunkResult {
+  items: SubtitleJunkItem[];
+  detected_source_lang?: string | null;
+}
+
+export function fetchSubtitleLanguages(): Promise<{ languages: SubtitleLanguage[] }> {
+  return request("/api/subtitles/languages");
+}
+
+export function scanSubtitleJunk(input: string): Promise<SubtitleScanJunkResult> {
+  return request<SubtitleScanJunkResult>("/api/subtitles/scan-junk", {
+    method: "POST",
+    body: JSON.stringify({ input }),
   });
 }
 
