@@ -641,7 +641,7 @@ function AudioForm({ onRun, disabled }: { onRun: (p: Record<string, unknown>) =>
       <ToolRunActions
         loading={disabled}
         disabled={disabled || !input || !lang}
-        applyHint="Requires MKVToolNix on PATH."
+        applyHint="Remuxes MKV files with stream copy (no re-encode)."
         onPreview={() => onRun(runParams(false))}
         onApply={() => onRun(runParams(true))}
       />

@@ -280,11 +280,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     # ------------------------------------------------------------------
     audio = subparsers.add_parser(
         "audio",
-        help="Set the default audio language (track) in MKV files using mkvpropedit.",
+        help="Set the default audio language (track) in MKV files using ffmpeg.",
         description=(
             "Mark the audio track of a chosen language as the default track in .mkv files. "
-            "Edits headers in place via mkvpropedit (no re-encode). Dry-run by default; "
-            "pass --apply to make changes. Requires MKVToolNix (mkvmerge + mkvpropedit) on PATH."
+            "Remuxes with stream copy (no re-encode). Dry-run by default; "
+            "pass --apply to make changes. Requires ffmpeg/ffprobe."
         ),
     )
     audio.add_argument(

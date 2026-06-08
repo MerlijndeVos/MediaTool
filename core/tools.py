@@ -1,88 +1,237 @@
 """Discovery and capability probing for external tools.
 
-This module locates the external binaries the toolkit shells out to (ffmpeg,
-ffprobe and MKVToolNix) and probes ffmpeg's NVENC capabilities, building the
-matching video-encoder argument lists.
+Locates ffmpeg/ffprobe (downloaded on first run or on PATH) and probes ffmpeg's
+NVENC capabilities.
 """
+
+from __future__ import annotations
 
 import logging
 import os
 import shutil
 import subprocess
 import sys
+import threading
+from enum import Enum
 from pathlib import Path
 from typing import List, Optional, Tuple
 
 from .config import NVENC_AQ_STRENGTH, NVENC_CQ_TARGET
-from .ffmpeg_bootstrap import ensure_ffmpeg_downloaded
-from .runtime import bundled_tools_dir, tool_filename
+from .ffmpeg_bootstrap import ensure_ffmpeg_downloaded, verify_tools
+from .runtime import bundled_tools_dir, install_bundled_tools_dir, tool_filename
 
-MKVTOOLNIX_URL = "https://mkvtoolnix.download/"
+
+class BootstrapPhase(str, Enum):
+    IDLE = "idle"
+    CHECKING = "checking"
+    DOWNLOADING = "downloading"
+    VERIFYING = "verifying"
+    READY = "ready"
+    FAILED = "failed"
+
+
+_bootstrap_lock = threading.Lock()
+_bootstrap_thread: Optional[threading.Thread] = None
+_bootstrap_phase = BootstrapPhase.IDLE
+_bootstrap_message = ""
+_bootstrap_error: Optional[str] = None
+
+
+def _set_bootstrap_state(
+    phase: BootstrapPhase,
+    message: str = "",
+    error: Optional[str] = None,
+) -> None:
+    global _bootstrap_phase, _bootstrap_message, _bootstrap_error
+    with _bootstrap_lock:
+        _bootstrap_phase = phase
+        _bootstrap_message = message
+        _bootstrap_error = error
+
+
+def get_bootstrap_state() -> dict:
+    with _bootstrap_lock:
+        return {
+            "phase": _bootstrap_phase.value,
+            "message": _bootstrap_message,
+            "error": _bootstrap_error,
+        }
+
+
+def _tool_search_dirs() -> list[Path]:
+    dirs: list[Path] = []
+    install_bin = install_bundled_tools_dir()
+    if install_bin.is_dir():
+        dirs.append(install_bin)
+    dirs.append(bundled_tools_dir())
+    return dirs
 
 
 def _prepend_tools_path() -> None:
-    tools_bin = str(bundled_tools_dir())
     path = os.environ.get("PATH", "")
-    if tools_bin not in path.split(os.pathsep):
-        os.environ["PATH"] = tools_bin + os.pathsep + path
+    existing = set(path.split(os.pathsep))
+    prefix: list[str] = []
+    for tools_bin in _tool_search_dirs():
+        entry = str(tools_bin)
+        if entry not in existing:
+            prefix.append(entry)
+            existing.add(entry)
+    if prefix:
+        os.environ["PATH"] = os.pathsep.join(prefix) + os.pathsep + path
 
 
 def _find_tool(name: str) -> tuple[Optional[str], str]:
+    filename = tool_filename(name)
+    for tools_bin in _tool_search_dirs():
+        candidate = tools_bin / filename
+        if candidate.is_file():
+            return str(candidate), "bundled"
     found = shutil.which(name)
     if found:
-        bundled = bundled_tools_dir() / tool_filename(name)
-        source = "bundled" if bundled.resolve() == Path(found).resolve() else "path"
-        return found, source
+        return found, "path"
     return None, "none"
 
 
+def _tools_ready() -> bool:
+    _prepend_tools_path()
+    ffmpeg_path, _ = _find_tool("ffmpeg")
+    ffprobe_path, _ = _find_tool("ffprobe")
+    if not ffmpeg_path or not ffprobe_path:
+        return False
+    ok, _ = verify_tools(ffmpeg_path, ffprobe_path)
+    return ok
+
+
+def _bootstrap_worker() -> None:
+    try:
+        _set_bootstrap_state(BootstrapPhase.CHECKING, "Checking for ffmpeg…")
+        if _tools_ready():
+            _set_bootstrap_state(BootstrapPhase.READY, "ffmpeg is ready.")
+            return
+
+        def emit(msg: str) -> None:
+            _set_bootstrap_state(BootstrapPhase.DOWNLOADING, msg)
+
+        ensure_ffmpeg_downloaded(log=emit)
+        _prepend_tools_path()
+
+        _set_bootstrap_state(BootstrapPhase.VERIFYING, "Verifying ffmpeg…")
+        ffmpeg_path, _ = _find_tool("ffmpeg")
+        ffprobe_path, _ = _find_tool("ffprobe")
+        ok, err = verify_tools(ffmpeg_path or "", ffprobe_path or "")
+        if not ok:
+            raise RuntimeError(err or "ffmpeg verification failed.")
+
+        _set_bootstrap_state(BootstrapPhase.READY, "ffmpeg installed successfully.")
+    except Exception as exc:
+        _set_bootstrap_state(
+            BootstrapPhase.FAILED,
+            "ffmpeg setup failed.",
+            str(exc),
+        )
+
+
+def start_bootstrap_background() -> None:
+    """Start a background first-run ffmpeg install if tools are not yet ready."""
+    global _bootstrap_thread
+    with _bootstrap_lock:
+        if _bootstrap_phase in {BootstrapPhase.DOWNLOADING, BootstrapPhase.VERIFYING, BootstrapPhase.CHECKING}:
+            return
+        if _bootstrap_thread is not None and _bootstrap_thread.is_alive():
+            return
+        if _bootstrap_phase == BootstrapPhase.READY and _tools_ready():
+            return
+
+    if _tools_ready():
+        _set_bootstrap_state(BootstrapPhase.READY, "ffmpeg is ready.")
+        return
+
+    with _bootstrap_lock:
+        _bootstrap_thread = threading.Thread(
+            target=_bootstrap_worker,
+            daemon=True,
+            name="ffmpeg-bootstrap",
+        )
+        _bootstrap_thread.start()
+
+
+def retry_bootstrap_background() -> None:
+    """Retry a failed or interrupted first-run ffmpeg install."""
+    global _bootstrap_thread
+    with _bootstrap_lock:
+        if _bootstrap_thread is not None and _bootstrap_thread.is_alive():
+            return
+        _bootstrap_phase = BootstrapPhase.IDLE
+        _bootstrap_error = None
+    start_bootstrap_background()
+
+
 def bootstrap_ffmpeg(logger: Optional[logging.Logger] = None, auto_download: bool = True) -> bool:
-    """Ensure ffmpeg/ffprobe exist, optionally downloading on first run."""
+    """Ensure ffmpeg/ffprobe exist, optionally downloading on first run (blocking)."""
+    _prepend_tools_path()
     ffmpeg, _ = _find_tool("ffmpeg")
     ffprobe, _ = _find_tool("ffprobe")
     if ffmpeg and ffprobe:
-        return True
+        ok, _ = verify_tools(ffmpeg, ffprobe)
+        if ok:
+            _set_bootstrap_state(BootstrapPhase.READY, "ffmpeg is ready.")
+            return True
+
     if not auto_download:
         return False
 
     log_fn = (lambda msg: logger.info(msg)) if logger else print
     try:
+        _set_bootstrap_state(BootstrapPhase.DOWNLOADING, "Downloading ffmpeg…")
         ensure_ffmpeg_downloaded(log=log_fn, logger=logger)
         _prepend_tools_path()
-        return bool(shutil.which("ffmpeg") and shutil.which("ffprobe"))
+        ready = _tools_ready()
+        if ready:
+            _set_bootstrap_state(BootstrapPhase.READY, "ffmpeg is ready.")
+        else:
+            _set_bootstrap_state(BootstrapPhase.FAILED, "ffmpeg setup failed.", "Verification failed.")
+        return ready
     except Exception as exc:
         if logger:
             logger.error("Failed to download ffmpeg: %s", exc)
+        _set_bootstrap_state(BootstrapPhase.FAILED, "ffmpeg setup failed.", str(exc))
         return False
 
 
 def get_tools_status(auto_bootstrap: bool = False) -> dict:
     """Return availability of external tools for the web UI."""
     if auto_bootstrap:
-        bootstrap_ffmpeg(auto_download=True)
+        start_bootstrap_background()
+    else:
+        _prepend_tools_path()
+        if _tools_ready():
+            _set_bootstrap_state(BootstrapPhase.READY, "ffmpeg is ready.")
 
     ffmpeg_path, ffmpeg_source = _find_tool("ffmpeg")
-    ffprobe_path, ffprobe_source = _find_tool("ffprobe")
-    mkvmerge, _ = _find_tool("mkvmerge")
-    mkvpropedit, _ = _find_tool("mkvpropedit")
-    mkv_ok = bool(mkvmerge and mkvpropedit)
+    ffprobe_path, _ = _find_tool("ffprobe")
+    bootstrap = get_bootstrap_state()
+    phase = bootstrap["phase"]
+
+    if phase in {
+        BootstrapPhase.DOWNLOADING.value,
+        BootstrapPhase.CHECKING.value,
+        BootstrapPhase.VERIFYING.value,
+    }:
+        available = False
+    else:
+        if _tools_ready():
+            _set_bootstrap_state(BootstrapPhase.READY, "ffmpeg is ready.")
+            bootstrap = get_bootstrap_state()
+        available = _tools_ready()
 
     return {
         "ffmpeg": {
-            "available": bool(ffmpeg_path and ffprobe_path),
+            "available": available,
             "ffmpeg_path": ffmpeg_path,
             "ffprobe_path": ffprobe_path,
             "source": ffmpeg_source if ffmpeg_path else "none",
         },
-        "mkvtoolnix": {
-            "available": mkv_ok,
-            "mkvmerge_path": mkvmerge,
-            "mkvpropedit_path": mkvpropedit,
-            "install_url": MKVTOOLNIX_URL,
-            "message": None
-            if mkv_ok
-            else "MKVToolNix is required for Audio Default and some DVD features. Install it and add mkvmerge to PATH.",
-        },
+        "bootstrap": bootstrap,
     }
 
 
@@ -105,11 +254,11 @@ def ensure_tools_available(logger: logging.Logger, auto_download: bool = True) -
 
     if not ffmpeg_path:
         logger.error(
-            "ffmpeg not found on PATH. Install ffmpeg or restart the app to trigger the first-run download."
+            "ffmpeg not found. Wait for the first-run download in the app, or install ffmpeg manually."
         )
         sys.exit(1)
     if not ffprobe_path:
-        logger.error("ffprobe not found on PATH. Please install ffmpeg (includes ffprobe).")
+        logger.error("ffprobe not found. Please install ffmpeg (includes ffprobe).")
         sys.exit(1)
 
     logger.info("Using ffmpeg at: %s", ffmpeg_path)
@@ -163,7 +312,6 @@ def nvenc_option_supported(help_text: str, option_name: str) -> bool:
 
 
 def choose_nvenc_preset(help_text: str, logger: logging.Logger) -> str:
-    # Prefer modern p7 ("slowest, best quality") if available, otherwise fall back to "slow" or "default"
     if "p7" in help_text:
         logger.info("Using NVENC preset: p7")
         return "p7"
@@ -203,20 +351,15 @@ def build_nvenc_video_args(
     rc_mode = choose_nvenc_rc_mode(help_text, logger)
     if rc_mode:
         args += ["-rc", rc_mode]
-        # For vbr / vbr_hq, a zero target bitrate with CQ is a common pattern for "quality-based" mode
         if rc_mode in {"vbr", "vbr_hq"}:
             args += ["-b:v", "0"]
-    # Try to use a CQ-like option if available
     if nvenc_option_supported(help_text, "cq"):
         args += ["-cq", str(cq_target)]
     elif nvenc_option_supported(help_text, "qp"):
-        # Fallback: use qp as a rough equivalent if cq is not available
         args += ["-qp", str(cq_target)]
 
-    # High profile if supported
     args += ["-profile:v", "high"]
 
-    # Adaptive quantization options if available
     if nvenc_option_supported(help_text, "spatial_aq"):
         args += ["-spatial_aq", "1"]
     if nvenc_option_supported(help_text, "temporal_aq"):
@@ -241,18 +384,3 @@ def build_x264_video_args(crf: int, preset: str, logger: logging.Logger) -> List
     ]
     logger.info("Using libx264 video args: %s", " ".join(args))
     return args
-
-
-def ensure_mkvtoolnix(logger: logging.Logger) -> Tuple[str, str]:
-    mkvmerge = shutil.which("mkvmerge")
-    mkvpropedit = shutil.which("mkvpropedit")
-    if not mkvmerge or not mkvpropedit:
-        logger.error(
-            "MKVToolNix not found on PATH (need mkvmerge + mkvpropedit). "
-            "Install it from %s and ensure its folder is on PATH.",
-            MKVTOOLNIX_URL,
-        )
-        sys.exit(1)
-    logger.info("Using mkvmerge at   : %s", mkvmerge)
-    logger.info("Using mkvpropedit at: %s", mkvpropedit)
-    return mkvmerge, mkvpropedit

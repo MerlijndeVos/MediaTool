@@ -115,7 +115,7 @@ export const TOOL_DESCRIPTIONS: Record<ToolId, string> = {
   download: "Download videos or playlists from yt-dlp-supported sites as MP4 or MP3.",
   rename: "Organize TV shows, movies, and subtitles into a Plex/Jellyfin-friendly layout.",
   vts: "Merge DVD VIDEO_TS VOB files into one file per title.",
-  audio: "Set the default audio track language in MKV files (requires MKVToolNix).",
+  audio: "Set the default audio track language in MKV files (ffmpeg stream copy).",
   dedup: "Remove duplicate (2), (3), … suffixes from filenames.",
   rename_folders: "Rename subfolders to YYYY month DD - Description using video dates.",
 };

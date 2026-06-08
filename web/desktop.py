@@ -9,7 +9,6 @@ import threading
 from pathlib import Path
 
 from core.runtime import install_root, resource_root
-from core.tools import bootstrap_ffmpeg
 from core.updates import register_quit_callback
 
 from .desktop_api import DesktopApi
@@ -100,7 +99,6 @@ def main(argv: list[str] | None = None) -> None:
             "  cd web/frontend && npm install && npm run build"
         )
 
-    bootstrap_ffmpeg(auto_download=True)
     _configure_windows_app_id()
 
     port = pick_port(args.port, args.host) if args.host == DEFAULT_HOST else args.port

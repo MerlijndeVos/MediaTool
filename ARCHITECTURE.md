@@ -25,7 +25,7 @@ Media Tool separates **business logic** from **front-ends**. Every feature is im
 └──────────────────────────┬──────────────────────────────────┘
                            │ subprocess / filesystem
 ┌──────────────────────────▼──────────────────────────────────┐
-│  ffmpeg · ffprobe · mkvmerge · yt-dlp (external)              │
+│  ffmpeg · ffprobe · yt-dlp (external; ffmpeg first-run download)    │
 └───────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────┐
@@ -44,7 +44,7 @@ Media Tool separates **business logic** from **front-ends**. Every feature is im
 | `rename_folders.py` | Date-stamp folder names from video filenames |
 | `audio.py` | MKV default audio track |
 | `download.py` | yt-dlp wrapper (CLI + cancellable API downloads) |
-| `tools.py` | ffmpeg / MKVToolNix discovery, first-run bootstrap |
+| `tools.py` | ffmpeg discovery, background first-run bootstrap + verify |
 | `ffmpeg_bootstrap.py` | Download static ffmpeg builds per OS |
 | `runtime.py` | Frozen-app paths, user data directory |
 | `progress.py` | `on_log` / `on_progress` callbacks for any front-end |
@@ -75,6 +75,6 @@ PyInstaller `--onedir` bundles Python, dependencies, and `web/frontend/dist`. Pe
 ## Design choices
 
 - **Local paths only** — Large videos are never uploaded; the UI sends filesystem paths.
-- **ffmpeg auto-download** — Reduces setup friction; MKVToolNix stays manual (hard to bundle cross-platform).
+- **ffmpeg first-run download** — Keeps installers small; downloads essentials builds, verifies they run, clears macOS quarantine / Windows MOTW, with UI progress and retry.
 - **Unsigned installers** — Acceptable for friends/family; code signing can be added later.
 - **Single repo** — Python backend and React frontend live together for simpler releases.

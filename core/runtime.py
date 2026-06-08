@@ -40,6 +40,11 @@ def app_data_dir() -> Path:
     return path
 
 
+def install_bundled_tools_dir() -> Path:
+    """Directory where the installer ships ffmpeg/ffprobe (PyInstaller onedir)."""
+    return install_root() / "tools" / "bin"
+
+
 def bundled_tools_dir() -> Path:
     """Directory where first-run ffmpeg downloads are stored."""
     path = app_data_dir() / "tools" / "bin"

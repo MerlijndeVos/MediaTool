@@ -18,7 +18,7 @@ Cross-platform desktop app for local video processing — convert, trim, stitch,
 | **Download** | Save URLs as MP4 or MP3 via yt-dlp |
 | **DVD (VTS)** | Join DVD `VIDEO_TS` VOB segments into MKV per title |
 | **Rename** | Organize TV/movie files for Plex/Jellyfin-style libraries |
-| **Audio** | Set default audio track in MKV files (MKVToolNix) |
+| **Audio** | Set default audio track in MKV files |
 | **Dedup** | Strip `(2)` duplicate suffixes from filenames |
 | **Folders** | Date-stamp subfolders (`2006 juli 13 - Holiday`) from video dates |
 
@@ -36,7 +36,7 @@ Download the installer for your OS from **[GitHub Releases](https://github.com/M
 
 Installers are **unsigned**. Windows SmartScreen and macOS Gatekeeper may ask you to confirm once (“Run anyway” / “Open”).
 
-**ffmpeg** is downloaded automatically on first launch if it is not on your PATH. **MKVToolNix** must be installed separately for the Audio tool — the app shows a link when it is missing.
+**ffmpeg** is **not** included in the installer (keeps downloads small). On first launch the app downloads a one-time essentials build (~100 MB) into your user data folder. The app verifies the binaries run correctly and shows progress in the UI; use **Retry** if your OS or antivirus blocks them. Installers are unsigned — you may need to allow the app once, and on macOS check **System Settings → Privacy & Security** if ffmpeg is blocked after download.
 
 ## Run from source
 
@@ -121,8 +121,7 @@ Use `--help` on any subcommand for full options. GPU encoding (`--use-gpu auto|o
 
 | Tool | Required for | Notes |
 |------|----------------|-------|
-| ffmpeg / ffprobe | Convert, trim, stitch, VTS (re-encode), download | Auto-downloaded on first app launch |
-| MKVToolNix | Audio default, VTS remux | Install from [mkvtoolnix.download](https://mkvtoolnix.download/) |
+| ffmpeg / ffprobe | Convert, trim, stitch, VTS, download, audio default | Auto-downloaded on first app launch (or use a system install on PATH) |
 | Node.js or Deno | YouTube downloads | Needed by yt-dlp for modern YouTube extraction |
 
 ## Architecture

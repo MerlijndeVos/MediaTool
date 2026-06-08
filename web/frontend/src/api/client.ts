@@ -93,15 +93,19 @@ export interface ToolsStatus {
     ffprobe_path?: string | null;
     source?: string;
   };
-  mkvtoolnix: {
-    available: boolean;
-    install_url?: string;
-    message?: string | null;
+  bootstrap?: {
+    phase: "idle" | "checking" | "downloading" | "verifying" | "ready" | "failed";
+    message?: string;
+    error?: string | null;
   };
 }
 
 export function fetchToolsStatus(): Promise<ToolsStatus> {
   return request<ToolsStatus>("/api/tools");
+}
+
+export function retryToolsBootstrap(): Promise<ToolsStatus> {
+  return request<ToolsStatus>("/api/tools/bootstrap", { method: "POST" });
 }
 
 export function probeDownloadUrl(params: {

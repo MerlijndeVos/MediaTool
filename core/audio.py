@@ -1,7 +1,7 @@
-"""Set the default audio language in MKV files (MKVToolNix).
+"""Set the default audio language in MKV files using ffmpeg/ffprobe.
 
-Uses mkvmerge -J to read track layout and mkvpropedit to rewrite header flags
-in place (no re-encode/remux).
+Uses ffprobe to read track layout and ffmpeg stream-copy remux to update
+default-track flags (and optionally language tags) without re-encoding.
 """
 
 import argparse
@@ -17,9 +17,9 @@ from typing import Dict, List, Optional, Tuple
 from .log_storage import operation_log_path
 from .logging_setup import setup_simple_logging
 from .paths import ext_path, path_exists
-from .tools import ensure_mkvtoolnix
+from .tools import ensure_tools_available
 
-# Map common language inputs to ISO 639-2/B codes mkvmerge reports.
+# Map common language inputs to ISO 639-2/B codes reported by ffprobe.
 LANG_ALIASES: Dict[str, str] = {
     "en": "eng", "eng": "eng", "english": "eng",
     "nl": "dut", "dut": "dut", "nld": "dut", "dutch": "dut", "flemish": "dut",
@@ -60,7 +60,7 @@ LANG_ALIASES: Dict[str, str] = {
 
 @dataclass
 class AudioTrack:
-    """An audio track as reported by mkvmerge, with its 1-based audio position."""
+    """An audio track with its 1-based audio position among audio streams."""
     audio_index: int
     language: str
     is_default: bool
@@ -79,45 +79,54 @@ def normalize_lang(value: Optional[str]) -> str:
     return LANG_ALIASES.get(v) or LANG_ALIASES.get(primary) or primary
 
 
-def probe_mkv_audio_tracks(mkvmerge_bin: str, mkv: Path, logger: logging.Logger) -> Optional[List[AudioTrack]]:
+def probe_mkv_audio_tracks(ffprobe_bin: str, mkv: Path, logger: logging.Logger) -> Optional[List[AudioTrack]]:
     """Return ordered audio tracks for an MKV, or None if it could not be probed."""
     try:
         result = subprocess.run(
-            [mkvmerge_bin, "-J", ext_path(mkv)],
+            [
+                ffprobe_bin,
+                "-v",
+                "quiet",
+                "-print_format",
+                "json",
+                "-show_streams",
+                ext_path(mkv),
+            ],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
             check=False,
         )
     except Exception as exc:
-        logger.warning("Failed to run mkvmerge on '%s': %s", mkv, exc)
+        logger.warning("Failed to run ffprobe on '%s': %s", mkv, exc)
         return None
 
-    if result.returncode not in (0, 1):
-        logger.warning("mkvmerge could not read '%s' (exit %s).", mkv, result.returncode)
+    if result.returncode != 0:
+        logger.warning("ffprobe could not read '%s' (exit %s).", mkv, result.returncode)
         return None
 
     try:
         data = json.loads(result.stdout)
     except json.JSONDecodeError:
-        logger.warning("mkvmerge returned no parseable JSON for '%s'.", mkv)
+        logger.warning("ffprobe returned no parseable JSON for '%s'.", mkv)
         return None
 
     audio_tracks: List[AudioTrack] = []
     audio_index = 0
-    for track in data.get("tracks", []):
-        if track.get("type") != "audio":
+    for stream in data.get("streams", []):
+        if stream.get("codec_type") != "audio":
             continue
         audio_index += 1
-        props = track.get("properties", {}) or {}
-        lang = props.get("language_ietf") or props.get("language") or "und"
+        tags = stream.get("tags", {}) or {}
+        disposition = stream.get("disposition", {}) or {}
+        lang = tags.get("language") or "und"
         audio_tracks.append(
             AudioTrack(
                 audio_index=audio_index,
                 language=str(lang),
-                is_default=bool(props.get("default_track", False)),
-                codec=str(track.get("codec", "")),
-                name=str(props.get("track_name", "") or ""),
+                is_default=bool(disposition.get("default", 0)),
+                codec=str(stream.get("codec_name", "")),
+                name=str(tags.get("title", "") or ""),
             )
         )
     return audio_tracks
@@ -127,45 +136,77 @@ def plan_audio_edits(
     tracks: List[AudioTrack],
     target_lang: str,
     set_language: bool,
-) -> Tuple[Optional[int], List[List[str]], bool]:
-    """Build mkvpropedit --edit argument groups for one file."""
+) -> Tuple[Optional[int], bool, bool]:
+    """Return (chosen 1-based audio index, needs_change, already_correct)."""
     target = normalize_lang(target_lang)
     chosen: Optional[AudioTrack] = next(
         (t for t in tracks if normalize_lang(t.language) == target), None
     )
     if chosen is None:
-        return None, [], False
+        return None, False, False
 
     needs_change = False
-    edits: List[List[str]] = []
     for t in tracks:
-        want_default = (t.audio_index == chosen.audio_index)
-        group = ["--edit", f"track:a{t.audio_index}"]
-        track_changed = False
+        want_default = t.audio_index == chosen.audio_index
         if t.is_default != want_default:
-            group += ["--set", f"flag-default={1 if want_default else 0}"]
-            track_changed = True
+            needs_change = True
         if want_default and set_language and normalize_lang(t.language) != target:
-            group += ["--set", f"language={target}"]
-            track_changed = True
-        if track_changed:
-            edits.append(group)
             needs_change = True
 
     already_correct = not needs_change
-    return chosen.audio_index, edits, already_correct
+    return chosen.audio_index, needs_change, already_correct
 
 
-def apply_mkv_edits(
-    mkvpropedit_bin: str,
+def describe_audio_plan(
+    tracks: List[AudioTrack],
+    chosen_audio_index: int,
+    target_lang: str,
+    set_language: bool,
+) -> str:
+    parts: List[str] = []
+    for t in tracks:
+        want_default = t.audio_index == chosen_audio_index
+        if t.is_default != want_default:
+            parts.append(f"a{t.audio_index} default={'1' if want_default else '0'}")
+        if want_default and set_language and normalize_lang(t.language) != target_lang:
+            parts.append(f"a{t.audio_index} language={target_lang}")
+    return ", ".join(parts) if parts else "no changes"
+
+
+def apply_audio_edits(
+    ffmpeg_bin: str,
     mkv: Path,
-    edits: List[List[str]],
+    tracks: List[AudioTrack],
+    chosen_audio_index: int,
+    target_lang: str,
+    set_language: bool,
     logger: logging.Logger,
 ) -> bool:
-    cmd = [mkvpropedit_bin, ext_path(mkv)]
-    for group in edits:
-        cmd += group
+    tmp = mkv.with_suffix(mkv.suffix + ".tmp")
+    cmd = [
+        ffmpeg_bin,
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-y",
+        "-i",
+        ext_path(mkv),
+        "-map",
+        "0",
+        "-c",
+        "copy",
+    ]
+    for t in tracks:
+        a_idx = t.audio_index - 1
+        want_default = t.audio_index == chosen_audio_index
+        cmd += [f"-disposition:a:{a_idx}", "default" if want_default else "0"]
+        if want_default and set_language and normalize_lang(t.language) != target_lang:
+            cmd += [f"-metadata:s:a:{a_idx}", f"language={target_lang}"]
+    cmd.append(ext_path(tmp))
+
     try:
+        if tmp.exists():
+            tmp.unlink()
         result = subprocess.run(
             cmd,
             stdout=subprocess.PIPE,
@@ -174,14 +215,26 @@ def apply_mkv_edits(
             check=False,
         )
     except Exception as exc:
-        logger.error("mkvpropedit failed to launch for '%s': %s", mkv, exc)
+        logger.error("ffmpeg failed to launch for '%s': %s", mkv, exc)
         return False
 
     if result.returncode != 0:
         logger.error(
-            "mkvpropedit error on '%s' (exit %s): %s",
-            mkv, result.returncode, result.stdout.strip(),
+            "ffmpeg error on '%s' (exit %s): %s",
+            mkv,
+            result.returncode,
+            result.stdout.strip(),
         )
+        if tmp.exists():
+            tmp.unlink()
+        return False
+
+    try:
+        tmp.replace(mkv)
+    except OSError as exc:
+        logger.error("Could not replace '%s': %s", mkv, exc)
+        if tmp.exists():
+            tmp.unlink()
         return False
     return True
 
@@ -223,7 +276,7 @@ def run_audio(args: argparse.Namespace) -> None:
     logger.info("Target language: %s (normalized: %s)", args.lang, target_lang)
     logger.info("Set language tag on chosen track: %s | recursive: %s", set_language, recursive)
 
-    mkvmerge_bin, mkvpropedit_bin = ensure_mkvtoolnix(logger)
+    ffmpeg_bin, ffprobe_bin = ensure_tools_available(logger)
 
     mkvs = iter_mkv_files(input_path, recursive)
     if not mkvs:
@@ -238,7 +291,7 @@ def run_audio(args: argparse.Namespace) -> None:
     no_audio = 0
 
     for mkv in mkvs:
-        tracks = probe_mkv_audio_tracks(mkvmerge_bin, mkv, logger)
+        tracks = probe_mkv_audio_tracks(ffprobe_bin, mkv, logger)
         if tracks is None:
             failed += 1
             continue
@@ -247,7 +300,7 @@ def run_audio(args: argparse.Namespace) -> None:
             no_audio += 1
             continue
 
-        chosen_idx, edits, already_correct = plan_audio_edits(tracks, target_lang, set_language)
+        chosen_idx, needs_change, already_correct = plan_audio_edits(tracks, target_lang, set_language)
 
         if chosen_idx is None:
             langs = ", ".join(f"a{t.audio_index}:{normalize_lang(t.language)}" for t in tracks)
@@ -261,15 +314,18 @@ def run_audio(args: argparse.Namespace) -> None:
             continue
 
         if not apply:
-            change_desc = " ".join(" ".join(g) for g in edits)
+            change_desc = describe_audio_plan(tracks, chosen_idx, target_lang, set_language)
             logger.info(
-                "[DRY-RUN] would set a%d (%s) default in '%s'  [%s]",
-                chosen_idx, target_lang, mkv, change_desc,
+                "[DRY-RUN] would remux '%s' to set a%d (%s) default  [%s]",
+                mkv,
+                chosen_idx,
+                target_lang,
+                change_desc,
             )
             changed += 1
             continue
 
-        if apply_mkv_edits(mkvpropedit_bin, mkv, edits, logger):
+        if apply_audio_edits(ffmpeg_bin, mkv, tracks, chosen_idx, target_lang, set_language, logger):
             logger.info("UPDATED (a%d=%s default): %s", chosen_idx, target_lang, mkv)
             changed += 1
         else:
@@ -279,7 +335,11 @@ def run_audio(args: argparse.Namespace) -> None:
         "Summary: total=%d, %s=%d, already_correct=%d, no_match=%d, no_audio=%d, errors=%d",
         len(mkvs),
         "would_change" if not apply else "updated",
-        changed, already, no_match, no_audio, failed,
+        changed,
+        already,
+        no_match,
+        no_audio,
+        failed,
     )
     if not apply and changed:
         logger.info("Dry-run complete. Re-run with --apply to perform these changes.")

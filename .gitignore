@@ -32,3 +32,4 @@ packaging/build/
 packaging/dist/
 packaging/secrets/github_token
 packaging/.bundled-version
+packaging/bundled-tools/

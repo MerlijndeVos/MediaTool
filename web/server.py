@@ -11,7 +11,7 @@ from typing import AsyncIterator
 from core.download import probe_url
 from core.log_storage import clear_logs, logs_stats
 from core.settings_store import load_settings, save_settings
-from core.tools import bootstrap_ffmpeg, get_tools_status
+from core.tools import get_tools_status, retry_bootstrap_background, start_bootstrap_background
 from core.updates import check_for_update, get_apply_status, start_apply_update
 from core.version import app_version
 from fastapi import FastAPI, HTTPException
@@ -46,7 +46,7 @@ from .paths import FRONTEND_DIST
 
 @asynccontextmanager
 async def _lifespan(_app: FastAPI):
-    bootstrap_ffmpeg(auto_download=True)
+    start_bootstrap_background()
     yield
 
 
@@ -70,7 +70,7 @@ COMMAND_DESCRIPTIONS: dict[str, str] = {
     "convert": "Batch-convert video files with folder mirroring (DV→MP4, etc.).",
     "vts": "Join DVD VIDEO_TS VOB segments into one file per title.",
     "rename": "Organize TV/movie files and subtitles (Plex/Jellyfin style).",
-    "audio": "Set default audio language in MKV files (MKVToolNix).",
+    "audio": "Set default audio language in MKV files (ffmpeg stream copy).",
     "dedup": "Strip duplicate (N) suffixes from filenames.",
     "download": "Download URLs from yt-dlp supported sites as MP4 or MP3.",
     "trim": "Cut seconds off the start and/or end of videos.",
@@ -103,6 +103,12 @@ def updates_status() -> UpdateApplyStatusResponse:
 
 @app.get("/api/tools")
 def tools_status() -> dict:
+    return get_tools_status(auto_bootstrap=True)
+
+
+@app.post("/api/tools/bootstrap")
+def tools_bootstrap_retry() -> dict:
+    retry_bootstrap_background()
     return get_tools_status(auto_bootstrap=False)
 
 
