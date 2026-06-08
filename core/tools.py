@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import List, Optional, Tuple
 
 from .config import NVENC_AQ_STRENGTH, NVENC_CQ_TARGET
-from .ffmpeg_bootstrap import ensure_ffmpeg_downloaded, verify_tools
+from .ffmpeg_bootstrap import ensure_ffmpeg_downloaded, remove_downloaded_tools, verify_tools
 from .runtime import bundled_tools_dir, install_bundled_tools_dir, tool_filename
 
 
@@ -35,6 +35,7 @@ _bootstrap_thread: Optional[threading.Thread] = None
 _bootstrap_phase = BootstrapPhase.IDLE
 _bootstrap_message = ""
 _bootstrap_error: Optional[str] = None
+_verified_pair: Optional[tuple[str, str]] = None
 
 
 def _set_bootstrap_state(
@@ -92,21 +93,41 @@ def _find_tool(name: str) -> tuple[Optional[str], str]:
     return None, "none"
 
 
+def _invalidate_verify_cache() -> None:
+    global _verified_pair
+    _verified_pair = None
+
+
+def _mark_tools_ready(ffmpeg_path: str, ffprobe_path: str) -> None:
+    global _verified_pair
+    _verified_pair = (ffmpeg_path, ffprobe_path)
+    _set_bootstrap_state(BootstrapPhase.READY, "ffmpeg is ready.")
+
+
 def _tools_ready() -> bool:
+    """Return True when ffmpeg/ffprobe are present and last verification succeeded."""
+    global _verified_pair
     _prepend_tools_path()
     ffmpeg_path, _ = _find_tool("ffmpeg")
     ffprobe_path, _ = _find_tool("ffprobe")
     if not ffmpeg_path or not ffprobe_path:
+        _verified_pair = None
         return False
+    pair = (ffmpeg_path, ffprobe_path)
+    if _verified_pair == pair:
+        return True
     ok, _ = verify_tools(ffmpeg_path, ffprobe_path)
-    return ok
+    if ok:
+        _verified_pair = pair
+        return True
+    _verified_pair = None
+    return False
 
 
 def _bootstrap_worker() -> None:
     try:
         _set_bootstrap_state(BootstrapPhase.CHECKING, "Checking for ffmpeg…")
         if _tools_ready():
-            _set_bootstrap_state(BootstrapPhase.READY, "ffmpeg is ready.")
             return
 
         def emit(msg: str) -> None:
@@ -122,7 +143,7 @@ def _bootstrap_worker() -> None:
         if not ok:
             raise RuntimeError(err or "ffmpeg verification failed.")
 
-        _set_bootstrap_state(BootstrapPhase.READY, "ffmpeg installed successfully.")
+        _mark_tools_ready(ffmpeg_path or "", ffprobe_path or "")
     except Exception as exc:
         _set_bootstrap_state(
             BootstrapPhase.FAILED,
@@ -143,7 +164,6 @@ def start_bootstrap_background() -> None:
             return
 
     if _tools_ready():
-        _set_bootstrap_state(BootstrapPhase.READY, "ffmpeg is ready.")
         return
 
     with _bootstrap_lock:
@@ -163,6 +183,8 @@ def retry_bootstrap_background() -> None:
             return
         _bootstrap_phase = BootstrapPhase.IDLE
         _bootstrap_error = None
+    _invalidate_verify_cache()
+    remove_downloaded_tools(bundled_tools_dir())
     start_bootstrap_background()
 
 
@@ -174,7 +196,7 @@ def bootstrap_ffmpeg(logger: Optional[logging.Logger] = None, auto_download: boo
     if ffmpeg and ffprobe:
         ok, _ = verify_tools(ffmpeg, ffprobe)
         if ok:
-            _set_bootstrap_state(BootstrapPhase.READY, "ffmpeg is ready.")
+            _mark_tools_ready(ffmpeg, ffprobe)
             return True
 
     if not auto_download:
@@ -187,7 +209,10 @@ def bootstrap_ffmpeg(logger: Optional[logging.Logger] = None, auto_download: boo
         _prepend_tools_path()
         ready = _tools_ready()
         if ready:
-            _set_bootstrap_state(BootstrapPhase.READY, "ffmpeg is ready.")
+            ffmpeg_path, _ = _find_tool("ffmpeg")
+            ffprobe_path, _ = _find_tool("ffprobe")
+            if ffmpeg_path and ffprobe_path:
+                _mark_tools_ready(ffmpeg_path, ffprobe_path)
         else:
             _set_bootstrap_state(BootstrapPhase.FAILED, "ffmpeg setup failed.", "Verification failed.")
         return ready
@@ -204,25 +229,26 @@ def get_tools_status(auto_bootstrap: bool = False) -> dict:
         start_bootstrap_background()
     else:
         _prepend_tools_path()
-        if _tools_ready():
-            _set_bootstrap_state(BootstrapPhase.READY, "ffmpeg is ready.")
 
     ffmpeg_path, ffmpeg_source = _find_tool("ffmpeg")
     ffprobe_path, _ = _find_tool("ffprobe")
     bootstrap = get_bootstrap_state()
     phase = bootstrap["phase"]
 
-    if phase in {
+    if phase == BootstrapPhase.READY.value:
+        available = True
+    elif phase in {
+        BootstrapPhase.FAILED.value,
         BootstrapPhase.DOWNLOADING.value,
         BootstrapPhase.CHECKING.value,
         BootstrapPhase.VERIFYING.value,
     }:
         available = False
     else:
-        if _tools_ready():
-            _set_bootstrap_state(BootstrapPhase.READY, "ffmpeg is ready.")
-            bootstrap = get_bootstrap_state()
         available = _tools_ready()
+        if available and ffmpeg_path and ffprobe_path:
+            _mark_tools_ready(ffmpeg_path, ffprobe_path)
+            bootstrap = get_bootstrap_state()
 
     return {
         "ffmpeg": {

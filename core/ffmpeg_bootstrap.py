@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from .runtime import bundled_tools_dir, exe_suffix, tool_filename
+from .subprocess_utils import no_window_kwargs
 
 LogFn = Callable[[str], None]
 
@@ -113,6 +114,7 @@ def _unblock_windows(path: Path) -> None:
             stderr=subprocess.DEVNULL,
             check=False,
             timeout=15,
+            **no_window_kwargs(),
         )
     except Exception:
         pass
@@ -164,6 +166,7 @@ def verify_tools(ffmpeg_path: str, ffprobe_path: str) -> tuple[bool, str]:
                 text=True,
                 timeout=30,
                 check=False,
+                **no_window_kwargs(),
             )
         except OSError as exc:
             return False, _run_failure_hint(label, exc)
