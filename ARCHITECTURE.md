@@ -9,24 +9,24 @@ Media Tool separates **business logic** from **front-ends**. Every feature is im
 └──────────────────────────┬──────────────────────────────────┘
                            │
 ┌──────────────────────────┼──────────────────────────────────┐
-│  Browser UI (optional)   │   React + Vite (web/frontend)     │
+│  Browser UI (optional)   │   React + Vite (web/frontend)    │
 │  http://127.0.0.1:8765/app/  or dev server :5173            │
 └──────────────────────────┼──────────────────────────────────┘
                            │ REST + SSE
 ┌──────────────────────────▼──────────────────────────────────┐
-│  web/server.py — FastAPI                                      │
-│  web/jobs.py   — background threads, job IDs, log streaming   │
+│  web/server.py — FastAPI                                    │
+│  web/jobs.py   — background threads, job IDs, log streaming │
 └──────────────────────────┬──────────────────────────────────┘
                            │
 ┌──────────────────────────▼──────────────────────────────────┐
-│  core/                                                        │
-│  convert · vts · rename · audio · download · rename_folders   │
-│  tools · ffmpeg_bootstrap · progress · probe · paths          │
+│  core/                                                      │
+│  convert · vts · rename · audio · download · rename_folders │
+│  tools · ffmpeg_bootstrap · progress · probe · paths        │
 └──────────────────────────┬──────────────────────────────────┘
                            │ subprocess / filesystem
 ┌──────────────────────────▼──────────────────────────────────┐
-│  ffmpeg · ffprobe · yt-dlp (external; ffmpeg first-run download)    │
-└───────────────────────────────────────────────────────────────┘
+│  ffmpeg · ffprobe · yt-dlp (ffmpeg first-run download)      │
+└─────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────┐
 │  CLI (media-tool / python -m cli)                           │
