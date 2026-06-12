@@ -4,7 +4,7 @@
 
 # Media Tool
 
-Cross-platform desktop app for local video processing — convert, trim, stitch, organize libraries, download from YouTube, and more. Everything runs on your machine; nothing is uploaded.
+Cross-platform desktop app for media processing — convert, trim, stitch, organize libraries, download from YouTube, and more. Everything runs on your machine; nothing is uploaded.
 
 **License:** [MIT](LICENSE)
 
