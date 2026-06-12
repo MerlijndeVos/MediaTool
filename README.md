@@ -4,7 +4,7 @@
 # Media Tool
 ### Local video processing for your desktop
 
-**Convert, trim, stitch, organize libraries, download from YouTube, and more — everything runs on your machine**
+**Convert, trim, stitch, organize libraries, download from YouTube, and more — everything runs on your machine; nothing is uploaded.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![GitHub Releases](https://img.shields.io/badge/Releases-GitHub-blue)](https://github.com/MerlijndeVos/MediaTool/releases)
