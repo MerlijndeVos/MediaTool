@@ -1,12 +1,17 @@
-<p align="center">
-  <img src="packaging/icons/media-tool.png" alt="Media Tool" width="128" height="128" />
-</p>
+<div align="center">
+<img src="packaging/icons/media-tool.svg" width="128" alt="Media Tool app icon"/>
 
 # Media Tool
+### Local video processing for your desktop
 
-Cross-platform desktop app for local video processing — convert, trim, stitch, organize libraries, download from YouTube, and more. Everything runs on your machine; nothing is uploaded.
+**Convert, trim, stitch, organize libraries, download from YouTube, and more — everything runs on your machine**
 
-**License:** [MIT](LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![GitHub Releases](https://img.shields.io/badge/Releases-GitHub-blue)](https://github.com/MerlijndeVos/MediaTool/releases)
+
+</div>
+
+---
 
 ## Features
 
