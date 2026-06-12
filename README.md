@@ -2,7 +2,7 @@
 <img src="packaging/icons/media-tool.svg" width="128" alt="Media Tool app icon"/>
 
 # Media Tool
-### Local video processing for your desktop
+### Media processing for your desktop
 
 **Convert, trim, stitch, organize libraries, download from YouTube, and more**
 
