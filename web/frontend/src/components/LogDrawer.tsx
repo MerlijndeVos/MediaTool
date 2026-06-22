@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ChevronDown, ChevronUp, Terminal } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Copy, Terminal } from "lucide-react";
 import { LogStream, UndoRenameBar } from "@/components/LogStream";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -39,6 +39,7 @@ export function LogDrawer({
   undoing = false,
 }: LogDrawerProps) {
   const [height, setHeight] = useState(readStoredHeight);
+  const [copied, setCopied] = useState(false);
   const dragging = useRef(false);
   const startY = useRef(0);
   const startHeight = useRef(0);
@@ -48,6 +49,25 @@ export function LogDrawer({
   useEffect(() => {
     onHeightChange?.(open ? height : HEADER_HEIGHT);
   }, [open, height, onHeightChange]);
+
+  const onCopy = useCallback(async () => {
+    const text = logs.map((line) => line.message).join("\n");
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const textarea = document.createElement("textarea");
+      textarea.value = text;
+      textarea.style.position = "fixed";
+      textarea.style.opacity = "0";
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      document.body.removeChild(textarea);
+    }
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1500);
+  }, [logs]);
 
   const onResizeStart = useCallback(
     (e: React.MouseEvent) => {
@@ -114,9 +134,20 @@ export function LogDrawer({
           <span className="text-muted-foreground">({logs.length})</span>
           {open ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
         </button>
-        <Button variant="ghost" size="sm" onClick={onClear}>
-          Clear
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => void onCopy()}
+            disabled={logs.length === 0}
+          >
+            {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+            {copied ? "Copied" : "Copy"}
+          </Button>
+          <Button variant="ghost" size="sm" onClick={onClear}>
+            Clear
+          </Button>
+        </div>
       </div>
       {open && (
         <div className="flex h-[calc(100%-2.75rem)] flex-col">

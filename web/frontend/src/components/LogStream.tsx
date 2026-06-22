@@ -78,7 +78,7 @@ export function LogStream({
   return (
     <pre
       className={cn(
-        "overflow-auto font-mono text-xs leading-relaxed text-muted-foreground",
+        "cursor-text select-text overflow-auto font-mono text-xs leading-relaxed text-muted-foreground",
         className,
       )}
     >
