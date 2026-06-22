@@ -48,6 +48,16 @@ jobs:
             exit 1
           fi
 
+      - name: Verify release notes exist
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          NOTES="release-notes/${GITHUB_REF_NAME}.md"
+          if [ ! -f "$NOTES" ]; then
+            echo "Missing $NOTES — add release notes before tagging."
+            exit 1
+          fi
+
       - name: Sync frontend package version
         shell: bash
         run: |
@@ -117,6 +127,17 @@ jobs:
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     steps:
+      - uses: actions/checkout@v6
+
+      - name: Verify release notes exist
+        shell: bash
+        run: |
+          NOTES="release-notes/${GITHUB_REF_NAME}.md"
+          if [ ! -f "$NOTES" ]; then
+            echo "Missing $NOTES"
+            exit 1
+          fi
+
       - uses: actions/download-artifact@v7
         with:
           pattern: media-tool-*
@@ -130,7 +151,8 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.ref_name }}
+          name: Media Tool ${{ github.ref_name }}
+          body_path: release-notes/${{ github.ref_name }}.md
           files: artifacts/*
-          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
