@@ -69,16 +69,19 @@ function UndoConfirmDialog({
 export function LogStream({
   logs,
   className,
+  wrap = false,
   emptyMessage = "Output from jobs will appear here…",
 }: {
   logs: LogLine[];
   className?: string;
+  wrap?: boolean;
   emptyMessage?: string;
 }) {
   return (
     <pre
       className={cn(
         "cursor-text select-text overflow-auto font-mono text-xs leading-relaxed text-muted-foreground",
+        wrap ? "whitespace-pre-wrap break-words" : "whitespace-pre",
         className,
       )}
     >

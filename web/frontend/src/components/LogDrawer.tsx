@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Check, ChevronDown, ChevronUp, Copy, Terminal } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Copy, Terminal, WrapText } from "lucide-react";
 import { LogStream, UndoRenameBar } from "@/components/LogStream";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -9,6 +9,7 @@ const HEADER_HEIGHT = 44;
 const DEFAULT_HEIGHT = 256;
 const MIN_HEIGHT = 120;
 const HEIGHT_STORAGE_KEY = "log-drawer-height";
+const WRAP_STORAGE_KEY = "log-drawer-wrap";
 
 interface LogDrawerProps {
   open: boolean;
@@ -28,6 +29,11 @@ function readStoredHeight(): number {
   return Number.isFinite(parsed) && parsed >= MIN_HEIGHT ? parsed : DEFAULT_HEIGHT;
 }
 
+function readStoredWrap(): boolean {
+  if (typeof window === "undefined") return false;
+  return localStorage.getItem(WRAP_STORAGE_KEY) === "1";
+}
+
 export function LogDrawer({
   open,
   onToggle,
@@ -40,6 +46,7 @@ export function LogDrawer({
 }: LogDrawerProps) {
   const [height, setHeight] = useState(readStoredHeight);
   const [copied, setCopied] = useState(false);
+  const [wrap, setWrap] = useState(readStoredWrap);
   const dragging = useRef(false);
   const startY = useRef(0);
   const startHeight = useRef(0);
@@ -68,6 +75,14 @@ export function LogDrawer({
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1500);
   }, [logs]);
+
+  const onToggleWrap = useCallback(() => {
+    setWrap((prev) => {
+      const next = !prev;
+      localStorage.setItem(WRAP_STORAGE_KEY, next ? "1" : "0");
+      return next;
+    });
+  }, []);
 
   const onResizeStart = useCallback(
     (e: React.MouseEvent) => {
@@ -138,6 +153,17 @@ export function LogDrawer({
           <Button
             variant="ghost"
             size="sm"
+            onClick={onToggleWrap}
+            className={cn(wrap && "text-primary")}
+            aria-pressed={wrap}
+            title={wrap ? "Disable line wrap" : "Enable line wrap"}
+          >
+            <WrapText className="h-4 w-4" />
+            Wrap
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => void onCopy()}
             disabled={logs.length === 0}
           >
@@ -154,7 +180,7 @@ export function LogDrawer({
           {onUndoRename && (
             <UndoRenameBar jobs={undoableJobs} onUndo={onUndoRename} undoing={undoing} />
           )}
-          <LogStream logs={logs} className="flex-1 p-4" />
+          <LogStream logs={logs} wrap={wrap} className="flex-1 p-4" />
         </div>
       )}
     </div>
