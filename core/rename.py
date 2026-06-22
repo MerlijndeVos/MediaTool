@@ -217,6 +217,56 @@ def title_case(text: str, enabled: bool) -> str:
     return " ".join(out)
 
 
+def longest_common_movie_prefix(titles: List[str]) -> Optional[str]:
+    """Return a shared franchise prefix when several movie titles start the same way.
+
+    Requires at least two titles, a prefix of two or more words, and a suffix of
+    at least two words on every title so we don't split unrelated pairs like
+    'The Dark Knight' / 'The Dark Tower'.
+    """
+    if len(titles) < 2:
+        return None
+    word_lists = [t.split() for t in titles if t]
+    if len(word_lists) < 2:
+        return None
+
+    prefix_len = 0
+    for i in range(len(word_lists[0])):
+        word = word_lists[0][i]
+        if all(i < len(words) and words[i].lower() == word.lower() for words in word_lists[1:]):
+            prefix_len = i + 1
+        else:
+            break
+
+    if prefix_len < 2:
+        return None
+    if any(len(words) <= prefix_len + 1 for words in word_lists):
+        return None
+
+    return " ".join(word_lists[0][:prefix_len])
+
+
+def apply_franchise_separator(
+    title: str,
+    common_prefix: str,
+    titlecase_enabled: bool,
+) -> str:
+    """Format a shared franchise prefix as 'Franchise - Subtitle'."""
+    title_words = title.split()
+    prefix_words = common_prefix.split()
+    if len(title_words) <= len(prefix_words):
+        return title
+    if [w.lower() for w in title_words[: len(prefix_words)]] != [
+        w.lower() for w in prefix_words
+    ]:
+        return title
+    prefix = " ".join(title_words[: len(prefix_words)])
+    suffix = title_case(" ".join(title_words[len(prefix_words) :]), titlecase_enabled)
+    if not suffix:
+        return title
+    return f"{prefix} - {suffix}"
+
+
 def parse_media_info(
     stem: str,
     forced_type: str,
@@ -610,6 +660,7 @@ def plan_rename(
 
         # Map each video to its planned target so subtitles can follow.
         video_targets: Dict[Path, Tuple[Path, str]] = {}
+        parsed_videos: List[Tuple[Path, MediaInfo]] = []
 
         for video in sorted(videos, key=lambda v: v.name.lower()):
             info = parse_media_info(
@@ -627,6 +678,17 @@ def plan_rename(
                 existing = existing_show_folder_name(video, input_root, info.title)
                 if existing:
                     info.title = existing
+
+            parsed_videos.append((video, info))
+
+        movie_titles = [info.title for _, info in parsed_videos if info.kind == "movie"]
+        franchise_prefix = longest_common_movie_prefix(movie_titles)
+
+        for video, info in parsed_videos:
+            if info.kind == "movie" and franchise_prefix:
+                info.title = apply_franchise_separator(
+                    info.title, franchise_prefix, titlecase_enabled
+                )
 
             target_dir, base_stem = build_target_dir_and_stem(info, dest_root)
             used = used_by_dir.setdefault(str(target_dir).lower(), set())
