@@ -351,7 +351,6 @@ export default function App() {
           releaseUrl={updates.check.release_url}
           applying={updates.applying}
           applyStatus={updates.applyStatus}
-          applyMessage={updates.applyStatus?.message}
           onSkip={updates.handleSkip}
           onUpdate={updates.handleApply}
         />

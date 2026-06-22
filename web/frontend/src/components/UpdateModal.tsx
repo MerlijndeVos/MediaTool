@@ -15,7 +15,6 @@ interface UpdateModalProps {
   releaseUrl?: string | null;
   applying: boolean;
   applyStatus?: UpdateApplyStatus | null;
-  applyMessage?: string | null;
   onSkip: () => void;
   onUpdate: () => void;
 }
@@ -28,7 +27,6 @@ export function UpdateModal({
   releaseUrl,
   applying,
   applyStatus,
-  applyMessage,
   onSkip,
   onUpdate,
 }: UpdateModalProps) {
@@ -115,11 +113,17 @@ export function UpdateModal({
             <Button type="button" variant="outline" size="default" disabled={applying} onClick={onSkip}>
               Skip for now
             </Button>
-            <Button type="button" size="default" disabled={applying} onClick={onUpdate} className="gap-1.5">
+            <Button
+              type="button"
+              size="default"
+              disabled={applying}
+              onClick={onUpdate}
+              className="min-w-[9.5rem] gap-1.5 whitespace-nowrap"
+            >
               {applying ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  {applyMessage || "Updating…"}
+                  {applyStatus?.phase === "installing" ? "Installing…" : "Downloading…"}
                 </>
               ) : (
                 <>

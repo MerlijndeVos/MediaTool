@@ -54,12 +54,12 @@ export function UpdatesPanel({
               size="default"
               disabled={applying}
               onClick={() => setModalOpen(true)}
-              className="gap-1.5"
+              className="min-w-[9.5rem] gap-1.5 whitespace-nowrap"
             >
               {applying ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  {applyStatus?.message || "Updating…"}
+                  {applyStatus?.phase === "installing" ? "Installing…" : "Downloading…"}
                 </>
               ) : (
                 <>
