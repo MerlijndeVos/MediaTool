@@ -11,8 +11,9 @@ from typing import AsyncIterator, Optional
 from core.download import probe_url
 from core.subtitles import detect_lang_from_path, scan_junk
 from core.subtitle_languages import language_options
-from core.log_storage import clear_logs, logs_stats
+from core.log_storage import clear_logs, logs_dir, logs_stats, resolve_log_file
 from core.settings_store import load_settings, save_settings
+from core.shell import open_path
 from core.tools import get_tools_status, retry_bootstrap_background, start_bootstrap_background
 from core.updates import check_for_update, get_apply_status, start_apply_update
 from core.version import app_version
@@ -34,6 +35,8 @@ from .schemas import (
     JobSummary,
     JobUndoResponse,
     LogsStatsResponse,
+    OpenLogFileRequest,
+    OpenPathResponse,
     PARAM_MODELS,
     SettingsResponse,
     SettingsUpdateRequest,
@@ -189,6 +192,30 @@ def subtitle_scan_junk(body: SubtitleScanJunkRequest) -> SubtitleScanJunkRespons
 def delete_logs() -> ClearLogsResponse:
     deleted = clear_logs()
     return ClearLogsResponse(deleted_count=deleted, logs=LogsStatsResponse(**logs_stats()))
+
+
+@app.post("/api/settings/logs/open-folder", response_model=OpenPathResponse)
+def open_logs_folder() -> OpenPathResponse:
+    try:
+        open_path(logs_dir())
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    return OpenPathResponse()
+
+
+@app.post("/api/settings/logs/open-file", response_model=OpenPathResponse)
+def open_log_file(body: OpenLogFileRequest) -> OpenPathResponse:
+    try:
+        open_path(resolve_log_file(body.name))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    return OpenPathResponse()
 
 
 @app.get("/api/commands", response_model=CommandsResponse)

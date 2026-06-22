@@ -322,6 +322,14 @@ class ClearLogsResponse(BaseModel):
     logs: LogsStatsResponse
 
 
+class OpenLogFileRequest(BaseModel):
+    name: str
+
+
+class OpenPathResponse(BaseModel):
+    ok: bool = True
+
+
 def utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 

@@ -83,3 +83,13 @@ def clear_logs() -> int:
         except OSError:
             pass
     return deleted
+
+
+def resolve_log_file(name: str) -> Path:
+    """Return a log file path, rejecting traversal outside the logs directory."""
+    if not name or name != Path(name).name or not name.endswith(".log"):
+        raise ValueError(f"Invalid log file name: {name!r}")
+    path = logs_dir() / name
+    if not path.is_file():
+        raise FileNotFoundError(str(path))
+    return path

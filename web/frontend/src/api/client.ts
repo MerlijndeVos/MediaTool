@@ -220,3 +220,14 @@ export function scanSubtitleJunk(input: string): Promise<SubtitleScanJunkResult>
 export function clearLogFiles(): Promise<{ deleted_count: number; logs: LogsStats }> {
   return request("/api/settings/logs", { method: "DELETE" });
 }
+
+export function openLogFolder(): Promise<{ ok: boolean }> {
+  return request("/api/settings/logs/open-folder", { method: "POST" });
+}
+
+export function openLogFile(name: string): Promise<{ ok: boolean }> {
+  return request("/api/settings/logs/open-file", {
+    method: "POST",
+    body: JSON.stringify({ name }),
+  });
+}

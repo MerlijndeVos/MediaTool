@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle, Loader2, RefreshCw, Trash2 } from "lucide-react";
+import { AlertTriangle, ExternalLink, FolderOpen, Loader2, RefreshCw, Trash2 } from "lucide-react";
 import {
   clearLogFiles,
   fetchSettings,
+  openLogFile,
+  openLogFolder,
   updateSettings,
   type AppSettings,
 } from "@/api/client";
@@ -22,6 +24,7 @@ export function LoggingPanel({ onFileLoggingChange }: LoggingPanelProps) {
   const [saving, setSaving] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
+  const [opening, setOpening] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -66,6 +69,30 @@ export function LoggingPanel({ onFileLoggingChange }: LoggingPanelProps) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setClearing(false);
+    }
+  };
+
+  const handleOpenFolder = async () => {
+    setError(null);
+    setOpening("folder");
+    try {
+      await openLogFolder();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setOpening(null);
+    }
+  };
+
+  const handleOpenFile = async (name: string) => {
+    setError(null);
+    setOpening(name);
+    try {
+      await openLogFile(name);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setOpening(null);
     }
   };
 
@@ -125,16 +152,49 @@ export function LoggingPanel({ onFileLoggingChange }: LoggingPanelProps) {
           </Button>
         </CardHeader>
         <CardContent className="space-y-4">
-          <p className="break-all text-xs text-muted-foreground">
-            <span className="font-medium text-foreground">Location:</span> {settings.logs.path}
-          </p>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <p className="min-w-0 flex-1 break-all text-xs text-muted-foreground">
+              <span className="font-medium text-foreground">Location:</span> {settings.logs.path}
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => void handleOpenFolder()}
+              disabled={opening != null}
+            >
+              {opening === "folder" ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <FolderOpen className="h-4 w-4" />
+              )}
+              Open folder
+            </Button>
+          </div>
 
           {settings.logs.files.length > 0 ? (
             <ul className="divide-y rounded-md border text-sm">
               {settings.logs.files.map((file) => (
-                <li key={file.name} className="flex items-center justify-between gap-3 px-3 py-2">
-                  <span className="min-w-0 truncate font-mono text-xs">{file.name}</span>
-                  <span className="shrink-0 text-xs text-muted-foreground">{formatBytes(file.size_bytes)}</span>
+                <li key={file.name}>
+                  <button
+                    type="button"
+                    className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left transition-colors hover:bg-muted/60 disabled:opacity-60"
+                    onClick={() => void handleOpenFile(file.name)}
+                    disabled={opening != null}
+                    title={`Open ${file.name}`}
+                  >
+                    <span className="flex min-w-0 items-center gap-2">
+                      {opening === file.name ? (
+                        <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />
+                      ) : (
+                        <ExternalLink className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      )}
+                      <span className="truncate font-mono text-xs">{file.name}</span>
+                    </span>
+                    <span className="shrink-0 text-xs text-muted-foreground">
+                      {formatBytes(file.size_bytes)}
+                    </span>
+                  </button>
                 </li>
               ))}
             </ul>
