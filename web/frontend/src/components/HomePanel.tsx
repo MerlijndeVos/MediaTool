@@ -1,6 +1,5 @@
 import type { LucideIcon } from "lucide-react";
 import {
-  ArrowRight,
   AudioLines,
   Bot,
   Combine,
@@ -86,7 +85,30 @@ interface HomePanelProps {
   onOpenSettings: (view: SettingsViewId) => void;
 }
 
+type Accent = "video" | "subtitles" | "experimental" | "settings";
+
+// Full class strings so Tailwind can see them.
+const ACCENT_STYLES: Record<Accent, { tile: string; chip: string }> = {
+  video: {
+    tile: "bg-blue-500/15 hover:bg-blue-500/25",
+    chip: "bg-blue-600 text-white dark:bg-blue-500",
+  },
+  subtitles: {
+    tile: "bg-violet-500/15 hover:bg-violet-500/25",
+    chip: "bg-violet-600 text-white dark:bg-violet-500",
+  },
+  experimental: {
+    tile: "bg-amber-500/15 hover:bg-amber-500/25",
+    chip: "bg-amber-600 text-white dark:bg-amber-500",
+  },
+  settings: {
+    tile: "bg-slate-500/15 hover:bg-slate-500/25",
+    chip: "bg-slate-600 text-white dark:bg-slate-500",
+  },
+};
+
 interface TileProps {
+  accent: Accent;
   icon: LucideIcon;
   label: string;
   description: string;
@@ -94,31 +116,31 @@ interface TileProps {
   onClick: () => void;
 }
 
-function Tile({ icon: Icon, label, description, badge, onClick }: TileProps) {
+function Tile({ accent, icon: Icon, label, description, badge, onClick }: TileProps) {
+  const styles = ACCENT_STYLES[accent];
   return (
     <button
       type="button"
       onClick={onClick}
-      className="group flex h-full flex-col gap-3 rounded-lg border bg-card p-4 text-left shadow-sm transition-colors hover:border-primary/50 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className={cn(
+        "flex items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        styles.tile,
+      )}
     >
-      <div className="flex items-center justify-between">
-        <span className="flex size-10 items-center justify-center rounded-md bg-primary/10 text-primary">
-          <Icon className="h-5 w-5" />
-        </span>
-        {badge && (
-          <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-primary">
-            {badge}
-          </span>
-        )}
-      </div>
-      <div className="flex-1 space-y-1">
-        <p className="text-sm font-semibold leading-none">{label}</p>
-        <p className="text-xs leading-relaxed text-muted-foreground">{description}</p>
-      </div>
-      <span className="flex items-center gap-1 text-xs font-medium text-primary">
-        Open
-        <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+      <span className={cn("flex size-9 shrink-0 items-center justify-center rounded-md", styles.chip)}>
+        <Icon className="h-[18px] w-[18px]" />
       </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-semibold leading-tight">{label}</span>
+        <span className="mt-0.5 line-clamp-2 block text-xs leading-snug text-muted-foreground">
+          {description}
+        </span>
+      </span>
+      {badge && (
+        <span className="shrink-0 self-start rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold uppercase text-primary-foreground">
+          {badge}
+        </span>
+      )}
     </button>
   );
 }
@@ -135,14 +157,14 @@ function Section({
   className?: string;
 }) {
   return (
-    <section className={cn("space-y-3", className)}>
+    <section className={cn("space-y-2.5", className)}>
       <div>
         <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           {title}
         </h2>
         {subtitle && <p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p>}
       </div>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{children}</div>
+      <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">{children}</div>
     </section>
   );
 }
@@ -153,11 +175,12 @@ export function HomePanel({
   onOpenTool,
   onOpenSettings,
 }: HomePanelProps) {
-  const toolSection = (title: string, subtitle: string, ids: ToolId[]) => (
+  const toolSection = (accent: Accent, title: string, subtitle: string, ids: ToolId[]) => (
     <Section title={title} subtitle={subtitle}>
       {ids.map((id) => (
         <Tile
           key={id}
+          accent={accent}
           icon={TOOL_ICONS[id]}
           label={TOOL_LABELS[id]}
           description={toolDescription(id)}
@@ -173,14 +196,15 @@ export function HomePanel({
         <CardTitle>Welcome to Media Tool</CardTitle>
         <CardDescription>Pick a tool to get started.</CardDescription>
       </CardHeader>
-      <CardContent className="space-y-8">
-        {toolSection("Video", "Convert, cut, join, download, and organize video files.", PRIMARY_TOOLS)}
-        {toolSection("Subtitles", "Translate and clean up SRT subtitle files.", SUBTITLE_TOOLS)}
-        {toolSection("Experimental", "Specialised utilities for less common jobs.", SECONDARY_TOOLS)}
-        <Section title="Settings" className="border-t border-border/60 pt-6">
+      <CardContent className="space-y-6">
+        {toolSection("video", "Video", "Convert, cut, join, download, and organize video files.", PRIMARY_TOOLS)}
+        {toolSection("subtitles", "Subtitles", "Translate and clean up SRT subtitle files.", SUBTITLE_TOOLS)}
+        {toolSection("experimental", "Experimental", "Specialised utilities for less common jobs.", SECONDARY_TOOLS)}
+        <Section title="Settings" className="border-t border-border/60 pt-5">
           {SETTINGS_TILES.filter((s) => desktop || !s.desktopOnly).map((s) => (
             <Tile
               key={s.id}
+              accent="settings"
               icon={s.icon}
               label={s.label}
               description={s.description}

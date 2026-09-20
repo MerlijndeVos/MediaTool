@@ -15,6 +15,12 @@ from .progress import get_active_hooks
 
 _INVALID_WIN_PATH_CHARS = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 
+# YouTube intermittently rejects a fresh stream URL with 403 (more often under load); a new
+# extraction gets a new URL and normally succeeds, so retry these instead of failing the item.
+_TRANSIENT_HTTP_ERROR = re.compile(r"HTTP Error (403|429|5\d\d)")
+_DOWNLOAD_ATTEMPTS = 3
+_RETRY_DELAY_SECONDS = 2.0
+
 
 def _user_output_stem(name: str) -> str:
     """Keep user-provided spacing; drop only characters Windows paths cannot contain."""
@@ -457,21 +463,40 @@ def download_url(
     }
     ydl_opts.update(_youtube_format_opts(out_format, video_quality, int(audio_bitrate), logger))
 
+    ret = None
+    retry_wait = cancel_event or threading.Event()
     try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ret = ydl.download([url])
-    except _YtCancel:
-        handle_cancel()
-        raise DownloadCancelled()
-    except DownloadCancelled:
-        handle_cancel()
-        raise
-    except Exception as exc:
-        if cancel_event is not None and cancel_event.is_set():
-            handle_cancel()
-            raise DownloadCancelled()
-        logger.error("%sDownload failed: %s", prefix, exc)
-        raise RuntimeError(str(exc)) from exc
+        for attempt in range(1, _DOWNLOAD_ATTEMPTS + 1):
+            try:
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    ret = ydl.download([url])
+                break
+            except _YtCancel:
+                handle_cancel()
+                raise DownloadCancelled()
+            except DownloadCancelled:
+                handle_cancel()
+                raise
+            except Exception as exc:
+                if cancel_event is not None and cancel_event.is_set():
+                    handle_cancel()
+                    raise DownloadCancelled()
+                if attempt < _DOWNLOAD_ATTEMPTS and _TRANSIENT_HTTP_ERROR.search(str(exc)):
+                    delay = _RETRY_DELAY_SECONDS * attempt
+                    logger.warning(
+                        "%sTemporary download error (%s), retrying with a fresh link in %.0fs (attempt %d/%d)",
+                        prefix,
+                        exc,
+                        delay,
+                        attempt + 1,
+                        _DOWNLOAD_ATTEMPTS,
+                    )
+                    if retry_wait.wait(delay):
+                        handle_cancel()
+                        raise DownloadCancelled()
+                    continue
+                logger.error("%sDownload failed: %s", prefix, exc)
+                raise RuntimeError(str(exc)) from exc
     finally:
         close_log_handlers(logger_name)
 

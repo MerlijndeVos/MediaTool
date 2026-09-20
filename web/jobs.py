@@ -229,10 +229,23 @@ class Job:
         }
 
 
+# Queuing a whole playlist would otherwise start every item at once, which makes YouTube
+# throttle the burst and reject some requests with HTTP 403. Extra items wait as "queued".
+MAX_CONCURRENT_DOWNLOADS = 3
+
+
 class JobManager:
     def __init__(self) -> None:
         self._jobs: dict[str, Job] = {}
         self._lock = threading.Lock()
+        self._download_slots = threading.BoundedSemaphore(MAX_CONCURRENT_DOWNLOADS)
+
+    def _acquire_download_slot(self, job: Job) -> bool:
+        """Block until a download slot is free; False if the job was cancelled while waiting."""
+        while not job.cancel_event.is_set():
+            if self._download_slots.acquire(timeout=0.25):
+                return True
+        return False
 
     def list_jobs(self) -> list[Job]:
         with self._lock:
@@ -334,6 +347,16 @@ class JobManager:
         return payload
 
     def _run_job(self, job: Job) -> None:
+        holds_download_slot = False
+        if job.command == "download":
+            holds_download_slot = self._acquire_download_slot(job)
+            if not holds_download_slot:
+                job.status = "cancelled"
+                job.finished_at = utc_now_iso()
+                job.emit("status", self._status_payload(job))
+                job.events.put(None)
+                return
+
         job.status = "running"
         job.started_at = utc_now_iso()
         job.emit("status", {"status": "running"})
@@ -387,6 +410,8 @@ class JobManager:
             logging.getLogger(__name__).exception("Job %s failed", job.id)
             job.emit("log", {"message": f"Error: {exc}", "level": logging.ERROR})
         finally:
+            if holds_download_slot:
+                self._download_slots.release()
             detach_log_callback(root, callback_handler)
             set_active_hooks(None)
             loggers = COMMAND_LOGGERS.get(job.command, ())
