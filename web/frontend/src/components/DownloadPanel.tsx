@@ -35,6 +35,8 @@ interface DownloadPanelProps {
 
 const TERMINAL: JobStatus[] = ["completed", "failed", "cancelled"];
 
+const BITRATE_OPTIONS = ["192", "256", "320"].map((v) => ({ value: v, label: `${v} kbps` }));
+
 interface PendingEntry {
   id: string;
   title: string;
@@ -164,7 +166,7 @@ export function DownloadPanel({
   const [output, setOutput] = useState("");
   const [format, setFormat] = useState("mp4");
   const [quality, setQuality] = useState("best");
-  const [bitrate, setBitrate] = useState("192");
+  const [bitrate, setBitrate] = useState("320");
   const [usePlaylistFolder, setUsePlaylistFolder] = useState(true);
 
   const [probing, setProbing] = useState(false);
@@ -201,7 +203,7 @@ export function DownloadPanel({
     setPendingEntries([]);
   };
 
-  const analyzeUrl = async () => {
+  const loadUrl = async () => {
     const trimmed = url.trim();
     if (!trimmed) return;
     setProbing(true);
@@ -292,7 +294,7 @@ export function DownloadPanel({
         <div className="space-y-2">
           <Field
             label="Video or playlist URL"
-            tooltip="Paste a link from any site supported by yt-dlp, then analyze to preview available files."
+            tooltip="Paste a link from any site supported by yt-dlp, then load it to preview available files."
           >
             <div className="flex gap-2">
               <Input
@@ -306,7 +308,7 @@ export function DownloadPanel({
                 }}
                 placeholder="https://…"
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" && canProbe) void analyzeUrl();
+                  if (e.key === "Enter" && canProbe) void loadUrl();
                 }}
               />
               <Button
@@ -314,21 +316,21 @@ export function DownloadPanel({
                 variant="secondary"
                 className="shrink-0 gap-1.5"
                 disabled={!canProbe}
-                onClick={() => void analyzeUrl()}
+                onClick={() => void loadUrl()}
               >
                 {probing ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
                   <Search className="h-4 w-4" />
                 )}
-                Analyze
+                Load
               </Button>
             </div>
           </Field>
           {probing && (
             <p className="flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
-              Analyzing URL — fetching video info from yt-dlp…
+              Loading URL — fetching video info from yt-dlp…
             </p>
           )}
           {probeError && (
@@ -353,7 +355,8 @@ export function DownloadPanel({
             label="Max quality"
             value={quality}
             onChange={setQuality}
-            tooltip="Maximum video height. Best picks the highest available. Ignored for MP3."
+            disabled={format === "mp3"}
+            tooltip="Maximum video height. Best picks the highest available. Not applicable to MP3."
             options={["best", "2160", "1440", "1080", "720", "480", "360"].map((v) => ({
               value: v,
               label: v === "best" ? "Best" : `${v}p`,
@@ -361,12 +364,13 @@ export function DownloadPanel({
           />
         </div>
         {format === "mp3" && (
-          <Field
+          <SelectField
             label="Audio bitrate (kbps)"
-            tooltip="MP3 quality in kbps. Common values: 128, 192, 320."
-          >
-            <Input type="number" value={bitrate} onChange={(e) => setBitrate(e.target.value)} />
-          </Field>
+            value={bitrate}
+            onChange={setBitrate}
+            tooltip="MP3 quality in kbps. Higher is better quality and a larger file."
+            options={BITRATE_OPTIONS}
+          />
         )}
 
         {probeResult && pendingEntries.length > 0 && (
@@ -517,7 +521,7 @@ export function DownloadPanel({
           </div>
           {jobs.length === 0 ? (
             <p className="px-3 py-10 text-center text-sm text-muted-foreground">
-              No active downloads. Analyze a URL above to add files to the queue.
+              No active downloads. Load a URL above to add files to the queue.
             </p>
           ) : (
             <div className="max-h-[min(420px,50vh)] overflow-y-auto overflow-x-hidden">

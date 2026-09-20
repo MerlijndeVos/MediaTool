@@ -70,8 +70,6 @@ git push origin main
 git tag v0.2.0 && git push origin v0.2.0
 ```
 
-In Cursor, use the **media-tool-release** skill to draft notes, bump the version, and prepare the commit (it will ask before tagging or pushing).
-
 Local Windows bundle:
 
 ```powershell

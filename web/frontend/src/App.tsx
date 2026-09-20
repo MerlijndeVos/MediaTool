@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Bot, Download, Palette, ScrollText, Wifi, WifiOff } from "lucide-react";
+import { Bot, Download, House, Palette, ScrollText, Wifi, WifiOff } from "lucide-react";
 import { checkHealth, fetchSettings } from "@/api/client";
 import { AppearancePanel } from "@/components/AppearancePanel";
+import { HomePanel } from "@/components/HomePanel";
 import { LogDrawer } from "@/components/LogDrawer";
 import { ToolsBanner } from "@/components/ToolsBanner";
 import { LoggingPanel } from "@/components/LoggingPanel";
@@ -22,12 +23,12 @@ import {
 } from "@/lib/types";
 import { useJobRunner } from "@/hooks/useJobRunner";
 
-type AppView = "tools" | "logs" | "openai" | "updates" | "appearance";
+type AppView = "home" | "tools" | "logs" | "openai" | "updates" | "appearance";
 
 export default function App() {
   const updates = useUpdates();
   const desktop = isDesktopApp();
-  const [view, setView] = useState<AppView>("tools");
+  const [view, setView] = useState<AppView>("home");
   const [tool, setTool] = useState<ToolId>("convert");
   const [fileLogging, setFileLogging] = useState(true);
   const [logOpen, setLogOpen] = useState(true);
@@ -140,7 +141,12 @@ export default function App() {
       <ToolsBanner />
       <header className="sticky top-0 z-30 border-b bg-card/80 backdrop-blur-md">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3">
-          <div className="flex items-center gap-2.5">
+          <button
+            type="button"
+            onClick={() => setView("home")}
+            className="flex items-center gap-2.5 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-label="Media Tool home"
+          >
             <img
               src="/app/favicon.svg"
               alt=""
@@ -149,7 +155,7 @@ export default function App() {
               height={32}
             />
             <h1 className="text-base font-semibold leading-none">Media Tool</h1>
-          </div>
+          </button>
           <div className="flex items-center gap-2">
             <span
               className={cn(
@@ -168,6 +174,19 @@ export default function App() {
 
       <div className="mx-auto grid max-w-6xl gap-6 px-4 py-6 lg:grid-cols-[220px_1fr]">
         <aside className="space-y-6">
+          <button
+            type="button"
+            onClick={() => setView("home")}
+            className={cn(
+              "flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-medium transition-colors",
+              view === "home"
+                ? "bg-primary text-primary-foreground"
+                : "text-foreground hover:bg-accent",
+            )}
+          >
+            <House className="h-4 w-4" />
+            Home
+          </button>
           <nav className="space-y-1">
             <p className="px-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Video
@@ -319,7 +338,17 @@ export default function App() {
               )}
             </div>
           )}
-          {view === "logs" ? (
+          {view === "home" ? (
+            <HomePanel
+              desktop={desktop}
+              updateAvailable={updates.showUpdate}
+              onOpenTool={(id) => {
+                setTool(id);
+                setView("tools");
+              }}
+              onOpenSettings={setView}
+            />
+          ) : view === "logs" ? (
             <LoggingPanel onFileLoggingChange={setFileLogging} />
           ) : view === "openai" ? (
             <OpenAiSettingsPanel />
