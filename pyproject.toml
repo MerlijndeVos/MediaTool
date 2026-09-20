@@ -48,7 +48,10 @@ media-tool-app = "web.desktop:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["core*", "cli*", "web*"]
+include = ["core*", "cli*", "web*", "builtin_mods*"]
+
+[tool.setuptools.package-data]
+builtin_mods = ["*/mod.toml", "*/*.py"]
 
 [tool.setuptools]
 py-modules = ["app"]

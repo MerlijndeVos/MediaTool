@@ -1,0 +1,116 @@
+id = "vts"
+name = "DVD (VTS)"
+description = "Merge DVD VIDEO_TS VOB files into one file per title."
+version = "1.0.0"
+author = "Media Tool"
+api_version = 1
+group = "Experimental"
+order = 210
+icon = "disc-3"
+
+[ui]
+kind = "form"
+run_mode = "preview_apply"
+mode_param = "dry_run"
+
+[run]
+loggers = ["dv_to_mp4", "dv_to_mp4.failures"]
+
+[permissions]
+writes_files = true
+runs_programs = true
+
+[[params]]
+name = "input"
+type = "folder"
+label = "Input folder"
+help = "Folder with VIDEO_TS rips or VTS_xx_x.VOB files, scanned recursively."
+width = "half"
+
+[[params]]
+name = "output"
+type = "folder"
+label = "Output folder"
+help = "One joined file per DVD title is written here."
+width = "half"
+
+[[params]]
+name = "min_mb"
+type = "integer"
+label = "Min title size (MB)"
+help = "Skip title sets smaller than this (menus, junk). Use 0 to convert everything."
+default = 50
+min = 0
+
+[[params]]
+name = "reencode"
+type = "bool"
+label = "Re-encode to H.264"
+help = "Transcode to H.264 instead of a fast lossless remux. Slower, but smaller files."
+default = false
+
+[[params]]
+name = "output_format"
+type = "choice"
+label = "Output format"
+default = "mkv"
+choices = [
+    { value = "mkv", label = "MKV" },
+    { value = "mp4", label = "MP4" },
+    { value = "mov", label = "MOV" },
+]
+ui = false
+
+[[params]]
+name = "deinterlace"
+type = "choice"
+label = "Deinterlace"
+default = "auto"
+choices = [
+    { value = "auto", label = "Auto" },
+    { value = "on", label = "On" },
+    { value = "off", label = "Off" },
+]
+ui = false
+
+[[params]]
+name = "use_gpu"
+type = "choice"
+label = "GPU"
+default = "auto"
+choices = [
+    { value = "auto", label = "Auto" },
+    { value = "on", label = "On" },
+    { value = "off", label = "Off" },
+]
+ui = false
+
+[[params]]
+name = "crf"
+type = "integer"
+label = "CRF"
+default = 19
+min = 0
+max = 51
+ui = false
+
+[[params]]
+name = "preset"
+type = "text"
+label = "Preset"
+default = "slow"
+ui = false
+
+[[params]]
+name = "include_menus"
+type = "bool"
+label = "Include menus"
+default = false
+ui = false
+
+[[params]]
+name = "dry_run"
+type = "bool"
+label = "Dry run"
+default = true
+ui = false

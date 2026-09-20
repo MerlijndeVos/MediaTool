@@ -1,0 +1,19 @@
+id = "subtitle_cleanup"
+name = "Clean Up"
+description = "Remove URLs, credits, and other junk lines from SRT files in place."
+version = "1.0.0"
+author = "Media Tool"
+api_version = 1
+group = "Subtitles"
+order = 120
+icon = "eraser"
+
+[ui]
+kind = "builtin"
+panel = "subtitle_cleanup"
+
+[run]
+loggers = ["subtitle_cleanup"]
+
+[permissions]
+writes_files = true

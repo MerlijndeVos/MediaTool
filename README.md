@@ -29,6 +29,8 @@
 
 The UI includes drag-and-drop paths, live logs, per-job progress, dark mode, and native folder pickers in the desktop app.
 
+**Mods:** every tool above is a *mod*, and you can add your own without touching the app's code. A mod is a folder with a `mod.toml` and a `main.py`; it gets a generated form, live logs and a `media-tool <id>` command. Mods you add start turned off. See **[MODDING.md](MODDING.md)** (it includes a prompt you can give an AI assistant to write one for you).
+
 ## Install (end users)
 
 Download the installer for your OS from **[GitHub Releases](https://github.com/MerlijndeVos/MediaTool/releases)** (tag `v0.1.0` or newer).
@@ -121,6 +123,8 @@ media-tool stitch --input part1.mp4 --input part2.mp4 --output joined.mp4
 media-tool rename_folders --root "D:\DV_out" --dry-run
 ```
 
+`media-tool mods list` shows every mod, `mods enable <id>` turns a user mod on, and `--no-mods` starts without any user mods.
+
 Use `--help` on any subcommand for full options. GPU encoding (`--use-gpu auto|on|off`), CRF, presets, dry-run, and resume-safe output handling apply where relevant.
 
 ### External tools
@@ -135,9 +139,10 @@ Use `--help` on any subcommand for full options. GPU encoding (`--use-gpu auto|o
 Three layers share one `core/` library:
 
 ```
-core/     ← all media logic (ffmpeg, yt-dlp, rename rules, …)
-cli/      ← argparse → core
-web/      ← FastAPI + React UI + pywebview desktop shell
+core/          ← all media logic (ffmpeg, yt-dlp, rename rules, …) and the mod loader
+builtin_mods/  ← the built-in features, each a mod (mod.toml + main.py)
+cli/           ← argparse → core
+web/           ← FastAPI + React UI + pywebview desktop shell
 ```
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for detail. Contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md).

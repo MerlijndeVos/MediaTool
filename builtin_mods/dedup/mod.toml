@@ -1,0 +1,34 @@
+id = "dedup"
+name = "Fix Duplicates"
+description = "Remove duplicate (2), (3), … suffixes from filenames."
+version = "1.0.0"
+author = "Media Tool"
+api_version = 1
+group = "Experimental"
+order = 230
+icon = "copy"
+
+[ui]
+kind = "form"
+run_mode = "preview_apply"
+mode_param = "apply"
+mode_inverted = true
+
+[run]
+loggers = ["video_dedup"]
+
+[permissions]
+writes_files = true
+
+[[params]]
+name = "input"
+type = "folder"
+label = "Folder"
+help = "Scans recursively for files named like name (2).ext and renames them back to name.ext."
+
+[[params]]
+name = "apply"
+type = "bool"
+label = "Apply"
+default = false
+ui = false

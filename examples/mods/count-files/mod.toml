@@ -1,0 +1,39 @@
+id = "count-files"
+name = "Count Files"
+description = "Count the files in a folder, grouped by extension."
+version = "1.0.0"
+author = "Media Tool"
+api_version = 1
+group = "Other"
+icon = "puzzle"
+
+[ui]
+kind = "form"
+run_mode = "run"
+
+[permissions]
+# Advisory: shown to the user before they enable the mod. This one only reads.
+network = false
+writes_files = false
+runs_programs = false
+
+[[params]]
+name = "folder"
+type = "folder"
+label = "Folder"
+help = "The folder to look through."
+
+[[params]]
+name = "recursive"
+type = "bool"
+label = "Include subfolders"
+default = true
+
+[[params]]
+name = "top"
+type = "integer"
+label = "Show the top N extensions"
+help = "How many extensions to list, most common first."
+default = 10
+min = 1
+max = 100

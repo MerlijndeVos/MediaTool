@@ -1,15 +1,5 @@
-export type CommandName =
-  | "convert"
-  | "vts"
-  | "rename"
-  | "audio"
-  | "dedup"
-  | "download"
-  | "trim"
-  | "stitch"
-  | "rename_folders"
-  | "subtitle_translate"
-  | "subtitle_cleanup";
+/** A mod id: built-in features and user mods are all addressed by id. */
+export type CommandName = string;
 
 export type JobStatus = "queued" | "running" | "completed" | "failed" | "cancelled";
 
@@ -101,38 +91,72 @@ export interface DownloadProbeResult {
 
 export type ToolId = CommandName;
 
-export const PRIMARY_TOOLS: ToolId[] = ["convert", "trim", "stitch", "download", "rename"];
-export const SUBTITLE_TOOLS: ToolId[] = ["subtitle_translate", "subtitle_cleanup"];
-export const SECONDARY_TOOLS: ToolId[] = ["vts", "audio", "dedup", "rename_folders"];
+export type ModParamType =
+  | "text"
+  | "number"
+  | "integer"
+  | "bool"
+  | "choice"
+  | "folder"
+  | "file"
+  | "files"
+  | "list"
+  | "json";
 
-export const TOOL_LABELS: Record<ToolId, string> = {
-  convert: "Convert",
-  trim: "Trim",
-  stitch: "Stitch",
-  download: "Download",
-  vts: "DVD (VTS)",
-  rename: "Rename",
-  audio: "Audio Default",
-  dedup: "Fix Duplicates",
-  rename_folders: "Rename Folders",
-  subtitle_translate: "Translate",
-  subtitle_cleanup: "Clean Up",
-};
+export interface ModParam {
+  name: string;
+  type: ModParamType;
+  label: string;
+  help: string;
+  placeholder: string;
+  required: boolean;
+  default?: unknown;
+  /** Value the form starts with when it differs from the API default. */
+  initial?: unknown;
+  choices: { value: string; label: string }[];
+  strict: boolean;
+  min?: number | null;
+  max?: number | null;
+  ui: boolean;
+  width: "full" | "half";
+  nullable: boolean;
+}
 
-export const TOOL_DESCRIPTIONS: Record<ToolId, string> = {
-  convert: "Batch-convert videos between formats with optional deinterlace and GPU encoding.",
-  trim: "Remove seconds from the start and/or end of one or more files.",
-  stitch: "Join multiple clips into a single output file in order.",
-  download: "Download videos or playlists from yt-dlp-supported sites as MP4 or MP3.",
-  rename: "Organize TV shows and movies for Plex/Jellyfin, or clean up any folder and file names, using reusable format profiles.",
-  vts: "Merge DVD VIDEO_TS VOB files into one file per title.",
-  audio: "Set the default audio track language in MKV files (ffmpeg stream copy).",
-  dedup: "Remove duplicate (2), (3), … suffixes from filenames.",
-  rename_folders: "Rename subfolders to YYYY month DD - Description using video dates.",
-  subtitle_translate: "Translate SRT subtitles to another language with OpenAI.",
-  subtitle_cleanup: "Remove URLs, credits, and other junk lines from SRT files in place.",
-};
+export interface ModInfo {
+  id: string;
+  name: string;
+  description: string;
+  version: string;
+  author: string;
+  group: string;
+  order: number;
+  icon: string;
+  source: "builtin" | "user";
+  builtin: boolean;
+  enabled: boolean;
+  path?: string | null;
+  ui: {
+    kind: "form" | "builtin";
+    panel: string;
+    run_mode: "preview_apply" | "run";
+    mode_param: string;
+    mode_inverted: boolean;
+    apply_hint: string;
+  };
+  run: { max_concurrent: number; cancel: "immediate" | "cooperative"; undo: boolean };
+  permissions: { network: boolean; writes_files: boolean; runs_programs: boolean };
+  params: ModParam[];
+}
 
-export function toolDescription(tool: ToolId): string {
-  return TOOL_DESCRIPTIONS[tool];
+export interface ModLoadError {
+  path: string;
+  message: string;
+  id?: string | null;
+}
+
+export interface ModsResponse {
+  mods: ModInfo[];
+  errors: ModLoadError[];
+  safe_mode: boolean;
+  mods_dir: string;
 }

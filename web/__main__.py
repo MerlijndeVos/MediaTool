@@ -11,6 +11,8 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+from core.mods import set_safe_mode
+
 from .run import require_port, run_uvicorn
 
 DEFAULT_HOST = "127.0.0.1"
@@ -30,7 +32,14 @@ def main() -> None:
         default=DEFAULT_HOST,
         help=f"Bind address (default: {DEFAULT_HOST} — local only).",
     )
+    parser.add_argument(
+        "--no-mods",
+        action="store_true",
+        help="Safe mode: do not load user-installed mods (built-in features are unaffected).",
+    )
     args = parser.parse_args()
+    if args.no_mods:
+        set_safe_mode(True)
 
     try:
         import uvicorn  # noqa: F401

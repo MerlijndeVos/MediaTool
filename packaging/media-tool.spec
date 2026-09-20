@@ -40,6 +40,12 @@ with (REPO_ROOT / "pyproject.toml").open("rb") as _pf:
         encoding="utf-8",
     )
 datas.append((str(_bundled_version_file), "."))
+# Built-in features are mods: a mod.toml + main.py per folder, loaded from files at runtime.
+# (Their imports are bundled through the hidden imports below.)
+BUILTIN_MODS = REPO_ROOT / "builtin_mods"
+for _mod_file in sorted(BUILTIN_MODS.glob("*/*")):
+    if _mod_file.suffix in {".toml", ".py"}:
+        datas.append((str(_mod_file), f"builtin_mods/{_mod_file.parent.name}"))
 try:
     datas += copy_metadata("media-tool")
 except Exception:
@@ -82,6 +88,20 @@ hiddenimports: list[str] = [
     "watchfiles",
     "pythonnet",
     "clr_loader",
+]
+
+# Mods are plain Python loaded at runtime, so PyInstaller cannot see what they import.
+# Bundle everything the built-in mods use, and the parts of the standard library a mod
+# is likely to want (PyInstaller only includes stdlib modules the app itself imports).
+hiddenimports += collect_submodules("core")
+hiddenimports += [
+    "argparse", "base64", "bisect", "collections", "concurrent.futures", "copy", "csv",
+    "dataclasses", "datetime", "decimal", "difflib", "enum", "fnmatch", "fractions", "functools",
+    "glob", "gzip", "hashlib", "heapq", "html", "html.parser", "http.client", "io", "itertools",
+    "json", "logging", "math", "mimetypes", "operator", "os", "pathlib", "platform", "random",
+    "re", "secrets", "shlex", "shutil", "sqlite3", "statistics", "string", "struct",
+    "subprocess", "tempfile", "textwrap", "time", "typing", "unicodedata", "urllib.parse",
+    "urllib.request", "uuid", "xml.etree.ElementTree", "zipfile",
 ]
 
 for pkg in (

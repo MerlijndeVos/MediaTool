@@ -1,0 +1,32 @@
+id = "rename_folders"
+name = "Rename Folders"
+description = "Rename subfolders to YYYY month DD - Description using video dates."
+version = "1.0.0"
+author = "Media Tool"
+api_version = 1
+group = "Experimental"
+order = 240
+icon = "folder-pen"
+
+[ui]
+kind = "form"
+run_mode = "preview_apply"
+mode_param = "dry_run"
+
+[run]
+
+[permissions]
+writes_files = true
+
+[[params]]
+name = "root"
+type = "folder"
+label = "Root folder"
+help = "Renames direct subfolders to \"YYYY maand DD - Description\" using dates from video filenames."
+
+[[params]]
+name = "dry_run"
+type = "bool"
+label = "Dry run"
+default = true
+ui = false

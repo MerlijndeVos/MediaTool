@@ -1,0 +1,20 @@
+id = "stitch"
+name = "Stitch"
+description = "Join multiple clips into a single output file in order."
+version = "1.0.0"
+author = "Media Tool"
+api_version = 1
+group = "Video"
+order = 30
+icon = "combine"
+
+[ui]
+kind = "builtin"
+panel = "stitch"
+
+[run]
+loggers = ["video_stitch"]
+
+[permissions]
+writes_files = true
+runs_programs = true

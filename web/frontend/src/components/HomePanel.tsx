@@ -1,46 +1,12 @@
 import type { LucideIcon } from "lucide-react";
-import {
-  AudioLines,
-  Bot,
-  Combine,
-  Copy,
-  Disc3,
-  Download,
-  Eraser,
-  FileVideo,
-  FolderPen,
-  Languages,
-  Palette,
-  PenLine,
-  Scissors,
-  ScrollText,
-} from "lucide-react";
+import { Bot, Download, Palette, Puzzle, ScrollText } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import type { ModGroup } from "@/hooks/useMods";
+import { groupAccent, modIcon } from "@/lib/modIcons";
 import { cn } from "@/lib/utils";
-import {
-  PRIMARY_TOOLS,
-  SECONDARY_TOOLS,
-  SUBTITLE_TOOLS,
-  TOOL_LABELS,
-  toolDescription,
-  type ToolId,
-} from "@/lib/types";
+import type { ToolId } from "@/lib/types";
 
-export type SettingsViewId = "logs" | "openai" | "updates" | "appearance";
-
-const TOOL_ICONS: Record<ToolId, LucideIcon> = {
-  convert: FileVideo,
-  trim: Scissors,
-  stitch: Combine,
-  download: Download,
-  rename: PenLine,
-  vts: Disc3,
-  audio: AudioLines,
-  dedup: Copy,
-  rename_folders: FolderPen,
-  subtitle_translate: Languages,
-  subtitle_cleanup: Eraser,
-};
+export type SettingsViewId = "logs" | "openai" | "updates" | "mods" | "appearance";
 
 interface SettingsTile {
   id: SettingsViewId;
@@ -71,6 +37,12 @@ const SETTINGS_TILES: SettingsTile[] = [
     desktopOnly: true,
   },
   {
+    id: "mods",
+    label: "Mods",
+    description: "Turn your own mods on or off, and see what is installed.",
+    icon: Puzzle,
+  },
+  {
     id: "appearance",
     label: "Appearance",
     description: "Switch between light and dark themes.",
@@ -79,13 +51,15 @@ const SETTINGS_TILES: SettingsTile[] = [
 ];
 
 interface HomePanelProps {
+  /** Enabled mods grouped for display (Video, Subtitles, ...). */
+  groups: ModGroup[];
   desktop: boolean;
   updateAvailable: boolean;
   onOpenTool: (tool: ToolId) => void;
   onOpenSettings: (view: SettingsViewId) => void;
 }
 
-type Accent = "video" | "subtitles" | "experimental" | "settings";
+type Accent = "video" | "subtitles" | "experimental" | "other" | "settings";
 
 // Full class strings so Tailwind can see them.
 const ACCENT_STYLES: Record<Accent, { tile: string; chip: string }> = {
@@ -100,6 +74,10 @@ const ACCENT_STYLES: Record<Accent, { tile: string; chip: string }> = {
   experimental: {
     tile: "bg-amber-500/15 hover:bg-amber-500/25",
     chip: "bg-amber-600 text-white dark:bg-amber-500",
+  },
+  other: {
+    tile: "bg-emerald-500/15 hover:bg-emerald-500/25",
+    chip: "bg-emerald-600 text-white dark:bg-emerald-500",
   },
   settings: {
     tile: "bg-slate-500/15 hover:bg-slate-500/25",
@@ -169,27 +147,19 @@ function Section({
   );
 }
 
+const GROUP_SUBTITLES: Record<string, string> = {
+  video: "Convert, cut, join, download, and organize video files.",
+  subtitles: "Translate and clean up SRT subtitle files.",
+  experimental: "Specialised utilities for less common jobs.",
+};
+
 export function HomePanel({
+  groups,
   desktop,
   updateAvailable,
   onOpenTool,
   onOpenSettings,
 }: HomePanelProps) {
-  const toolSection = (accent: Accent, title: string, subtitle: string, ids: ToolId[]) => (
-    <Section title={title} subtitle={subtitle}>
-      {ids.map((id) => (
-        <Tile
-          key={id}
-          accent={accent}
-          icon={TOOL_ICONS[id]}
-          label={TOOL_LABELS[id]}
-          description={toolDescription(id)}
-          onClick={() => onOpenTool(id)}
-        />
-      ))}
-    </Section>
-  );
-
   return (
     <Card className="border-0 shadow-md">
       <CardHeader>
@@ -197,9 +167,24 @@ export function HomePanel({
         <CardDescription>Pick a tool to get started.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        {toolSection("video", "Video", "Convert, cut, join, download, and organize video files.", PRIMARY_TOOLS)}
-        {toolSection("subtitles", "Subtitles", "Translate and clean up SRT subtitle files.", SUBTITLE_TOOLS)}
-        {toolSection("experimental", "Experimental", "Specialised utilities for less common jobs.", SECONDARY_TOOLS)}
+        {groups.map((group) => (
+          <Section
+            key={group.name}
+            title={group.name}
+            subtitle={GROUP_SUBTITLES[group.name.trim().toLowerCase()]}
+          >
+            {group.mods.map((mod) => (
+              <Tile
+                key={mod.id}
+                accent={groupAccent(group.name)}
+                icon={modIcon(mod.icon)}
+                label={mod.name}
+                description={mod.description}
+                onClick={() => onOpenTool(mod.id)}
+              />
+            ))}
+          </Section>
+        ))}
         <Section title="Settings" className="border-t border-border/60 pt-5">
           {SETTINGS_TILES.filter((s) => desktop || !s.desktopOnly).map((s) => (
             <Tile

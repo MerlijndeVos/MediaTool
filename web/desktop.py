@@ -8,6 +8,7 @@ import sys
 import threading
 from pathlib import Path
 
+from core.mods import set_safe_mode
 from core.runtime import install_root, resource_root
 from core.updates import register_quit_callback
 
@@ -75,7 +76,14 @@ def main(argv: list[str] | None = None) -> None:
         action="store_true",
         help="Enable webview devtools (where supported).",
     )
+    parser.add_argument(
+        "--no-mods",
+        action="store_true",
+        help="Safe mode: do not load user-installed mods (built-in features are unaffected).",
+    )
     args = parser.parse_args(argv)
+    if args.no_mods:
+        set_safe_mode(True)
 
     try:
         import webview

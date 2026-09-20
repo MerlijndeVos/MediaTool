@@ -1,0 +1,20 @@
+id = "subtitle_translate"
+name = "Translate"
+description = "Translate SRT subtitles to another language with OpenAI."
+version = "1.0.0"
+author = "Media Tool"
+api_version = 1
+group = "Subtitles"
+order = 110
+icon = "languages"
+
+[ui]
+kind = "builtin"
+panel = "subtitle_translate"
+
+[run]
+loggers = ["subtitle_translate"]
+
+[permissions]
+network = true
+writes_files = true

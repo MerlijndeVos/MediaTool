@@ -21,10 +21,14 @@ python app.py
 | Path | Purpose |
 |------|---------|
 | `core/` | All media processing logic |
+| `core/mods/` | Mod system: manifest parser, registry, the `ctx` mods receive |
+| `builtin_mods/` | The built-in features, each a mod (`mod.toml` + `main.py`) |
 | `cli/` | Command-line interface |
 | `web/server.py` | FastAPI app |
 | `web/frontend/` | React UI |
-| `web/jobs.py` | API job runner |
+| `web/jobs.py` | API job runner (runs any mod) |
+| `tests/` | Unit tests (`python -m unittest discover -s tests`) |
+| `examples/mods/` | Example user mod |
 | `app.py` | Desktop entry point |
 | `packaging/` | PyInstaller spec and installer scripts |
 
@@ -32,11 +36,18 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the full picture.
 
 ## Adding a feature
 
+Every feature is a mod, see [MODDING.md](MODDING.md).
+
 1. Implement logic in `core/` with logging via the standard `logging` module (respects `core.progress` hooks).
-2. Add CLI args in `cli/args.py` and register the handler in `cli/dispatch.py`.
-3. Add a Pydantic params model in `web/schemas.py` and a job handler in `web/jobs.py`.
-4. Add a form/panel in `web/frontend/src/components/ToolPanel.tsx` if the UI needs it.
-5. Test via CLI and the desktop app.
+2. Add `builtin_mods/<id>/mod.toml` and `main.py` (`run(params, ctx)` calls into `core`). Describe the
+   parameters in `[[params]]`: the form, the API validation and the CLI flags are generated from them.
+   Use [`builtin_mods/trim`](builtin_mods/trim) as a model.
+3. Only if the form is too rich for a manifest: set `[ui] kind = "builtin"`, add a React panel and
+   register it in `BuiltinPanel` in `web/frontend/src/components/ToolPanel.tsx`, and export a
+   `Params` pydantic model from `main.py`.
+4. Optional: a hand-written subcommand in `cli/args.py` + `cli/dispatch.py` if you want richer flags
+   than the generated ones.
+5. Test with `python -m unittest discover -s tests`, the CLI and the desktop app.
 
 ## Frontend
 

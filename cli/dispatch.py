@@ -4,6 +4,7 @@ import argparse
 import sys
 from typing import Callable
 
+from . import mods_cli
 from core import (
     run_audio,
     run_convert,
@@ -39,6 +40,8 @@ def dispatch(args: argparse.Namespace) -> None:
     """Run the subcommand selected on *args*."""
     handler = COMMANDS.get(args.command)
     if handler is None:
+        if mods_cli.run_command(args):
+            return
         print(f"Unknown command: {args.command}", file=sys.stderr)
         sys.exit(2)
     handler(args)

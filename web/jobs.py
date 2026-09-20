@@ -1,188 +1,35 @@
-"""Background job execution and event streaming for the web API."""
+"""Background job execution and event streaming for the web API.
+
+Every feature is a mod (see :mod:`core.mods`): a job validates its parameters against the
+mod, then calls the mod's ``run(params, ctx)`` on a background thread.
+"""
 
 from __future__ import annotations
 
-import argparse
-import json
 import logging
 import queue
 import threading
 import uuid
 from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any, Optional
 
-from core import config
-from core import (
-    DownloadCancelled,
-    close_log_handlers,
-    download_url,
-    run_audio,
-    run_convert,
-    run_dedup,
-    run_rename,
-    run_stitch,
-    run_subtitle_cleanup,
-    run_subtitle_translate,
-    run_trim,
-    run_vts,
-)
+from core import close_log_handlers, config
+from core.mods import Mod, ModCancelled, ModContext, ModError, registry
 from core.progress import (
-    CallbackLogHandler,
     LogHooks,
     attach_log_callback,
     detach_log_callback,
     set_active_hooks,
 )
-from core.rename import run_undo_from_journal
-from core.rename_folders import process_root
 
-from .schemas import (
-    AudioParams,
-    CommandName,
-    ConvertParams,
-    DedupParams,
-    DownloadParams,
-    JobStatus,
-    RenameFoldersParams,
-    RenameParams,
-    StitchParams,
-    SubtitleCleanupParams,
-    SubtitleTranslateParams,
-    TrimParams,
-    VtsParams,
-    utc_now_iso,
-    validate_params,
-)
-
-COMMAND_LOGGERS: dict[str, tuple[str, ...]] = {
-    "convert": ("dv_to_mp4", "dv_to_mp4.failures"),
-    "vts": ("dv_to_mp4", "dv_to_mp4.failures"),
-    "rename": ("video_rename",),
-    "audio": ("video_audio",),
-    "dedup": ("video_dedup",),
-    "download": (),
-    "trim": ("video_trim",),
-    "stitch": ("video_stitch",),
-    "rename_folders": (),
-    "subtitle_translate": ("subtitle_translate",),
-    "subtitle_cleanup": ("subtitle_cleanup",),
-}
-
-
-def _to_namespace(command: str, params: Any) -> argparse.Namespace:
-    """Build an ``argparse.Namespace`` expected by :mod:`core` handlers."""
-    if command == "convert":
-        p: ConvertParams = params
-        return argparse.Namespace(
-            input=Path(p.input),
-            output=Path(p.output),
-            input_format=p.input_format,
-            output_format=p.output_format,
-            deinterlace=p.deinterlace,
-            use_gpu=p.use_gpu,
-            crf=p.crf,
-            preset=p.preset,
-            dry_run=p.dry_run,
-            prune_output=p.prune_output,
-            copy_useful_only=p.copy_useful_only,
-        )
-    if command == "vts":
-        p = params
-        return argparse.Namespace(
-            input=Path(p.input),
-            output=Path(p.output),
-            output_format=p.output_format,
-            reencode=p.reencode,
-            deinterlace=p.deinterlace,
-            use_gpu=p.use_gpu,
-            crf=p.crf,
-            preset=p.preset,
-            include_menus=p.include_menus,
-            min_mb=p.min_mb,
-            dry_run=p.dry_run,
-        )
-    if command == "rename":
-        p: RenameParams = params
-        return argparse.Namespace(
-            input=Path(p.input),
-            output=Path(p.output) if p.output else None,
-            type=p.type,
-            apply=p.apply,
-            copy=p.copy_files,
-            undo=p.undo,
-            prune_empty_dirs=p.prune_empty_dirs,
-            no_titlecase=p.no_titlecase,
-            strip_words=p.strip_words,
-            bare_episode_numbers=p.bare_episode_numbers,
-            default_sub_lang=p.default_sub_lang,
-            profile=p.profile,
-            mode=p.mode,
-            layout=p.layout,
-            targets=p.targets,
-            max_depth=p.max_depth,
-        )
-    if command == "audio":
-        p: AudioParams = params
-        return argparse.Namespace(
-            input=Path(p.input),
-            lang=p.lang,
-            apply=p.apply,
-            set_language=p.set_language,
-            no_recursive=p.no_recursive,
-        )
-    if command == "dedup":
-        p: DedupParams = params
-        return argparse.Namespace(input=Path(p.input), apply=p.apply)
-    if command == "trim":
-        p: TrimParams = params
-        return argparse.Namespace(
-            input=Path(p.input),
-            output=Path(p.output) if p.output else None,
-            trim_start=p.trim_start,
-            trim_end=p.trim_end,
-            input_format=p.input_format,
-            no_recursive=p.no_recursive,
-            reencode=p.reencode,
-            replace=p.replace,
-            dry_run=p.dry_run,
-        )
-    if command == "stitch":
-        p: StitchParams = params
-        return argparse.Namespace(
-            input=[Path(x) for x in p.input],
-            output=Path(p.output),
-            output_format=p.output_format,
-            input_format=p.input_format,
-            no_recursive=p.no_recursive,
-            reencode=p.reencode,
-            dry_run=p.dry_run,
-        )
-    if command == "subtitle_translate":
-        p: SubtitleTranslateParams = params
-        return argparse.Namespace(
-            input=Path(p.input),
-            source_lang=p.source_lang,
-            target_lang=p.target_lang,
-            overwrite=p.overwrite,
-            dry_run=p.dry_run,
-            model=None,
-        )
-    if command == "subtitle_cleanup":
-        p: SubtitleCleanupParams = params
-        return argparse.Namespace(
-            input=Path(p.input),
-            confirmed_removals=list(p.confirmed_removals),
-            junk_reviewed=p.junk_reviewed,
-            dry_run=p.dry_run,
-        )
-    raise ValueError(f"No namespace mapping for command: {command}")
+from .mod_params import validate_params
+from .schemas import JobStatus, utc_now_iso
 
 
 @dataclass
 class Job:
     id: str
-    command: CommandName
+    command: str
     status: JobStatus = "queued"
     created_at: str = field(default_factory=utc_now_iso)
     started_at: Optional[str] = None
@@ -190,8 +37,7 @@ class Job:
     error: Optional[str] = None
     exit_code: Optional[int] = None
     file_logging: bool = True
-    params: Any = None
-    namespace: Optional[argparse.Namespace] = None
+    params: Optional[dict[str, Any]] = None
     undo_manifest: Optional[dict] = None
     undo_used: bool = False
     undo_of: Optional[str] = None
@@ -210,8 +56,7 @@ class Job:
 
     def undo_available(self) -> bool:
         return (
-            self.command == "rename"
-            and self.undo_of is None
+            self.undo_of is None
             and self.status == "completed"
             and bool(self.undo_manifest)
             and not self.undo_used
@@ -234,21 +79,30 @@ class Job:
         }
 
 
-# Queuing a whole playlist would otherwise start every item at once, which makes YouTube
-# throttle the burst and reject some requests with HTTP 403. Extra items wait as "queued".
-MAX_CONCURRENT_DOWNLOADS = 3
-
-
 class JobManager:
     def __init__(self) -> None:
         self._jobs: dict[str, Job] = {}
         self._lock = threading.Lock()
-        self._download_slots = threading.BoundedSemaphore(MAX_CONCURRENT_DOWNLOADS)
+        # Per-mod concurrency limits (``[run] max_concurrent`` in the manifest), created lazily.
+        # Queuing a whole playlist would otherwise start every download at once, which makes
+        # YouTube throttle the burst and reject some requests with HTTP 403.
+        self._slots: dict[str, threading.BoundedSemaphore] = {}
 
-    def _acquire_download_slot(self, job: Job) -> bool:
-        """Block until a download slot is free; False if the job was cancelled while waiting."""
+    def _slot_for(self, mod: Mod) -> Optional[threading.BoundedSemaphore]:
+        limit = mod.manifest.max_concurrent
+        if limit <= 0:
+            return None
+        with self._lock:
+            slot = self._slots.get(mod.id)
+            if slot is None:
+                slot = self._slots[mod.id] = threading.BoundedSemaphore(limit)
+            return slot
+
+    @staticmethod
+    def _acquire_slot(slot: threading.BoundedSemaphore, job: Job) -> bool:
+        """Block until a slot is free; False if the job was cancelled while waiting."""
         while not job.cancel_event.is_set():
-            if self._download_slots.acquire(timeout=0.25):
+            if slot.acquire(timeout=0.25):
                 return True
         return False
 
@@ -260,9 +114,21 @@ class JobManager:
         with self._lock:
             return self._jobs.get(job_id)
 
+    def _start(self, job: Job) -> None:
+        with self._lock:
+            self._jobs[job.id] = job
+        thread = threading.Thread(
+            target=self._run_job,
+            args=(job,),
+            daemon=True,
+            name=f"web-job-{job.id[:8]}",
+        )
+        job._thread = thread
+        thread.start()
+
     def create(
         self,
-        command: CommandName,
+        command: str,
         params: dict[str, Any],
         *,
         file_logging: bool = True,
@@ -272,22 +138,9 @@ class JobManager:
             id=str(uuid.uuid4()),
             command=command,
             file_logging=file_logging,
-            params=validated,
+            params=validated.model_dump(),
         )
-        if command not in ("download", "rename_folders"):
-            job.namespace = _to_namespace(command, validated)
-
-        with self._lock:
-            self._jobs[job.id] = job
-
-        thread = threading.Thread(
-            target=self._run_job,
-            args=(job,),
-            daemon=True,
-            name=f"web-job-{job.id[:8]}",
-        )
-        job._thread = thread
-        thread.start()
+        self._start(job)
         return job
 
     def cancel(self, job_id: str) -> bool:
@@ -297,44 +150,36 @@ class JobManager:
         if job.status not in ("queued", "running"):
             return False
         job.cancel_event.set()
-        if job.command != "download":
+        mod = registry.get(job.command)
+        cooperative = mod is not None and mod.manifest.cancel == "cooperative"
+        if not cooperative:
             job.status = "cancelled"
             job.finished_at = utc_now_iso()
             job.emit("status", {"status": "cancelled"})
             job.events.put(None)
         return True
 
-    def undo_rename(self, source_job_id: str, *, file_logging: bool = True) -> Job:
+    def undo_job(self, source_job_id: str, *, file_logging: bool = True) -> Job:
         with self._lock:
             source = self._jobs.get(source_job_id)
         if source is None:
             raise KeyError("Job not found")
-        if source.command != "rename" or source.undo_of is not None:
-            raise ValueError("Only rename apply jobs can be undone")
+        if source.undo_of is not None:
+            raise ValueError("Only apply jobs can be undone")
         if source.status != "completed":
             raise ValueError("Job has not completed")
         if source.undo_used:
-            raise ValueError("This rename has already been undone")
+            raise ValueError("This job has already been undone")
         if not source.undo_manifest:
             raise ValueError("Nothing to undo (preview run or no files changed)")
 
         job = Job(
             id=str(uuid.uuid4()),
-            command="rename",
+            command=source.command,
             file_logging=file_logging,
             undo_of=source_job_id,
         )
-        with self._lock:
-            self._jobs[job.id] = job
-
-        thread = threading.Thread(
-            target=self._run_job,
-            args=(job,),
-            daemon=True,
-            name=f"web-job-{job.id[:8]}",
-        )
-        job._thread = thread
-        thread.start()
+        self._start(job)
         return job
 
     def _status_payload(self, job: Job) -> dict[str, Any]:
@@ -352,10 +197,12 @@ class JobManager:
         return payload
 
     def _run_job(self, job: Job) -> None:
-        holds_download_slot = False
-        if job.command == "download":
-            holds_download_slot = self._acquire_download_slot(job)
-            if not holds_download_slot:
+        mod = registry.get(job.command)
+        slot = self._slot_for(mod) if mod is not None else None
+        holds_slot = False
+        if slot is not None:
+            holds_slot = self._acquire_slot(slot, job)
+            if not holds_slot:
                 job.status = "cancelled"
                 job.finished_at = utc_now_iso()
                 job.emit("status", self._status_payload(job))
@@ -386,14 +233,19 @@ class JobManager:
         )
 
         try:
+            if mod is None:
+                raise ModError(f"Mod '{job.command}' is no longer available.")
+            ctx = ModContext(
+                mod.id,
+                job_id=job.id,
+                cancel_event=job.cancel_event,
+                on_log=on_log,
+                on_progress=on_progress,
+            )
             if job.undo_of:
-                self._run_rename_undo(job)
-            elif job.command == "download":
-                self._run_download(job)
-            elif job.command == "rename_folders":
-                self._run_rename_folders(job)
+                self._run_undo(job, mod, ctx)
             else:
-                self._run_core(job)
+                self._run_mod(job, mod, ctx)
             if job.status == "running":
                 job.status = "completed"
                 job.exit_code = 0
@@ -405,7 +257,7 @@ class JobManager:
             else:
                 job.status = "failed"
                 job.error = f"Exited with code {code}"
-        except DownloadCancelled:
+        except ModCancelled:
             job.status = "cancelled"
             job.exit_code = None
         except Exception as exc:
@@ -415,54 +267,42 @@ class JobManager:
             logging.getLogger(__name__).exception("Job %s failed", job.id)
             job.emit("log", {"message": f"Error: {exc}", "level": logging.ERROR})
         finally:
-            if holds_download_slot:
-                self._download_slots.release()
+            if holds_slot and slot is not None:
+                slot.release()
             detach_log_callback(root, callback_handler)
             set_active_hooks(None)
-            loggers = COMMAND_LOGGERS.get(job.command, ())
-            if loggers:
-                close_log_handlers(*loggers)
+            if mod is not None and mod.manifest.loggers:
+                close_log_handlers(*mod.manifest.loggers)
             if job.status in ("completed", "failed", "cancelled"):
                 job.finished_at = utc_now_iso()
                 job.emit("status", self._status_payload(job))
             job.events.put(None)
 
-    def _run_core(self, job: Job) -> None:
-        handlers: dict[str, Callable[..., Any]] = {
-            "convert": run_convert,
-            "vts": run_vts,
-            "rename": run_rename,
-            "audio": run_audio,
-            "dedup": run_dedup,
-            "trim": run_trim,
-            "stitch": run_stitch,
-            "subtitle_translate": run_subtitle_translate,
-            "subtitle_cleanup": run_subtitle_cleanup,
-        }
-        handler = handlers[job.command]
+    def _run_mod(self, job: Job, mod: Mod, ctx: ModContext) -> None:
         if job.cancel_event.is_set():
             job.status = "cancelled"
             return
-        if job.command == "rename":
-            manifest = run_rename(job.namespace)
-            if manifest:
-                job.undo_manifest = manifest
-        else:
-            handler(job.namespace)
+        run = mod.run_fn()
+        run(dict(job.params or {}), ctx)
+        if mod.manifest.undo and ctx.undo_manifest:
+            job.undo_manifest = ctx.undo_manifest
 
-    def _run_rename_undo(self, job: Job) -> None:
+    def _run_undo(self, job: Job, mod: Mod, ctx: ModContext) -> None:
         source = self.get(job.undo_of or "")
         if source is None:
             raise ValueError(f"Source job not found: {job.undo_of}")
         if not source.undo_manifest:
             raise ValueError("Source job has no undo manifest")
         if source.undo_used:
-            raise ValueError("Rename already undone")
+            raise ValueError("Already undone")
+        undo = mod.undo_fn()
+        if undo is None:
+            raise ModError(f"Mod '{mod.id}' does not support undo.")
 
-        logger = logging.getLogger("video_rename")
-        restored, failed, skipped = run_undo_from_journal(
-            source.undo_manifest, apply=True, logger=logger
-        )
+        result = undo(source.undo_manifest, ctx) or {}
+        restored = int(result.get("restored", 0))
+        failed = int(result.get("failed", 0))
+        skipped = int(result.get("skipped", 0))
         if failed > 0:
             job.status = "failed"
             job.exit_code = 1
@@ -482,49 +322,6 @@ class JobManager:
                         "level": logging.WARNING,
                     },
                 )
-
-    def _run_download(self, job: Job) -> None:
-        p: DownloadParams = job.params
-        if job.cancel_event.is_set():
-            job.status = "cancelled"
-            return
-
-        def progress_cb(payload: dict) -> None:
-            if job.cancel_event.is_set():
-                return
-            job.emit("progress", payload)
-
-        try:
-            download_url(
-                url=p.url,
-                output_dir=Path(p.output),
-                out_format=p.format,
-                video_quality=p.video_quality,
-                audio_bitrate=p.audio_bitrate,
-                playlist=p.playlist,
-                no_playlist_index=p.no_playlist_index,
-                output_name=p.output_name,
-                playlist_subdir=p.playlist_subdir,
-                playlist_index=p.playlist_index,
-                progress_callback=progress_cb,
-                cancel_event=job.cancel_event,
-                tag=job.id[:8],
-            )
-            if job.cancel_event.is_set():
-                job.status = "cancelled"
-        except DownloadCancelled:
-            job.status = "cancelled"
-
-    def _run_rename_folders(self, job: Job) -> None:
-        p: RenameFoldersParams = job.params
-        if job.cancel_event.is_set():
-            job.status = "cancelled"
-            return
-
-        def log_line(line: str) -> None:
-            job.emit("log", {"message": line, "level": logging.INFO})
-
-        process_root(Path(p.root), p.dry_run, log=log_line)
 
 
 # Module-level singleton used by the FastAPI app.

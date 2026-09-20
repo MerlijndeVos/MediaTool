@@ -7,12 +7,14 @@ export function Switch({
   onCheckedChange,
   id,
   disabled,
+  "aria-label": ariaLabel,
 }: {
   className?: string;
   checked?: boolean;
   onCheckedChange?: (checked: boolean) => void;
   id?: string;
   disabled?: boolean;
+  "aria-label"?: string;
 }) {
   return (
     <SwitchPrimitive.Root
@@ -20,6 +22,7 @@ export function Switch({
       checked={checked}
       onCheckedChange={onCheckedChange}
       disabled={disabled}
+      aria-label={ariaLabel}
       className={cn(
         "peer inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent p-0.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-primary data-[state=unchecked]:bg-input",
         className,

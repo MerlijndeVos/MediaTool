@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { AlertTriangle, ChevronDown, Eye, FolderOpen, Loader2, Play } from "lucide-react";
-import { isDesktopApp, pickFolder } from "@/lib/desktop";
+import { isDesktopApp, pickFiles, pickFolder } from "@/lib/desktop";
 import { Button } from "@/components/ui/button";
 import { HelpTooltip } from "@/components/ui/help-tooltip";
 import { Input } from "@/components/ui/input";
@@ -170,16 +170,16 @@ export function PathField({
   placeholder?: string;
   hint?: string;
   tooltip?: string;
-  /** Show a native Browse button in the desktop app (`folder` only for now). */
-  browse?: "folder" | false;
+  /** Show a native Browse button in the desktop app. */
+  browse?: "folder" | "file" | false;
 }) {
   const [picking, setPicking] = useState(false);
-  const showBrowse = browse === "folder" && isDesktopApp();
+  const showBrowse = browse !== false && isDesktopApp();
 
   const handleBrowse = async () => {
     setPicking(true);
     try {
-      const path = await pickFolder();
+      const path = browse === "file" ? ((await pickFiles(false))[0] ?? null) : await pickFolder();
       if (path) onChange(path);
     } finally {
       setPicking(false);

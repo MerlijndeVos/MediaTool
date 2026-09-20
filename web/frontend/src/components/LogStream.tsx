@@ -120,7 +120,9 @@ export function UndoRenameBar({
   return (
     <>
       <div className="flex flex-wrap items-center gap-2 border-b bg-amber-500/10 px-4 py-2">
-        <span className="text-xs font-medium text-amber-950 dark:text-amber-100">Undo rename</span>
+        <span className="text-xs font-medium text-amber-950 dark:text-amber-100">
+          {jobs.every((job) => job.command === "rename") ? "Undo rename" : "Undo"}
+        </span>
         {jobs.map((job) => (
           <Button
             key={job.id}

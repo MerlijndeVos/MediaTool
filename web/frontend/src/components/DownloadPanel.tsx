@@ -15,7 +15,6 @@ import { Progress } from "@/components/ui/progress";
 import { CheckField, Field, PathField, SelectField } from "@/components/fields";
 import { Input } from "@/components/ui/input";
 import type { ActiveJob, DownloadJobMeta, DownloadProbeResult, JobStatus } from "@/lib/types";
-import { toolDescription } from "@/lib/types";
 import {
   cn,
   formatBytes,
@@ -288,7 +287,7 @@ export function DownloadPanel({
     <>
       <CardHeader>
         <CardTitle>Download</CardTitle>
-        <CardDescription>{toolDescription("download")}</CardDescription>
+        <CardDescription>Download videos or playlists from yt-dlp-supported sites as MP4 or MP3.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="space-y-2">

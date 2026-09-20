@@ -1,0 +1,112 @@
+id = "trim"
+name = "Trim"
+description = "Remove seconds from the start and/or end of one or more files."
+version = "1.0.0"
+author = "Media Tool"
+api_version = 1
+group = "Video"
+order = 20
+icon = "scissors"
+
+[ui]
+kind = "form"
+run_mode = "preview_apply"
+mode_param = "dry_run"
+
+[run]
+loggers = ["video_trim"]
+
+[permissions]
+writes_files = true
+runs_programs = true
+
+[[params]]
+name = "input"
+type = "folder"
+label = "Input file or folder"
+help = "A single video file, or a folder of videos matching the format below."
+width = "half"
+
+[[params]]
+name = "output"
+type = "folder"
+label = "Output folder (optional)"
+help = "Leave empty to write each trimmed file next to its source as name - trimmed.ext."
+placeholder = "Leave empty for 'name - trimmed.ext'"
+nullable = true
+width = "half"
+
+[[params]]
+name = "trim_start"
+type = "text"
+label = "Trim start"
+help = "Seconds (10, 0.5), milliseconds (500ms), or a timestamp (0:10, 1:02:03)."
+placeholder = "0, 0.5, 500ms, 0:10"
+default = "0"
+width = "half"
+
+[[params]]
+name = "trim_end"
+type = "text"
+label = "Trim end"
+help = "Seconds (5, 0.25), milliseconds (250ms), or a timestamp (0:05)."
+placeholder = "0, 0.25, 250ms, 0:05"
+default = "0"
+width = "half"
+
+[[params]]
+name = "input_format"
+type = "choice"
+label = "Folder format"
+help = "When input is a folder, Auto trims every supported video. Or pick one extension."
+default = "mp4"
+initial = "auto"
+choices = [
+    { value = "auto", label = "Auto (all videos)" },
+    { value = "dv", label = "DV" },
+    { value = "avi", label = "AVI" },
+    { value = "divx", label = "DIVX" },
+    { value = "flv", label = "FLV" },
+    { value = "m2ts", label = "M2TS" },
+    { value = "m4v", label = "M4V" },
+    { value = "mkv", label = "MKV" },
+    { value = "mov", label = "MOV" },
+    { value = "mp4", label = "MP4" },
+    { value = "mpeg", label = "MPEG" },
+    { value = "mpg", label = "MPG" },
+    { value = "mts", label = "MTS" },
+    { value = "ogm", label = "OGM" },
+    { value = "ts", label = "TS" },
+    { value = "vob", label = "VOB" },
+    { value = "webm", label = "WEBM" },
+    { value = "wmv", label = "WMV" },
+]
+strict = false
+
+[[params]]
+name = "reencode"
+type = "bool"
+label = "Re-encode (frame-accurate)"
+help = "Re-encode for an exact cut. Off copies streams (faster, but snaps to keyframes)."
+default = false
+
+[[params]]
+name = "replace"
+type = "bool"
+label = "Replace original"
+help = "Overwrite each source with its trimmed version once the trim succeeds."
+default = false
+
+[[params]]
+name = "no_recursive"
+type = "bool"
+label = "No recursion"
+help = "When input is a folder, only scan that folder, not subfolders."
+default = false
+
+[[params]]
+name = "dry_run"
+type = "bool"
+label = "Dry run"
+default = true
+ui = false

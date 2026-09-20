@@ -22,6 +22,7 @@ from core.rename_profiles import (
 from core.subtitles import detect_lang_from_path, scan_junk
 from core.subtitle_languages import language_options
 from core.log_storage import clear_logs, logs_dir, logs_stats, resolve_log_file
+from core.mods import ModError, registry, safe_mode, user_mods_dir
 from core.settings_store import load_settings, save_settings
 from core.shell import open_path
 from core.tools import get_tools_status, retry_bootstrap_background, start_bootstrap_background
@@ -33,6 +34,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from .jobs import job_manager
+from .mod_params import params_model, validate_params
 from .schemas import (
     ClearLogsResponse,
     CommandInfo,
@@ -45,9 +47,10 @@ from .schemas import (
     JobSummary,
     JobUndoResponse,
     LogsStatsResponse,
+    ModEnableRequest,
+    ModsResponse,
     OpenLogFileRequest,
     OpenPathResponse,
-    PARAM_MODELS,
     RenameProfileGenerateRequest,
     RenameProfileGenerateResponse,
     RenameProfileSaveRequest,
@@ -65,7 +68,6 @@ from .schemas import (
     UpdateApplyResponse,
     UpdateApplyStatusResponse,
     UpdateCheckResponse,
-    validate_params,
 )
 
 from .paths import FRONTEND_DIST
@@ -92,21 +94,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-COMMAND_DESCRIPTIONS: dict[str, str] = {
-    "convert": "Batch-convert video files with folder mirroring (DV→MP4, etc.).",
-    "vts": "Join DVD VIDEO_TS VOB segments into one file per title.",
-    "rename": "Organize TV/movie files (Plex/Jellyfin style) or clean up folder/file names with format profiles.",
-    "audio": "Set default audio language in MKV files (ffmpeg stream copy).",
-    "dedup": "Strip duplicate (N) suffixes from filenames.",
-    "download": "Download URLs from yt-dlp supported sites as MP4 or MP3.",
-    "trim": "Cut seconds off the start and/or end of videos.",
-    "stitch": "Join multiple videos end-to-end.",
-    "rename_folders": "Date-stamp subfolders (YYYY maand DD - Description).",
-    "subtitle_translate": "Translate SRT subtitles with OpenAI.",
-    "subtitle_cleanup": "Remove junk lines from SRT subtitles in place.",
-}
-
 
 @app.get("/api/health", response_model=HealthResponse)
 def health() -> HealthResponse:
@@ -293,18 +280,60 @@ def open_log_file(body: OpenLogFileRequest) -> OpenPathResponse:
 @app.get("/api/commands", response_model=CommandsResponse)
 def list_commands() -> CommandsResponse:
     commands = [
-        CommandInfo(name=name, description=COMMAND_DESCRIPTIONS.get(name, ""))
-        for name in PARAM_MODELS
+        CommandInfo(name=mod.id, description=mod.manifest.description)
+        for mod in registry.enabled()
     ]
-    return CommandsResponse(commands=commands)  # type: ignore[arg-type]
+    return CommandsResponse(commands=commands)
 
 
 @app.get("/api/commands/{command}/schema")
 def command_schema(command: str) -> dict:
-    model_cls = PARAM_MODELS.get(command)
-    if model_cls is None:
+    mod = registry.get(command)
+    if mod is None or not mod.enabled:
         raise HTTPException(status_code=404, detail=f"Unknown command: {command}")
-    return model_cls.model_json_schema()
+    try:
+        return params_model(mod).model_json_schema()
+    except ModError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+def _mods_response() -> ModsResponse:
+    return ModsResponse(
+        mods=[mod.to_dict() for mod in registry.all()],
+        errors=[err.to_dict() for err in registry.errors()],
+        safe_mode=safe_mode(),
+        mods_dir=str(user_mods_dir()),
+    )
+
+
+@app.get("/api/mods", response_model=ModsResponse)
+def list_mods() -> ModsResponse:
+    """Every mod (built-in features and user-installed), with its manifest and on/off state."""
+    return _mods_response()
+
+
+@app.post("/api/mods/reload", response_model=ModsResponse)
+def reload_mods() -> ModsResponse:
+    registry.reload()
+    return _mods_response()
+
+
+@app.patch("/api/mods/{mod_id}", response_model=ModsResponse)
+def set_mod_enabled(mod_id: str, body: ModEnableRequest) -> ModsResponse:
+    try:
+        registry.set_enabled(mod_id, body.enabled)
+    except ModError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return _mods_response()
+
+
+@app.post("/api/mods/open-folder", response_model=OpenPathResponse)
+def open_mods_folder() -> OpenPathResponse:
+    try:
+        open_path(user_mods_dir(create=True))
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    return OpenPathResponse()
 
 
 @app.get("/api/jobs", response_model=list[JobSummary])
@@ -365,9 +394,9 @@ def cancel_job(job_id: str) -> dict:
 
 
 @app.post("/api/jobs/{job_id}/undo", response_model=JobUndoResponse, status_code=201)
-def undo_rename_job(job_id: str) -> JobUndoResponse:
+def undo_job(job_id: str) -> JobUndoResponse:
     try:
-        job = job_manager.undo_rename(job_id)
+        job = job_manager.undo_job(job_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Job not found") from exc
     except ValueError as exc:

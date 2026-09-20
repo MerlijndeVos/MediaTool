@@ -1,0 +1,20 @@
+id = "rename"
+name = "Rename"
+description = "Organize TV shows and movies for Plex/Jellyfin, or clean up any folder and file names, using reusable format profiles."
+version = "1.0.0"
+author = "Media Tool"
+api_version = 1
+group = "Video"
+order = 50
+icon = "pen-line"
+
+[ui]
+kind = "builtin"
+panel = "rename"
+
+[run]
+loggers = ["video_rename"]
+undo = true
+
+[permissions]
+writes_files = true

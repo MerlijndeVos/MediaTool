@@ -1,0 +1,155 @@
+id = "convert"
+name = "Convert"
+description = "Batch-convert videos between formats with optional deinterlace and GPU encoding."
+version = "1.0.0"
+author = "Media Tool"
+api_version = 1
+group = "Video"
+order = 10
+icon = "file-video"
+
+[ui]
+kind = "form"
+run_mode = "preview_apply"
+mode_param = "dry_run"
+
+[run]
+loggers = ["dv_to_mp4", "dv_to_mp4.failures"]
+
+[permissions]
+writes_files = true
+runs_programs = true
+
+[[params]]
+name = "input"
+type = "folder"
+label = "Input folder"
+help = "Root folder scanned recursively for source files."
+width = "half"
+
+[[params]]
+name = "output"
+type = "folder"
+label = "Output folder"
+help = "Converted files are written here, mirroring the input folder structure."
+width = "half"
+
+[[params]]
+name = "input_format"
+type = "choice"
+label = "Input format"
+help = "Auto converts every supported video in the folder. Or pick one extension to scan for."
+default = "dv"
+choices = [
+    { value = "auto", label = "Auto (all videos)" },
+    { value = "dv", label = "DV" },
+    { value = "avi", label = "AVI" },
+    { value = "divx", label = "DIVX" },
+    { value = "flv", label = "FLV" },
+    { value = "m2ts", label = "M2TS" },
+    { value = "m4v", label = "M4V" },
+    { value = "mkv", label = "MKV" },
+    { value = "mov", label = "MOV" },
+    { value = "mp4", label = "MP4" },
+    { value = "mpeg", label = "MPEG" },
+    { value = "mpg", label = "MPG" },
+    { value = "mts", label = "MTS" },
+    { value = "ogm", label = "OGM" },
+    { value = "ts", label = "TS" },
+    { value = "vob", label = "VOB" },
+    { value = "webm", label = "WEBM" },
+    { value = "wmv", label = "WMV" },
+]
+strict = false
+width = "half"
+
+[[params]]
+name = "output_format"
+type = "choice"
+label = "Output format"
+help = "Container format for the converted files."
+default = "mp4"
+choices = [
+    { value = "mp4", label = "MP4" },
+    { value = "mkv", label = "MKV" },
+    { value = "mov", label = "MOV" },
+]
+width = "half"
+
+[[params]]
+name = "use_gpu"
+type = "choice"
+label = "GPU"
+help = "Auto tries NVENC; On requires GPU encoding; Off uses CPU (libx264)."
+default = "auto"
+choices = [
+    { value = "auto", label = "Auto" },
+    { value = "on", label = "On" },
+    { value = "off", label = "Off" },
+]
+width = "half"
+
+[[params]]
+name = "deinterlace"
+type = "choice"
+label = "Deinterlace"
+help = "Auto enables bwdif only for interlaced sources like DV."
+default = "auto"
+choices = [
+    { value = "auto", label = "Auto" },
+    { value = "on", label = "On" },
+    { value = "off", label = "Off" },
+]
+width = "half"
+
+[[params]]
+name = "crf"
+type = "integer"
+label = "CRF"
+help = "Quality for CPU encoding. Lower means better quality and larger files (typical range 18–23)."
+default = 19
+min = 0
+max = 51
+width = "half"
+
+[[params]]
+name = "preset"
+type = "choice"
+label = "Preset"
+help = "Encoding speed vs compression. Slower presets squeeze more quality per bit."
+default = "slow"
+choices = [
+    { value = "ultrafast", label = "ultrafast" },
+    { value = "superfast", label = "superfast" },
+    { value = "veryfast", label = "veryfast" },
+    { value = "faster", label = "faster" },
+    { value = "fast", label = "fast" },
+    { value = "medium", label = "medium" },
+    { value = "slow", label = "slow" },
+    { value = "slower", label = "slower" },
+    { value = "veryslow", label = "veryslow" },
+    { value = "placebo", label = "placebo" },
+]
+strict = false
+width = "half"
+
+[[params]]
+name = "dry_run"
+type = "bool"
+label = "Dry run"
+default = true
+ui = false
+
+[[params]]
+name = "prune_output"
+type = "bool"
+label = "Prune output"
+default = false
+ui = false
+
+[[params]]
+name = "copy_useful_only"
+type = "bool"
+label = "Copy useful only"
+default = false
+ui = false

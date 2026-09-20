@@ -1,12 +1,21 @@
 """Command-line argument definitions for Media Tool."""
 
 import argparse
+import sys
 from pathlib import Path
 
 from core.config import DEFAULT_CRF, DEFAULT_X264_PRESET, DEFAULT_VTS_MIN_MB
+from core.mods import set_safe_mode
+
+from . import mods_cli
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    # Mod subcommands are built from the mods on disk, so safe mode has to be known before
+    # the parser is assembled (the flag itself is declared below for --help and validation).
+    if "--no-mods" in (sys.argv[1:] if argv is None else argv):
+        set_safe_mode(True)
+
     parser = argparse.ArgumentParser(
         prog="media-tool",
         description="Media tool: convert DV files to MP4, or rename/organize TV & movie libraries.",
@@ -15,6 +24,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--no-file-log",
         action="store_true",
         help="Do not write per-operation log files (console output only).",
+    )
+    parser.add_argument(
+        "--no-mods",
+        action="store_true",
+        help="Safe mode: do not load user-installed mods (built-in features are unaffected).",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -675,6 +689,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Show planned removals without writing files.",
     )
+
+    mods_cli.register(subparsers)
 
     return parser.parse_args(argv)
 

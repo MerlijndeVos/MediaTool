@@ -1,32 +1,28 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Bot, Download, House, Palette, ScrollText, Wifi, WifiOff } from "lucide-react";
+import { Bot, Download, House, Palette, Puzzle, ScrollText, Wifi, WifiOff } from "lucide-react";
 import { checkHealth, fetchSettings } from "@/api/client";
 import { AppearancePanel } from "@/components/AppearancePanel";
 import { HomePanel } from "@/components/HomePanel";
 import { LogDrawer } from "@/components/LogDrawer";
 import { ToolsBanner } from "@/components/ToolsBanner";
 import { LoggingPanel } from "@/components/LoggingPanel";
+import { ModsPanel } from "@/components/ModsPanel";
 import { OpenAiSettingsPanel } from "@/components/OpenAiSettingsPanel";
 import { ToolPanel } from "@/components/ToolPanel";
 import { UpdateModal } from "@/components/UpdateModal";
 import { UpdatesPanel } from "@/components/UpdatesPanel";
 import { cn } from "@/lib/utils";
 import { isDesktopApp } from "@/lib/desktop";
+import { useMods } from "@/hooks/useMods";
 import { useUpdates } from "@/hooks/useUpdates";
-import {
-  PRIMARY_TOOLS,
-  SECONDARY_TOOLS,
-  SUBTITLE_TOOLS,
-  TOOL_LABELS,
-  type DownloadJobMeta,
-  type ToolId,
-} from "@/lib/types";
+import type { DownloadJobMeta, ToolId } from "@/lib/types";
 import { useJobRunner } from "@/hooks/useJobRunner";
 
-type AppView = "home" | "tools" | "logs" | "openai" | "updates" | "appearance";
+type AppView = "home" | "tools" | "logs" | "openai" | "updates" | "appearance" | "mods";
 
 export default function App() {
   const updates = useUpdates();
+  const mods = useMods();
   const desktop = isDesktopApp();
   const [view, setView] = useState<AppView>("home");
   const [tool, setTool] = useState<ToolId>("convert");
@@ -57,7 +53,6 @@ export default function App() {
     () =>
       jobs.filter(
         (j) =>
-          j.command === "rename" &&
           !j.undo_of &&
           j.status === "completed" &&
           j.undo_available &&
@@ -187,75 +182,37 @@ export default function App() {
             <House className="h-4 w-4" />
             Home
           </button>
-          <nav className="space-y-1">
-            <p className="px-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Video
-            </p>
-            {PRIMARY_TOOLS.map((id) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => {
-                  setView("tools");
-                  setTool(id);
-                }}
-                className={cn(
-                  "w-full rounded-md px-3 py-2 text-left text-sm font-medium transition-colors",
-                  view === "tools" && tool === id
-                    ? "bg-primary text-primary-foreground"
-                    : "text-foreground hover:bg-accent",
-                )}
-              >
-                {TOOL_LABELS[id]}
-              </button>
-            ))}
-          </nav>
-          <nav className="space-y-1">
-            <p className="px-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Subtitles
-            </p>
-            {SUBTITLE_TOOLS.map((id) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => {
-                  setView("tools");
-                  setTool(id);
-                }}
-                className={cn(
-                  "w-full rounded-md px-3 py-2 text-left text-sm font-medium transition-colors",
-                  view === "tools" && tool === id
-                    ? "bg-primary text-primary-foreground"
-                    : "text-foreground hover:bg-accent",
-                )}
-              >
-                {TOOL_LABELS[id]}
-              </button>
-            ))}
-          </nav>
-          <nav className="space-y-1">
-            <p className="px-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Experimental
-            </p>
-            {SECONDARY_TOOLS.map((id) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => {
-                  setView("tools");
-                  setTool(id);
-                }}
-                className={cn(
-                  "w-full rounded-md px-3 py-2 text-left text-sm transition-colors",
-                  view === "tools" && tool === id
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:bg-accent hover:text-foreground",
-                )}
-              >
-                {TOOL_LABELS[id]}
-              </button>
-            ))}
-          </nav>
+          {mods.groups.map((group) => {
+            const muted = group.name.toLowerCase() === "experimental";
+            return (
+              <nav key={group.name} className="space-y-1">
+                <p className="px-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  {group.name}
+                </p>
+                {group.mods.map((mod) => (
+                  <button
+                    key={mod.id}
+                    type="button"
+                    onClick={() => {
+                      setView("tools");
+                      setTool(mod.id);
+                    }}
+                    className={cn(
+                      "w-full rounded-md px-3 py-2 text-left text-sm transition-colors",
+                      !muted && "font-medium",
+                      view === "tools" && tool === mod.id
+                        ? "bg-primary text-primary-foreground"
+                        : muted
+                          ? "text-muted-foreground hover:bg-accent hover:text-foreground"
+                          : "text-foreground hover:bg-accent",
+                    )}
+                  >
+                    {mod.name}
+                  </button>
+                ))}
+              </nav>
+            );
+          })}
           <nav className="space-y-1 border-t border-border/60 pt-4">
             <p className="px-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Settings
@@ -315,6 +272,19 @@ export default function App() {
             )}
             <button
               type="button"
+              onClick={() => setView("mods")}
+              className={cn(
+                "flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors",
+                view === "mods"
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:bg-accent hover:text-foreground",
+              )}
+            >
+              <Puzzle className="h-4 w-4" />
+              Mods
+            </button>
+            <button
+              type="button"
               onClick={() => setView("appearance")}
               className={cn(
                 "flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors",
@@ -340,6 +310,7 @@ export default function App() {
           )}
           {view === "home" ? (
             <HomePanel
+              groups={mods.groups}
               desktop={desktop}
               updateAvailable={updates.showUpdate}
               onOpenTool={(id) => {
@@ -356,9 +327,12 @@ export default function App() {
             <UpdatesPanel {...updates} />
           ) : view === "appearance" ? (
             <AppearancePanel dark={dark} onDarkChange={setDark} />
+          ) : view === "mods" ? (
+            <ModsPanel mods={mods} />
           ) : (
             <ToolPanel
               tool={tool}
+              mods={mods.enabledMods}
               onRun={handleRun}
               onQueueDownloads={handleQueueDownloads}
               running={running}

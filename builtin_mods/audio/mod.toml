@@ -1,0 +1,59 @@
+id = "audio"
+name = "Audio Default"
+description = "Set the default audio track language in MKV files (ffmpeg stream copy)."
+version = "1.0.0"
+author = "Media Tool"
+api_version = 1
+group = "Experimental"
+order = 220
+icon = "audio-lines"
+
+[ui]
+kind = "form"
+run_mode = "preview_apply"
+mode_param = "apply"
+mode_inverted = true
+apply_hint = "Remuxes MKV files with stream copy (no re-encode)."
+
+[run]
+loggers = ["video_audio"]
+
+[permissions]
+writes_files = true
+runs_programs = true
+
+[[params]]
+name = "input"
+type = "folder"
+label = "MKV file or folder"
+help = "An .mkv file or folder of MKV files, scanned recursively."
+
+[[params]]
+name = "lang"
+type = "text"
+label = "Language"
+help = "Desired default audio track: 2-letter (en), 3-letter (eng), or name (english)."
+placeholder = "eng"
+initial = "eng"
+required = true
+
+[[params]]
+name = "apply"
+type = "bool"
+label = "Apply"
+default = false
+ui = false
+
+[[params]]
+name = "set_language"
+type = "bool"
+label = "Set language"
+default = false
+ui = false
+
+[[params]]
+name = "no_recursive"
+type = "bool"
+label = "No recursive"
+default = false
+ui = false

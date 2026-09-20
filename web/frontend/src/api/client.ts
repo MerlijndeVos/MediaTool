@@ -4,6 +4,7 @@ import type {
   JobCreateResponse,
   JobSummary,
   JobUndoResponse,
+  ModsResponse,
 } from "@/lib/types";
 import type { RenameMode, RenameProfile } from "@/lib/renameProfiles";
 
@@ -129,6 +130,25 @@ export function createJob(
     method: "POST",
     body: JSON.stringify({ command, params, file_logging: fileLogging }),
   });
+}
+
+export function fetchMods(): Promise<ModsResponse> {
+  return request<ModsResponse>("/api/mods");
+}
+
+export function reloadMods(): Promise<ModsResponse> {
+  return request<ModsResponse>("/api/mods/reload", { method: "POST" });
+}
+
+export function setModEnabled(id: string, enabled: boolean): Promise<ModsResponse> {
+  return request<ModsResponse>(`/api/mods/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify({ enabled }),
+  });
+}
+
+export function openModsFolder(): Promise<{ ok: boolean }> {
+  return request("/api/mods/open-folder", { method: "POST" });
 }
 
 export function listJobs(): Promise<JobSummary[]> {
