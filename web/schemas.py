@@ -8,6 +8,7 @@ from typing import Any, Literal, Optional, Union
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from core.paths import clean_path_string
+from core.rename_profiles import ProfileError, profile_from_dict
 
 CommandName = Literal[
     "convert",
@@ -68,6 +69,23 @@ class RenameParams(BaseModel):
     strip_words: list[str] = Field(default_factory=list)
     bare_episode_numbers: bool = False
     default_sub_lang: str = "en"
+    # Format profile (cleanup rules + name patterns); None = standard behaviour.
+    profile: Optional[dict[str, Any]] = None
+    # "media" organizes shows/movies; "generic" renames folders and/or files in place.
+    mode: Literal["media", "generic"] = "media"
+    layout: bool = True
+    targets: Literal["folders", "files", "both"] = "folders"
+    max_depth: int = Field(default=1, ge=1, le=50)
+
+    @field_validator("profile")
+    @classmethod
+    def _validate_profile(cls, value: Optional[dict[str, Any]]) -> Optional[dict[str, Any]]:
+        if value is None:
+            return None
+        try:
+            return profile_from_dict(value).to_dict()
+        except ProfileError as exc:
+            raise ValueError(str(exc)) from exc
 
 
 class AudioParams(BaseModel):
@@ -249,6 +267,55 @@ class JobUndoResponse(BaseModel):
 class JobCreateResponse(BaseModel):
     job: JobSummary
     events_url: str
+
+
+class RenameProfilesResponse(BaseModel):
+    profiles: list[dict[str, Any]]
+
+
+class RenameProfileSaveRequest(BaseModel):
+    profile: dict[str, Any]
+
+
+class RenameProfileTestRequest(BaseModel):
+    profile: dict[str, Any]
+    mode: Literal["media", "generic"] = "media"
+    samples: list[str] = Field(min_length=1, max_length=20)
+
+
+class RenameProfileTestItem(BaseModel):
+    sample: str
+    result: Optional[str] = None
+    note: Optional[str] = None
+
+
+class RenameProfileTestResponse(BaseModel):
+    results: list[RenameProfileTestItem]
+
+
+class RenameExample(BaseModel):
+    before: str
+    after: str
+
+
+class RenameProfileGenerateRequest(BaseModel):
+    mode: Literal["media", "generic"] = "media"
+    examples: list[RenameExample] = Field(min_length=1, max_length=5)
+
+
+class RenameProfileVerification(BaseModel):
+    before: str
+    expected: str
+    actual: Optional[str] = None
+    ok: bool
+
+
+class RenameProfileGenerateResponse(BaseModel):
+    profile: dict[str, Any]
+    verification: list[RenameProfileVerification]
+    all_ok: bool
+    attempts: int
+    model: str
 
 
 class HealthResponse(BaseModel):

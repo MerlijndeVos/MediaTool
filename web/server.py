@@ -9,6 +9,16 @@ from contextlib import asynccontextmanager
 from typing import AsyncIterator, Optional
 
 from core.download import probe_url
+from core.rename import preview_media_name
+from core.rename_ai import generate_profile
+from core.rename_generic import preview_generic_name
+from core.rename_profiles import (
+    ProfileError,
+    delete_profile,
+    list_profiles,
+    profile_from_dict,
+    save_profile,
+)
 from core.subtitles import detect_lang_from_path, scan_junk
 from core.subtitle_languages import language_options
 from core.log_storage import clear_logs, logs_dir, logs_stats, resolve_log_file
@@ -38,6 +48,13 @@ from .schemas import (
     OpenLogFileRequest,
     OpenPathResponse,
     PARAM_MODELS,
+    RenameProfileGenerateRequest,
+    RenameProfileGenerateResponse,
+    RenameProfileSaveRequest,
+    RenameProfilesResponse,
+    RenameProfileTestItem,
+    RenameProfileTestRequest,
+    RenameProfileTestResponse,
     SettingsResponse,
     SettingsUpdateRequest,
     SubtitleLanguagesResponse,
@@ -79,7 +96,7 @@ app.add_middleware(
 COMMAND_DESCRIPTIONS: dict[str, str] = {
     "convert": "Batch-convert video files with folder mirroring (DV→MP4, etc.).",
     "vts": "Join DVD VIDEO_TS VOB segments into one file per title.",
-    "rename": "Organize TV/movie files and subtitles (Plex/Jellyfin style).",
+    "rename": "Organize TV/movie files (Plex/Jellyfin style) or clean up folder/file names with format profiles.",
     "audio": "Set default audio language in MKV files (ffmpeg stream copy).",
     "dedup": "Strip duplicate (N) suffixes from filenames.",
     "download": "Download URLs from yt-dlp supported sites as MP4 or MP3.",
@@ -150,6 +167,61 @@ def update_settings(body: SettingsUpdateRequest) -> SettingsResponse:
     if updates:
         save_settings(**updates)
     return _settings_response()
+
+
+@app.get("/api/rename/profiles", response_model=RenameProfilesResponse)
+def rename_profiles() -> RenameProfilesResponse:
+    return RenameProfilesResponse(profiles=[p.to_dict() for p in list_profiles()])
+
+
+@app.post("/api/rename/profiles")
+def rename_profile_save(body: RenameProfileSaveRequest) -> dict:
+    try:
+        return save_profile(body.profile).to_dict()
+    except ProfileError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.delete("/api/rename/profiles/{profile_id}")
+def rename_profile_delete(profile_id: str) -> dict:
+    try:
+        deleted = delete_profile(profile_id)
+    except ProfileError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    return {"ok": True}
+
+
+@app.post("/api/rename/profiles/test", response_model=RenameProfileTestResponse)
+def rename_profile_test(body: RenameProfileTestRequest) -> RenameProfileTestResponse:
+    try:
+        profile = profile_from_dict(body.profile)
+    except ProfileError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    results: list[RenameProfileTestItem] = []
+    for sample in body.samples:
+        sample = sample.strip()
+        if not sample:
+            continue
+        if body.mode == "media":
+            result = preview_media_name(profile, sample)
+            note = None if result else "Not recognised as an episode or movie (needs SxxExx or a year)."
+        else:
+            result, note = preview_generic_name(profile, sample), None
+        results.append(RenameProfileTestItem(sample=sample, result=result, note=note))
+    return RenameProfileTestResponse(results=results)
+
+
+@app.post("/api/rename/profiles/generate", response_model=RenameProfileGenerateResponse)
+def rename_profile_generate(body: RenameProfileGenerateRequest) -> RenameProfileGenerateResponse:
+    try:
+        result = generate_profile([e.model_dump() for e in body.examples], body.mode)
+    except ValueError as exc:  # invalid input/profile or missing API key
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"AI request failed: {exc}") from exc
+    return RenameProfileGenerateResponse(**result)
 
 
 @app.get("/api/subtitles/languages", response_model=SubtitleLanguagesResponse)

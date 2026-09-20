@@ -22,7 +22,7 @@
 | **Stitch** | Join multiple clips end-to-end |
 | **Download** | Save URLs as MP4 or MP3 via yt-dlp |
 | **DVD (VTS)** | Join DVD `VIDEO_TS` VOB segments into MKV per title |
-| **Rename** | Organize TV/movie files for Plex/Jellyfin-style libraries |
+| **Rename** | Organize TV/movie files for Plex/Jellyfin, or clean up any folder/file names, with reusable format profiles (optionally AI-generated) |
 | **Audio** | Set default audio track in MKV files |
 | **Dedup** | Strip `(2)` duplicate suffixes from filenames |
 | **Folders** | Date-stamp subfolders (`2006 juli 13 - Holiday`) from video dates |
@@ -113,6 +113,7 @@ Every feature is available as a subcommand. Examples:
 media-tool convert --input "C:\DV_in" --output "D:\DV_out"
 media-tool vts --input "D:\DVD_rips" --output "E:\MKV_out" --dry-run
 media-tool rename --input "Z:\Media" --dry-run
+media-tool rename --input "D:\Samples" --mode generic --targets both --max-depth 3 --profile "Tidy names" --dry-run
 media-tool dedup --input "Z:\Media" --apply
 media-tool download --url "https://youtu.be/…" --output "D:\Downloads"
 media-tool trim --input "clip.mp4" --trim-start 10

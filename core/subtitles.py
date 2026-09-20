@@ -17,14 +17,15 @@ from .logging_setup import setup_simple_logging
 from .paths import clean_path_string, path_exists, path_is_dir, path_is_file
 from .progress import get_active_hooks
 from .rename import SUB_FLAG_TOKENS, split_subtitle_suffix
-from .settings_store import load_settings
+from .openai_client import DEFAULT_OPENAI_MODEL
+from .openai_client import openai_api_key as _openai_api_key
+from .openai_client import openai_model as _openai_model
 from .subtitle_languages import (
     LANGUAGE_LABELS,
     normalize_lang_code,
 )
 
 SRT_EXTENSION = ".srt"
-DEFAULT_OPENAI_MODEL = "gpt-4o-mini"
 TRANSLATE_BATCH_SIZE = 25
 CONTEXT_CUES = 4
 
@@ -243,23 +244,6 @@ def apply_junk_removals(
                 SubtitleCue(index=cue.index, start=cue.start, end=cue.end, lines=kept_lines)
             )
     return cleaned, removed
-
-
-def _openai_api_key() -> str:
-    settings = load_settings()
-    key = (settings.get("openai_api_key") or os.environ.get("OPENAI_API_KEY") or "").strip()
-    if not key:
-        raise ValueError(
-            "OpenAI API key not configured. Add it in Logging settings or set OPENAI_API_KEY."
-        )
-    return key
-
-
-def _openai_model(explicit: Optional[str] = None) -> str:
-    if explicit:
-        return explicit
-    settings = load_settings()
-    return str(settings.get("openai_model") or DEFAULT_OPENAI_MODEL)
 
 
 def _language_name(code: str) -> str:

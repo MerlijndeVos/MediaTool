@@ -40,7 +40,11 @@ Media Tool separates **business logic** from **front-ends**. Every feature is im
 |--------|----------------|
 | `convert.py` | Batch convert, trim, stitch |
 | `vts.py` | DVD VIDEO_TS join |
-| `rename.py` | Media library rename, dedup, undo journal |
+| `rename.py` | Media library rename (shows/movies), dedup, undo journal |
+| `rename_profiles.py` | Format profiles: cleanup rules, name patterns, saved-profile store |
+| `rename_generic.py` | Folders mode: rename folders/files in place with a profile |
+| `rename_ai.py` | AI-generated profiles from before/after examples (verified, never renames) |
+| `openai_client.py` | Shared OpenAI key/model settings |
 | `rename_folders.py` | Date-stamp folder names from video filenames |
 | `audio.py` | MKV default audio track |
 | `download.py` | yt-dlp wrapper (CLI + cancellable API downloads) |

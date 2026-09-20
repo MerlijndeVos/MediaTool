@@ -5,6 +5,7 @@ import type {
   JobSummary,
   JobUndoResponse,
 } from "@/lib/types";
+import type { RenameMode, RenameProfile } from "@/lib/renameProfiles";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 
@@ -229,5 +230,61 @@ export function openLogFile(name: string): Promise<{ ok: boolean }> {
   return request("/api/settings/logs/open-file", {
     method: "POST",
     body: JSON.stringify({ name }),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Rename format profiles
+// ---------------------------------------------------------------------------
+
+export interface RenameTestResult {
+  sample: string;
+  result: string | null;
+  note: string | null;
+}
+
+export interface RenameGenerateResult {
+  profile: RenameProfile;
+  verification: { before: string; expected: string; actual: string | null; ok: boolean }[];
+  all_ok: boolean;
+  attempts: number;
+  model: string;
+}
+
+export function fetchRenameProfiles(): Promise<{ profiles: RenameProfile[] }> {
+  return request<{ profiles: RenameProfile[] }>("/api/rename/profiles");
+}
+
+export function saveRenameProfile(profile: RenameProfile): Promise<RenameProfile> {
+  return request<RenameProfile>("/api/rename/profiles", {
+    method: "POST",
+    body: JSON.stringify({ profile }),
+  });
+}
+
+export function deleteRenameProfile(id: string): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>(`/api/rename/profiles/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+}
+
+export function testRenameProfile(
+  profile: RenameProfile,
+  mode: RenameMode,
+  samples: string[],
+): Promise<{ results: RenameTestResult[] }> {
+  return request<{ results: RenameTestResult[] }>("/api/rename/profiles/test", {
+    method: "POST",
+    body: JSON.stringify({ profile, mode, samples }),
+  });
+}
+
+export function generateRenameProfile(
+  mode: RenameMode,
+  examples: { before: string; after: string }[],
+): Promise<RenameGenerateResult> {
+  return request<RenameGenerateResult>("/api/rename/profiles/generate", {
+    method: "POST",
+    body: JSON.stringify({ mode, examples }),
   });
 }

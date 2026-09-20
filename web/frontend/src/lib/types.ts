@@ -124,7 +124,7 @@ export const TOOL_DESCRIPTIONS: Record<ToolId, string> = {
   trim: "Remove seconds from the start and/or end of one or more files.",
   stitch: "Join multiple clips into a single output file in order.",
   download: "Download videos or playlists from yt-dlp-supported sites as MP4 or MP3.",
-  rename: "Organize TV shows, movies, and subtitles into a Plex/Jellyfin-friendly layout.",
+  rename: "Organize TV shows and movies for Plex/Jellyfin, or clean up any folder and file names, using reusable format profiles.",
   vts: "Merge DVD VIDEO_TS VOB files into one file per title.",
   audio: "Set the default audio track language in MKV files (ffmpeg stream copy).",
   dedup: "Remove duplicate (2), (3), … suffixes from filenames.",

@@ -274,6 +274,43 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "Defaults to 'en'. Pass an empty string ('') to disable and keep untagged subs as-is."
         ),
     )
+    rename.add_argument(
+        "--profile",
+        default=None,
+        metavar="NAME_OR_FILE",
+        help=(
+            "Format profile (cleanup rules + name patterns): the name or id of a saved profile, "
+            "or a path to a profile .json file. Default: Standard."
+        ),
+    )
+    rename.add_argument(
+        "--mode",
+        choices=["media", "generic"],
+        default="media",
+        help=(
+            "'media' (default) organizes TV shows/movies. 'generic' renames folders and/or "
+            "files in place using the profile (see --targets, --max-depth)."
+        ),
+    )
+    rename.add_argument(
+        "--targets",
+        choices=["folders", "files", "both"],
+        default="folders",
+        help="With --mode generic: what to rename (default: folders).",
+    )
+    rename.add_argument(
+        "--max-depth",
+        type=int,
+        default=1,
+        metavar="N",
+        help="With --mode generic: how many levels below --input to rename (1 = direct children; default: 1).",
+    )
+    rename.add_argument(
+        "--no-layout",
+        dest="layout",
+        action="store_false",
+        help="With --mode media: only rename files, keeping them in their folders instead of Show/Season NN.",
+    )
 
     # ------------------------------------------------------------------
     # audio subcommand (set default audio language in MKV files)

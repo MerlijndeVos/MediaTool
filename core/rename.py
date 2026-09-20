@@ -19,6 +19,15 @@ from typing import Dict, List, Optional, Set, Tuple
 from .log_storage import operation_log_path, rename_undo_journal_path
 from .logging_setup import setup_simple_logging
 from .paths import copy_path, ext_path, make_dirs, move_path, path_exists
+from .rename_profiles import (
+    DEFAULT_PATTERNS,
+    Profile,
+    apply_rules,
+    load_profile_spec,
+    render_pattern,
+    standard_profile,
+)
+from .text_utils import SMALL_WORDS, title_case  # noqa: F401  (re-exported for callers/tests)
 
 VIDEO_EXTENSIONS: Set[str] = {
     ".mkv", ".mp4", ".m4v", ".avi", ".mov", ".wmv", ".flv", ".webm",
@@ -44,12 +53,6 @@ SUB_LANG_TOKENS: Set[str] = {
 
 # Lowercase tokens that flag special subtitle variants (kept on the renamed sub).
 SUB_FLAG_TOKENS: Set[str] = {"forced", "sdh", "cc", "hi", "default", "foreign"}
-
-# Small words kept lowercase in Title Case (unless first word).
-SMALL_WORDS: Set[str] = {
-    "a", "an", "the", "and", "but", "or", "nor", "for", "of", "to", "in", "on",
-    "at", "by", "with", "vs", "from", "as", "into", "over", "per",
-}
 
 # Junk / release-info tokens stripped from titles. Matched case-insensitively as
 # whole words on a space-normalized string.
@@ -167,6 +170,13 @@ def remove_junk(text: str) -> str:
     return text.strip(" -._")
 
 
+def _junk(text: str, strip_junk: bool) -> str:
+    """remove_junk, or just whitespace tidying when the profile keeps release tags."""
+    if strip_junk:
+        return remove_junk(text)
+    return re.sub(r"\s+", " ", text).strip(" -._")
+
+
 def strip_release_group(text: str) -> str:
     """Remove a trailing scene release group like '-LUMI' or '-RARBG'.
 
@@ -194,27 +204,6 @@ def strip_trailing_words(text: str, words: Set[str]) -> str:
     while parts and parts[-1].lower() in words:
         parts.pop()
     return " ".join(parts).strip(" -._")
-
-
-def title_case(text: str, enabled: bool) -> str:
-    text = text.strip()
-    if not text or not enabled:
-        return text
-    words = text.split(" ")
-    out: List[str] = []
-    for i, w in enumerate(words):
-        if not w:
-            continue
-        lw = w.lower()
-        if len(w) > 1 and w.isupper():
-            out.append(w)  # keep acronyms like SWAT, FBI
-        elif i != 0 and lw in SMALL_WORDS:
-            out.append(lw)
-        elif w[0].isalpha():
-            out.append(w[0].upper() + w[1:])
-        else:
-            out.append(w)
-    return " ".join(out)
 
 
 def longest_common_movie_prefix(titles: List[str]) -> Optional[str]:
@@ -273,6 +262,7 @@ def parse_media_info(
     titlecase_enabled: bool,
     strip_words: Optional[Set[str]] = None,
     bare_numbers: bool = False,
+    strip_junk: bool = True,
 ) -> Optional[MediaInfo]:
     """Parse a video file stem into TV or movie info. Returns None if unclassifiable."""
     strip_words = strip_words or set()
@@ -281,7 +271,9 @@ def parse_media_info(
         # after standard SxxExx / 1x01 patterns. The CLI --bare-episode-numbers flag
         # is kept for explicit opt-in when calling _parse_tv in isolation.
         use_bare = bare_numbers or forced_type in ("auto", "tv")
-        info = _parse_tv(stem, titlecase_enabled, strip_words, bare_numbers=use_bare)
+        info = _parse_tv(
+            stem, titlecase_enabled, strip_words, bare_numbers=use_bare, strip_junk=strip_junk
+        )
         if info is not None:
             return info
         if forced_type == "tv":
@@ -291,7 +283,11 @@ def parse_media_info(
         # In auto mode require a year so we don't reorganize unrelated files;
         # when the user forces --type movie we accept titles without a year.
         return _parse_movie(
-            stem, titlecase_enabled, strip_words, require_year=(forced_type == "auto")
+            stem,
+            titlecase_enabled,
+            strip_words,
+            require_year=(forced_type == "auto"),
+            strip_junk=strip_junk,
         )
 
     return None
@@ -302,6 +298,7 @@ def _parse_tv(
     titlecase_enabled: bool,
     strip_words: Optional[Set[str]] = None,
     bare_numbers: bool = False,
+    strip_junk: bool = True,
 ) -> Optional[MediaInfo]:
     strip_words = strip_words or set()
     season = episode = episode_end = None
@@ -328,7 +325,7 @@ def _parse_tv(
         # ('Niels Holgersson 1 De kabouter' -> S01E01 - De kabouter).
         if not bare_numbers:
             return None
-        cleaned = remove_junk(normalize_separators(stem))
+        cleaned = _junk(normalize_separators(stem), strip_junk)
         bm = RE_BARE_EP.search(cleaned)
         if not bm:
             return None
@@ -340,7 +337,7 @@ def _parse_tv(
         episode_title = None
         title_part = bm.group("title")
         if title_part:
-            tail = strip_trailing_group(remove_junk(normalize_separators(title_part)))
+            tail = strip_trailing_group(_junk(normalize_separators(title_part), strip_junk))
             tail = strip_trailing_words(tail, strip_words)
             episode_title = title_case(tail, titlecase_enabled) if tail else None
         return MediaInfo(
@@ -351,7 +348,7 @@ def _parse_tv(
             episode_title=episode_title,
         )
 
-    show = title_case(remove_junk(normalize_separators(stem[:split_at])), titlecase_enabled)
+    show = title_case(_junk(normalize_separators(stem[:split_at]), strip_junk), titlecase_enabled)
     if not show:
         return None
 
@@ -361,8 +358,8 @@ def _parse_tv(
 
     # Drop a scene group attached to the tail (e.g. 'ReEnc-LUMI') before cleaning,
     # then strip the usual junk/release tags so we don't keep a fake episode title.
-    tail_raw = strip_release_group(stem[end_at:])
-    tail = strip_trailing_group(remove_junk(normalize_separators(tail_raw)))
+    tail_raw = strip_release_group(stem[end_at:]) if strip_junk else stem[end_at:]
+    tail = strip_trailing_group(_junk(normalize_separators(tail_raw), strip_junk))
     tail = strip_trailing_words(tail, strip_words)
     episode_title = title_case(tail, titlecase_enabled) if tail else None
 
@@ -381,6 +378,7 @@ def _parse_movie(
     titlecase_enabled: bool,
     strip_words: Optional[Set[str]] = None,
     require_year: bool = False,
+    strip_junk: bool = True,
 ) -> Optional[MediaInfo]:
     strip_words = strip_words or set()
     cleaned = normalize_separators(stem)
@@ -407,9 +405,11 @@ def _parse_movie(
     if require_year and year is None:
         return None
 
-    title = strip_trailing_group(title_case(remove_junk(normalize_separators(title_part)), titlecase_enabled))
+    title = strip_trailing_group(
+        title_case(_junk(normalize_separators(title_part), strip_junk), titlecase_enabled)
+    )
     if not title:
-        title = strip_trailing_group(title_case(remove_junk(cleaned), titlecase_enabled))
+        title = strip_trailing_group(title_case(_junk(cleaned, strip_junk), titlecase_enabled))
     title = strip_trailing_words(title, strip_words)
     if not title:
         return None
@@ -546,37 +546,55 @@ def existing_show_folder_name(
     return None
 
 
-def build_target_dir_and_stem(info: MediaInfo, dest_root: Path) -> Tuple[Path, str]:
+def _episode_code(info: MediaInfo) -> str:
+    if info.episode_end:
+        return f"S{info.season:02d}E{info.episode:02d}&E{info.episode_end:02d}"
+    return f"S{info.season:02d}E{info.episode:02d}"
+
+
+def render_media_stem(info: MediaInfo, profile: Optional[Profile] = None) -> str:
+    """Build the file name stem for *info* from the profile's tv/movie pattern."""
+    if info.kind == "tv":
+        year_match = re.search(r"\(((?:19|20)\d{2})\)\s*$", info.title)
+        values = {
+            "show": info.title,
+            "season": info.season,
+            "episode": info.episode,
+            "episode_end": info.episode_end,
+            "code": _episode_code(info),
+            "title": info.episode_title or "",
+            "year": year_match.group(1) if year_match else "",
+        }
+        pattern = profile.pattern("tv") if profile else DEFAULT_PATTERNS["tv"]
+    else:
+        values = {"title": info.title, "year": info.year or ""}
+        pattern = profile.pattern("movie") if profile else DEFAULT_PATTERNS["movie"]
+    return sanitize_component(render_pattern(pattern, values))
+
+
+def build_target_dir_and_stem(
+    info: MediaInfo, dest_root: Path, profile: Optional[Profile] = None
+) -> Tuple[Path, str]:
+    stem = render_media_stem(info, profile)
     if info.kind == "tv":
         show = sanitize_component(info.title)
         season_folder = f"Season {info.season:02d}"
-        if info.episode_end:
-            ep_code = f"S{info.season:02d}E{info.episode:02d}&E{info.episode_end:02d}"
-        else:
-            ep_code = f"S{info.season:02d}E{info.episode:02d}"
-        if info.episode_title:
-            stem = f"{show} - {ep_code} - {info.episode_title}"
-        else:
-            stem = f"{show} - {ep_code}"
         # If dest_root is already this show's folder, don't nest another one.
         if _folder_is_title(dest_root.name, info.title):
             target_dir = dest_root / season_folder
         else:
             target_dir = dest_root / show / season_folder
-        return target_dir, sanitize_component(stem)
+        return target_dir, stem
 
-    # movie
-    if info.year:
-        name = f"{info.title} ({info.year})"
-    else:
-        name = info.title
-    name = sanitize_component(name)
+    # movie: the folder is always "Title (Year)"; only the file name follows the pattern.
+    folder = f"{info.title} ({info.year})" if info.year else info.title
+    folder = sanitize_component(folder)
     # If dest_root is already this movie's folder, place the file directly in it.
     if _folder_is_title(dest_root.name, info.title):
         target_dir = dest_root
     else:
-        target_dir = dest_root / name
-    return target_dir, name
+        target_dir = dest_root / folder
+    return target_dir, stem
 
 
 def scan_directory_group(
@@ -631,6 +649,35 @@ def match_subtitle_to_video(sub: Path, videos: List[Path]) -> Optional[Path]:
     return best
 
 
+def _apply_profile_to_info(info: MediaInfo, profile: Profile) -> None:
+    """Run the profile's cleanup rules over the parsed title fields."""
+    title = apply_rules(info.title, profile.rules, keep_year_parens=True)
+    info.title = title or info.title
+    if info.episode_title:
+        info.episode_title = apply_rules(info.episode_title, profile.rules, keep_year_parens=True) or None
+
+
+def preview_media_name(
+    profile: Profile,
+    filename: str,
+    forced_type: str = "auto",
+) -> Optional[str]:
+    """Return the new file name for a single sample (no folder layout), or None if
+    the name cannot be classified as an episode/movie. Used by the profile tester
+    and to verify AI-generated profiles."""
+    suffix = Path(filename).suffix
+    known = suffix.lower() in VIDEO_EXTENSIONS or suffix.lower() in SUBTITLE_EXTENSIONS
+    stem = filename[: -len(suffix)] if known else filename
+    ext = suffix.lower() if known else ""
+    info = parse_media_info(
+        stem, forced_type, False, None, False, strip_junk=profile.strip_release_junk
+    )
+    if info is None:
+        return None
+    _apply_profile_to_info(info, profile)
+    return render_media_stem(info, profile) + ext
+
+
 def plan_rename(
     input_root: Path,
     dest_root: Path,
@@ -640,11 +687,21 @@ def plan_rename(
     strip_words: Optional[Set[str]] = None,
     bare_numbers: bool = False,
     default_sub_lang: Optional[str] = "en",
+    profile: Optional[Profile] = None,
+    layout: bool = True,
 ) -> Tuple[List[RenameOp], List[Tuple[Path, str]]]:
-    """Build the list of rename operations and a list of (path, reason) skips."""
+    """Build the list of rename operations and a list of (path, reason) skips.
+
+    *profile* supplies cleanup rules and name patterns (default: the historic
+    Title Case + release-tag cleanup). With ``layout=False`` files keep their
+    folder (mirrored under *dest_root*) instead of moving into ``Show/Season NN``.
+    """
     ops: List[RenameOp] = []
     skipped: List[Tuple[Path, str]] = []
     strip_words = strip_words or set()
+    if profile is None:
+        profile = standard_profile(title_case_enabled=titlecase_enabled)
+    titlecase_enabled = profile.title_case
 
     # Track reserved names per destination directory to avoid collisions.
     used_by_dir: Dict[str, Set[str]] = {}
@@ -663,12 +720,19 @@ def plan_rename(
         parsed_videos: List[Tuple[Path, MediaInfo]] = []
 
         for video in sorted(videos, key=lambda v: v.name.lower()):
+            # Casing is done by the profile's rules below, not by the parser.
             info = parse_media_info(
-                video.stem, forced_type, titlecase_enabled, strip_words, bare_numbers
+                video.stem,
+                forced_type,
+                False,
+                strip_words,
+                bare_numbers,
+                strip_junk=profile.strip_release_junk,
             )
             if info is None:
                 skipped.append((video, "could not classify (no SxxExx / year)"))
                 continue
+            _apply_profile_to_info(info, profile)
 
             # Respect an existing show folder: if the file already lives under a
             # folder that represents this show (ignoring year/punctuation), keep
@@ -690,7 +754,9 @@ def plan_rename(
                     info.title, franchise_prefix, titlecase_enabled
                 )
 
-            target_dir, base_stem = build_target_dir_and_stem(info, dest_root)
+            target_dir, base_stem = build_target_dir_and_stem(info, dest_root, profile)
+            if not layout:
+                target_dir = dest_root / video.parent.relative_to(input_root)
             used = used_by_dir.setdefault(str(target_dir).lower(), set())
             ext = video.suffix.lower()
             new_name = reserve_name(target_dir, base_stem, ext, used, ignore_path=video)
@@ -775,10 +841,12 @@ def build_undo_journal(
     *,
     dest_root: Optional[Path] = None,
     input_root: Optional[Path] = None,
+    mode: str = "media",
 ) -> dict:
     """Build a structured undo manifest from completed rename operations."""
     return {
         "version": 1,
+        "mode": mode,
         "created": time.strftime("%Y-%m-%d %H:%M:%S"),
         "action": "copy" if use_copy else "move",
         "dest_root": str(dest_root) if dest_root is not None else None,
@@ -844,6 +912,7 @@ def write_undo_journal(
     logger: logging.Logger,
     *,
     input_root: Optional[Path] = None,
+    mode: str = "media",
 ) -> None:
     """Record completed operations so they can be reversed later.
 
@@ -854,7 +923,7 @@ def write_undo_journal(
         return
     path = undo_journal_path(dest_root)
     data = build_undo_journal(
-        done, use_copy, dest_root=dest_root, input_root=input_root
+        done, use_copy, dest_root=dest_root, input_root=input_root, mode=mode
     )
     _write_undo_journal_file(path, data, logger)
     _remove_legacy_undo_journal(dest_root, logger)
@@ -899,7 +968,8 @@ def run_undo_from_journal(
     )
     restored, failed, skipped = execute_undo(journal, apply, logger)
     logger.info("Undo result: restored=%d, failed=%d, skipped=%d.", restored, failed, skipped)
-    if apply and restored > 0:
+    # Folders mode renames in place, so there are no layout folders to clean up.
+    if apply and restored > 0 and journal.get("mode", "media") != "generic":
         prune_empty_dirs_after_undo(journal, logger)
     return restored, failed, skipped
 
@@ -947,7 +1017,12 @@ def execute_undo(
             logger.warning("Undo skip: file not found at '%s' (moved/renamed since?).", dst)
             skipped += 1
             continue
-        if path_exists(src):
+        # A case-only rename (Kick -> kick) leaves src "existing" on case-insensitive
+        # filesystems because it is the very same entry as dst; that is not a clash.
+        same_entry = os.path.normcase(os.path.abspath(ext_path(src))) == os.path.normcase(
+            os.path.abspath(ext_path(dst))
+        )
+        if path_exists(src) and not same_entry:
             logger.warning("Undo skip: original path already exists '%s'.", src)
             skipped += 1
             continue
@@ -1045,6 +1120,8 @@ def run_rename(args: argparse.Namespace) -> Optional[dict]:
     # An empty string disables defaulting; otherwise normalize to a lowercase code.
     default_sub_lang: Optional[str] = raw_sub_lang.strip().lower() or None
 
+    profile = load_profile_spec(getattr(args, "profile", None))
+
     if not input_root.is_dir():
         print(
             f"Input root '{input_root}' does not exist or is not a directory. "
@@ -1060,6 +1137,11 @@ def run_rename(args: argparse.Namespace) -> Optional[dict]:
         run_rename_undo(args, logger)
         return None
 
+    if getattr(args, "mode", "media") == "generic":
+        from .rename_generic import run_generic_rename
+
+        return run_generic_rename(args, logger, profile or standard_profile())
+
     mode = "APPLY" if apply else "DRY-RUN"
     action = "copy" if use_copy else "move"
     logger.info("Rename mode (%s).", mode)
@@ -1071,6 +1153,11 @@ def run_rename(args: argparse.Namespace) -> Optional[dict]:
                 sorted(strip_words) if strip_words else "(none)", bare_numbers)
     logger.info("Default subtitle language (untagged subs)=%s",
                 default_sub_lang or "(disabled)")
+    layout = bool(getattr(args, "layout", True))
+    if profile is not None:
+        logger.info("Profile: %s | TV pattern: %s | movie pattern: %s | layout=%s",
+                    profile.name, profile.pattern("tv"), profile.pattern("movie"),
+                    "Show/Season folders" if layout else "keep folders")
 
     if use_copy and dest_root == input_root:
         logger.warning(
@@ -1081,6 +1168,7 @@ def run_rename(args: argparse.Namespace) -> Optional[dict]:
         input_root, dest_root, forced_type, titlecase_enabled, logger,
         strip_words=strip_words, bare_numbers=bare_numbers,
         default_sub_lang=default_sub_lang,
+        profile=profile, layout=layout,
     )
 
     videos = sum(1 for o in ops if o.kind == "video")

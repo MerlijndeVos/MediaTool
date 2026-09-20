@@ -116,6 +116,11 @@ def _to_namespace(command: str, params: Any) -> argparse.Namespace:
             strip_words=p.strip_words,
             bare_episode_numbers=p.bare_episode_numbers,
             default_sub_lang=p.default_sub_lang,
+            profile=p.profile,
+            mode=p.mode,
+            layout=p.layout,
+            targets=p.targets,
+            max_depth=p.max_depth,
         )
     if command == "audio":
         p: AudioParams = params
