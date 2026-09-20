@@ -96,6 +96,10 @@ for pkg in (
     "webview",
     "anyio",
     "sniffio",
+    # certifi's own hook only ships cacert.pem; without its code in the bundle,
+    # ``import certifi`` resolves to the bare data folder and yt-dlp fails with
+    # "module 'certifi' has no attribute 'where'".
+    "certifi",
 ):
     try:
         pkg_datas, pkg_binaries, pkg_hidden = collect_all(pkg)
@@ -120,6 +124,11 @@ a = Analysis(
     cipher=block_cipher,
     noarchive=False,
 )
+
+_bundled_modules = {entry[0] for entry in a.pure}
+_missing_modules = [m for m in ("certifi", "yt_dlp") if m not in _bundled_modules]
+if _missing_modules:
+    raise SystemExit(f"Required modules missing from the bundle: {', '.join(_missing_modules)}")
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 

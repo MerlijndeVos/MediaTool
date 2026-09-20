@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "media-tool"
-version = "1.0.12"
+version = "1.0.13"
 description = "Cross-platform desktop app for local video conversion, library organization, and downloads"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -13,6 +13,8 @@ dependencies = [
     "yt-dlp>=2024.0.0",
     "yt-dlp-ejs>=0.8.0",
     "openai>=1.0.0",
+    # yt-dlp's optional TLS bundle; no longer pulled in transitively (openai 3.x uses truststore).
+    "certifi>=2024.0.0",
 ]
 
 [project.urls]
