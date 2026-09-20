@@ -30,6 +30,5 @@ web/frontend/dist/
 # PyInstaller / packaging (Phase 6)
 packaging/build/
 packaging/dist/
-packaging/secrets/github_token
 packaging/.bundled-version
 packaging/bundled-tools/

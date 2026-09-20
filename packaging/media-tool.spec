@@ -40,9 +40,6 @@ with (REPO_ROOT / "pyproject.toml").open("rb") as _pf:
         encoding="utf-8",
     )
 datas.append((str(_bundled_version_file), "."))
-_bundled_github_token = REPO_ROOT / "packaging" / "secrets" / "github_token"
-if _bundled_github_token.is_file():
-    datas.append((str(_bundled_github_token), "."))
 try:
     datas += copy_metadata("media-tool")
 except Exception:

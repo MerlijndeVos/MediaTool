@@ -65,7 +65,6 @@ export interface UpdateCheck {
   release_notes?: string | null;
   error?: string | null;
   status_message?: string | null;
-  authenticated?: boolean;
 }
 
 export interface UpdateApplyStatus {
