@@ -18,7 +18,7 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/MerlijndeVos/Toolbox"
+Homepage = "https://toolbox.murly.nl"
 Repository = "https://github.com/MerlijndeVos/Toolbox"
 Issues = "https://github.com/MerlijndeVos/Toolbox/issues"
 Changelog = "https://github.com/MerlijndeVos/Toolbox/releases"
