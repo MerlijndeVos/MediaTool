@@ -1,6 +1,6 @@
 """Mod system: features described by a ``mod.toml`` manifest plus a ``main.py`` with ``run()``.
 
-Media Tool's own features are mods too (see ``builtin_mods/``), so the app and third-party
+Toolbox's own features are mods too (see ``builtin_mods/``), so the app and third-party
 mods go through the same loader, job runner and UI. See ``MODDING.md``.
 """
 

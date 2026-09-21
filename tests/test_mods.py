@@ -143,14 +143,14 @@ class UserModTests(unittest.TestCase):
 
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
-        data_dir = Path(self._tmp.name) / "MediaTool"
+        data_dir = Path(self._tmp.name) / "Toolbox"
         data_dir.mkdir()
         self.mods_dir = data_dir / "mods"
         self.mods_dir.mkdir()
         patches = [
             mock.patch("core.mods.registry.app_data_dir", lambda: data_dir),
             mock.patch("core.settings_store.app_data_dir", lambda: data_dir),
-            mock.patch.dict("os.environ", {"MEDIA_TOOL_NO_MODS": ""}),
+            mock.patch.dict("os.environ", {"TOOLBOX_NO_MODS": "", "MEDIA_TOOL_NO_MODS": ""}),
         ]
         for p in patches:
             p.start()
@@ -245,10 +245,23 @@ class UserModTests(unittest.TestCase):
 
     def test_safe_mode_hides_user_mods(self):
         self.make_mod("hello")
-        with mock.patch.dict("os.environ", {"MEDIA_TOOL_NO_MODS": "1"}):
+        with mock.patch.dict("os.environ", {"TOOLBOX_NO_MODS": "1"}):
             registry.reload()
             self.assertIsNone(registry.get("hello"))
         registry.reload()
+        self.assertIsNotNone(registry.get("hello"))
+
+    def test_safe_mode_still_honours_the_pre_rename_variable(self):
+        # Set before the app was renamed from Media Tool; it must keep user mods off.
+        self.make_mod("hello")
+        from core.mods.registry import safe_mode
+
+        with mock.patch.dict("os.environ", {"MEDIA_TOOL_NO_MODS": "1"}):
+            registry.reload()
+            self.assertTrue(safe_mode())
+            self.assertIsNone(registry.get("hello"))
+        registry.reload()
+        self.assertFalse(safe_mode())
         self.assertIsNotNone(registry.get("hello"))
 
     def test_undo_manifest_is_kept_only_when_the_mod_declares_undo(self):

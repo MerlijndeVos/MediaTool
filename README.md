@@ -1,15 +1,17 @@
 <div align="center">
-<img src="packaging/icons/media-tool.svg" width="128" alt="Media Tool app icon"/>
+<img src="packaging/icons/toolbox.svg" width="128" alt="Toolbox app icon"/>
 
-# Media Tool
+# Toolbox
 ### Media processing for your desktop
 
 **Convert, trim, stitch, organize libraries, download from YouTube, and more**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![GitHub Releases](https://img.shields.io/badge/Releases-GitHub-blue)](https://github.com/MerlijndeVos/MediaTool/releases)
+[![GitHub Releases](https://img.shields.io/badge/Releases-GitHub-blue)](https://github.com/MerlijndeVos/Toolbox/releases)
 
 </div>
+
+> **Formerly Media Tool.** The app was renamed in version 3.0. Your settings, mods and the ffmpeg download move over automatically on first launch. The command is now `toolbox` (it was `media-tool`), and the safe-mode variable is `TOOLBOX_NO_MODS` (the old `MEDIA_TOOL_NO_MODS` still works).
 
 ---
 
@@ -29,17 +31,17 @@
 
 The UI includes drag-and-drop paths, live logs, per-job progress, dark mode, and native folder pickers in the desktop app.
 
-**Mods:** every tool above is a *mod*, and you can add your own without touching the app's code. A mod is a folder with a `mod.toml` and a `main.py`; it gets a generated form, live logs and a `media-tool <id>` command. Mods you add start turned off. See **[MODDING.md](MODDING.md)** (it includes a prompt you can give an AI assistant to write one for you).
+**Mods:** every tool above is a *mod*, and you can add your own without touching the app's code. A mod is a folder with a `mod.toml` and a `main.py`; it gets a generated form, live logs and a `toolbox <id>` command. Mods you add start turned off. See **[MODDING.md](MODDING.md)** (it includes a prompt you can give an AI assistant to write one for you).
 
 ## Install (end users)
 
-Download the installer for your OS from **[GitHub Releases](https://github.com/MerlijndeVos/MediaTool/releases)** (tag `v0.1.0` or newer).
+Download the installer for your OS from **[GitHub Releases](https://github.com/MerlijndeVos/Toolbox/releases)** (tag `v0.1.0` or newer).
 
 | Platform | File |
 |----------|------|
-| Windows | `MediaTool-Setup-*-win64.exe` |
-| macOS | `MediaTool-*-macos.dmg` |
-| Linux | `MediaTool-*-linux-*.AppImage` |
+| Windows | `Toolbox-Setup-*-win64.exe` |
+| macOS | `Toolbox-*-macos.dmg` |
+| Linux | `Toolbox-*-linux-*.AppImage` |
 
 Installers are **unsigned**. Windows SmartScreen and macOS Gatekeeper may ask you to confirm once (“Run anyway” / “Open”).
 
@@ -50,8 +52,8 @@ Installers are **unsigned**. Windows SmartScreen and macOS Gatekeeper may ask yo
 Requires **Python 3.11+** and **Node.js 20+** (for building the UI).
 
 ```powershell
-git clone https://github.com/MerlijndeVos/MediaTool.git
-cd MediaTool
+git clone https://github.com/MerlijndeVos/Toolbox.git
+cd Toolbox
 pip install -e ".[desktop]"
 cd web/frontend && npm install && npm run build
 cd ../..
@@ -61,9 +63,9 @@ python app.py
 Equivalent entry points after install:
 
 ```powershell
-media-tool-app          # desktop window
-media-tool-web          # API + browser UI at http://127.0.0.1:8765/app/
-media-tool convert --help   # CLI
+toolbox-app          # desktop window
+toolbox-web          # API + browser UI at http://127.0.0.1:8765/app/
+toolbox convert --help   # CLI
 ```
 
 ### Dependency groups
@@ -95,7 +97,7 @@ Open http://127.0.0.1:5173/app/ (Vite proxies `/api` to port 8765).
 ```powershell
 pip install -e ".[desktop,pack]"
 .\packaging\build.ps1
-# → dist\MediaTool\MediaTool.exe
+# → dist\Toolbox\Toolbox.exe
 # Optional: iscc packaging\windows\setup.iss
 ```
 
@@ -105,25 +107,25 @@ Push a version tag to trigger CI builds for all three platforms:
 git tag v0.1.0 && git push origin v0.1.0
 ```
 
-Builds appear at https://github.com/MerlijndeVos/MediaTool/releases.
+Builds appear at https://github.com/MerlijndeVos/Toolbox/releases.
 
 ## Command line
 
 Every feature is available as a subcommand. Examples:
 
 ```powershell
-media-tool convert --input "C:\DV_in" --output "D:\DV_out"
-media-tool vts --input "D:\DVD_rips" --output "E:\MKV_out" --dry-run
-media-tool rename --input "Z:\Media" --dry-run
-media-tool rename --input "D:\Samples" --mode generic --targets both --max-depth 3 --profile "Tidy names" --dry-run
-media-tool dedup --input "Z:\Media" --apply
-media-tool download --url "https://youtu.be/…" --output "D:\Downloads"
-media-tool trim --input "clip.mp4" --trim-start 10
-media-tool stitch --input part1.mp4 --input part2.mp4 --output joined.mp4
-media-tool rename_folders --root "D:\DV_out" --dry-run
+toolbox convert --input "C:\DV_in" --output "D:\DV_out"
+toolbox vts --input "D:\DVD_rips" --output "E:\MKV_out" --dry-run
+toolbox rename --input "Z:\Media" --dry-run
+toolbox rename --input "D:\Samples" --mode generic --targets both --max-depth 3 --profile "Tidy names" --dry-run
+toolbox dedup --input "Z:\Media" --apply
+toolbox download --url "https://youtu.be/…" --output "D:\Downloads"
+toolbox trim --input "clip.mp4" --trim-start 10
+toolbox stitch --input part1.mp4 --input part2.mp4 --output joined.mp4
+toolbox rename_folders --root "D:\DV_out" --dry-run
 ```
 
-`media-tool mods list` shows every mod, `mods enable <id>` turns a user mod on, and `--no-mods` starts without any user mods.
+`toolbox mods list` shows every mod, `mods enable <id>` turns a user mod on, and `--no-mods` starts without any user mods.
 
 Use `--help` on any subcommand for full options. GPU encoding (`--use-gpu auto|on|off`), CRF, presets, dry-run, and resume-safe output handling apply where relevant.
 

@@ -114,7 +114,7 @@ export function ModsPanel({ mods }: { mods: ModsState }) {
       <CardHeader>
         <CardTitle>Mods</CardTitle>
         <CardDescription>
-          Mods add tools to Media Tool. The built-in features are mods too; the ones you add
+          Mods add tools to Toolbox. The built-in features are mods too; the ones you add
           yourself start turned off.
         </CardDescription>
       </CardHeader>
@@ -129,7 +129,7 @@ export function ModsPanel({ mods }: { mods: ModsState }) {
         <div className="flex gap-3 rounded-lg border border-red-500/30 bg-red-500/5 p-3 text-xs text-muted-foreground">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-600 dark:text-red-400" />
           <p>
-            A mod is code that runs with the same access as Media Tool: it can read, change and
+            A mod is code that runs with the same access as Toolbox: it can read, change and
             delete your files. The access a mod declares is only a description, it is not
             enforced. Only turn on mods from people you trust, and read the code first.
           </p>

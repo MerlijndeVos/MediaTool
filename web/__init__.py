@@ -1,4 +1,4 @@
-"""Local FastAPI backend for the Media Tool web UI."""
+"""Local FastAPI backend for the Toolbox web UI."""
 
 from typing import TYPE_CHECKING
 

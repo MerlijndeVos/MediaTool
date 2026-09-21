@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import sys
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 def is_frozen() -> bool:
@@ -25,6 +28,27 @@ def install_root() -> Path:
     return resource_root()
 
 
+APP_DIRNAME = "Toolbox"
+# Before version 3.0 the app was called Media Tool and kept its data in this folder.
+LEGACY_APP_DIRNAME = "MediaTool"
+
+
+def _migrate_legacy_data_dir(root: Path) -> None:
+    """Move settings, mods and the ffmpeg cache over from the old folder, once.
+
+    Only when the new folder does not exist yet, so a fresh install or an already-migrated
+    profile is never touched. If the move fails (folder in use, permissions) the app simply
+    starts fresh in the new folder and the old one is left as it was.
+    """
+    old, new = root / LEGACY_APP_DIRNAME, root / APP_DIRNAME
+    if new.exists() or not old.is_dir():
+        return
+    try:
+        old.rename(new)
+    except OSError as exc:
+        logger.warning("Could not move data from %s to %s: %s", old, new, exc)
+
+
 def app_data_dir() -> Path:
     """Writable per-user data directory (cached ffmpeg, logs, etc.)."""
     if sys.platform == "win32":
@@ -35,7 +59,8 @@ def app_data_dir() -> Path:
     else:
         xdg = os.environ.get("XDG_DATA_HOME")
         root = Path(xdg) if xdg else Path.home() / ".local" / "share"
-    path = root / "MediaTool"
+    _migrate_legacy_data_dir(root)
+    path = root / APP_DIRNAME
     path.mkdir(parents=True, exist_ok=True)
     return path
 

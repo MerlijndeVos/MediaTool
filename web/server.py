@@ -1,4 +1,4 @@
-"""FastAPI application for the Media Tool local web API."""
+"""FastAPI application for the Toolbox local web API."""
 
 from __future__ import annotations
 
@@ -80,7 +80,7 @@ async def _lifespan(_app: FastAPI):
 
 
 app = FastAPI(
-    title="Media Tool API",
+    title="Toolbox API",
     description="Local REST + SSE API for video conversion, rename, download, and related tools.",
     version=app_version(),
     lifespan=_lifespan,
@@ -453,7 +453,7 @@ async def job_events(job_id: str) -> StreamingResponse:
 @app.get("/")
 def root() -> dict:
     return {
-        "name": "Media Tool API",
+        "name": "Toolbox API",
         "docs": "/docs",
         "health": "/api/health",
         "app": "/app/" if FRONTEND_DIST.is_dir() else None,

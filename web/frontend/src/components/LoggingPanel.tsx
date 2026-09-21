@@ -129,7 +129,7 @@ export function LoggingPanel({ onFileLoggingChange }: LoggingPanelProps) {
             onChange={handleFileLoggingChange}
             disabled={saving}
             hint="When off, logs appear in the bottom panel only."
-            tooltip="Log files are written under your local Media Tool data directory."
+            tooltip="Log files are written under your local Toolbox data directory."
           />
         </CardContent>
       </Card>

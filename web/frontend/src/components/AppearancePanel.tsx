@@ -13,7 +13,7 @@ export function AppearancePanel({ dark, onDarkChange }: AppearancePanelProps) {
     <Card>
       <CardHeader>
         <CardTitle>Appearance</CardTitle>
-        <CardDescription>Choose light or dark theme for the Media Tool interface.</CardDescription>
+        <CardDescription>Choose light or dark theme for the Toolbox interface.</CardDescription>
       </CardHeader>
       <CardContent>
         <div className="flex flex-wrap gap-2">

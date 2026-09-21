@@ -20,24 +20,24 @@ _ICON_DIR = resource_root() / "packaging" / "icons"
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
-WINDOW_TITLE = "Media Tool"
+WINDOW_TITLE = "Toolbox"
 
 
 def _app_icon_path() -> Path | None:
     if sys.platform == "win32":
         candidates = (
-            _ICON_DIR / "media-tool.ico",
-            install_root() / "media-tool.ico",
+            _ICON_DIR / "toolbox.ico",
+            install_root() / "toolbox.ico",
         )
     elif sys.platform == "darwin":
         candidates = (
-            _ICON_DIR / "media-tool.icns",
-            install_root() / "media-tool.icns",
+            _ICON_DIR / "toolbox.icns",
+            install_root() / "toolbox.icns",
         )
     else:
         candidates = (
-            _ICON_DIR / "media-tool.png",
-            install_root() / "media-tool.png",
+            _ICON_DIR / "toolbox.png",
+            install_root() / "toolbox.png",
         )
     for candidate in candidates:
         if candidate.is_file():
@@ -52,14 +52,14 @@ def _configure_windows_app_id() -> None:
         import ctypes
 
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
-            "MerlijndeVos.MediaTool"
+            "MerlijndeVos.Toolbox"
         )
     except Exception:
         pass
 
 
 def main(argv: list[str] | None = None) -> None:
-    parser = argparse.ArgumentParser(description="Media Tool desktop app")
+    parser = argparse.ArgumentParser(description="Toolbox desktop app")
     parser.add_argument(
         "--port",
         type=int,
@@ -117,7 +117,7 @@ def main(argv: list[str] | None = None) -> None:
         target=run_uvicorn,
         kwargs={"host": args.host, "port": port, "log_level": "warning"},
         daemon=True,
-        name="media-tool-api",
+        name="toolbox-api",
     )
     server.start()
     wait_for_server(base_url)

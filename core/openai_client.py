@@ -33,6 +33,6 @@ def new_client() -> Any:
         from openai import OpenAI
     except ImportError as exc:
         raise RuntimeError(
-            "The openai package is not installed. Reinstall Media Tool with web/desktop extras."
+            "The openai package is not installed. Reinstall Toolbox with web/desktop extras."
         ) from exc
     return OpenAI(api_key=openai_api_key())

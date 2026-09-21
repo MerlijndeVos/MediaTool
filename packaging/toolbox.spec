@@ -4,7 +4,7 @@
 Build (from repo root, after ``npm run build`` in web/frontend)::
 
     pip install -e ".[desktop,pack]"
-    pyinstaller packaging/media-tool.spec --noconfirm --clean
+    pyinstaller packaging/toolbox.spec --noconfirm --clean
 """
 
 from __future__ import annotations
@@ -19,8 +19,8 @@ import tomllib
 REPO_ROOT = Path(SPECPATH).resolve().parent
 FRONTEND_DIST = REPO_ROOT / "web" / "frontend" / "dist"
 ICON_DIR = REPO_ROOT / "packaging" / "icons"
-WINDOWS_ICON = ICON_DIR / "media-tool.ico"
-MACOS_ICON = ICON_DIR / "media-tool.icns"
+WINDOWS_ICON = ICON_DIR / "toolbox.ico"
+MACOS_ICON = ICON_DIR / "toolbox.icns"
 
 if not FRONTEND_DIST.is_dir():
     raise SystemExit(
@@ -47,7 +47,7 @@ for _mod_file in sorted(BUILTIN_MODS.glob("*/*")):
     if _mod_file.suffix in {".toml", ".py"}:
         datas.append((str(_mod_file), f"builtin_mods/{_mod_file.parent.name}"))
 try:
-    datas += copy_metadata("media-tool")
+    datas += copy_metadata("toolbox")
 except Exception:
     pass
 binaries: list[tuple[str, str]] = []
@@ -154,7 +154,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name="MediaTool",
+    name="Toolbox",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -176,13 +176,13 @@ coll = COLLECT(
     strip=False,
     upx=False,
     upx_exclude=[],
-    name="MediaTool",
+    name="Toolbox",
 )
 
 if sys.platform == "darwin":
     app = BUNDLE(
         coll,
-        name="Media Tool.app",
+        name="Toolbox.app",
         icon=str(MACOS_ICON) if MACOS_ICON.is_file() else None,
-        bundle_identifier="local.mediatool.app",
+        bundle_identifier="local.toolbox.app",
     )

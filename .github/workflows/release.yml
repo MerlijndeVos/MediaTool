@@ -74,7 +74,7 @@ jobs:
         run: python packaging/icons/render_icons.py
 
       - name: PyInstaller bundle
-        run: pyinstaller packaging/media-tool.spec --noconfirm --clean
+        run: pyinstaller packaging/toolbox.spec --noconfirm --clean
 
       - name: Platform installer
         shell: bash
@@ -104,8 +104,8 @@ jobs:
       - name: Upload release installer
         uses: actions/upload-artifact@v6
         with:
-          name: media-tool-${{ matrix.os }}
-          path: packaging/dist/MediaTool-*
+          name: toolbox-${{ matrix.os }}
+          path: packaging/dist/Toolbox-*
           if-no-files-found: error
           compression-level: 6
 
@@ -128,7 +128,7 @@ jobs:
 
       - uses: actions/download-artifact@v7
         with:
-          pattern: media-tool-*
+          pattern: toolbox-*
           path: artifacts
           merge-multiple: true
 
@@ -139,7 +139,7 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.ref_name }}
-          name: Media Tool ${{ github.ref_name }}
+          name: Toolbox ${{ github.ref_name }}
           body_path: release-notes/${{ github.ref_name }}.md
           files: artifacts/*
         env:

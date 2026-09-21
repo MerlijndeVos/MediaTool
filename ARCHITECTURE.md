@@ -1,10 +1,10 @@
 # Architecture
 
-Media Tool separates **business logic** from **front-ends**. Every feature is implemented once in `core/` and exposed through the CLI, HTTP API, and desktop app.
+Toolbox separates **business logic** from **front-ends**. Every feature is implemented once in `core/` and exposed through the CLI, HTTP API, and desktop app.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  Desktop app (app.py / media-tool-app)                      │
+│  Desktop app (app.py / toolbox-app)                      │
 │  pywebview window → http://127.0.0.1:<port>/app/            │
 └──────────────────────────┬──────────────────────────────────┘
                            │
@@ -29,7 +29,7 @@ Media Tool separates **business logic** from **front-ends**. Every feature is im
 └─────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────┐
-│  CLI (media-tool / python -m cli)                           │
+│  CLI (toolbox / python -m cli)                           │
 │  cli/args.py → cli/dispatch.py → core.run_*                 │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -72,13 +72,13 @@ Long-running work uses background threads with cancel support. The UI polls job 
 
 - **`args.py`** — Subcommand definitions for the built-in features
 - **`dispatch.py`** — `command → core.run_*` table
-- **`mods_cli.py`** — `media-tool mods ...` and one generated subcommand per enabled user mod
+- **`mods_cli.py`** — `toolbox mods ...` and one generated subcommand per enabled user mod
 - **`console.py`** — Installs console log/progress handlers via `core.progress`
 
 ## Mods
 
 Every feature is a **mod**: a folder with a `mod.toml` manifest (name, group, parameters, ...)
-and a `main.py` with `run(params, ctx)`. Media Tool's own features live in `builtin_mods/`;
+and a `main.py` with `run(params, ctx)`. Toolbox's own features live in `builtin_mods/`;
 users can add more under `<app data>/mods/` (off until enabled). See [MODDING.md](MODDING.md).
 
 ```

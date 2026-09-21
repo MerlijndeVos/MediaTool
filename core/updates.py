@@ -20,10 +20,10 @@ from .version import app_version, normalize_version
 
 logger = logging.getLogger(__name__)
 
-GITHUB_REPO = "MerlijndeVos/MediaTool"
+GITHUB_REPO = "MerlijndeVos/Toolbox"
 GITHUB_API = f"https://api.github.com/repos/{GITHUB_REPO}"
 GITHUB_LATEST = f"{GITHUB_API}/releases/latest"
-USER_AGENT = "MediaTool-updater"
+USER_AGENT = "Toolbox-updater"
 
 UpdatePhase = Literal["idle", "downloading", "installing", "error"]
 
@@ -360,6 +360,6 @@ def start_apply_update(info: UpdateInfo) -> tuple[bool, str | None]:
         if _state["phase"] in {"downloading", "installing"}:
             return False, "An update is already in progress."
 
-    thread = threading.Thread(target=_apply_update_worker, args=(info,), daemon=True, name="media-tool-update")
+    thread = threading.Thread(target=_apply_update_worker, args=(info,), daemon=True, name="toolbox-update")
     thread.start()
     return True, None

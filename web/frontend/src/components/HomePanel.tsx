@@ -163,7 +163,7 @@ export function HomePanel({
   return (
     <Card className="border-0 shadow-md">
       <CardHeader>
-        <CardTitle>Welcome to Media Tool</CardTitle>
+        <CardTitle>Welcome to Toolbox</CardTitle>
         <CardDescription>Pick a tool to get started.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">

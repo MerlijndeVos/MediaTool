@@ -3,8 +3,8 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "media-tool"
-version = "2.0.0"
+name = "toolbox"
+version = "3.0.0"
 description = "Cross-platform desktop app for local video conversion, library organization, and downloads"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -18,10 +18,10 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/MerlijndeVos/MediaTool"
-Repository = "https://github.com/MerlijndeVos/MediaTool"
-Issues = "https://github.com/MerlijndeVos/MediaTool/issues"
-Changelog = "https://github.com/MerlijndeVos/MediaTool/releases"
+Homepage = "https://github.com/MerlijndeVos/Toolbox"
+Repository = "https://github.com/MerlijndeVos/Toolbox"
+Issues = "https://github.com/MerlijndeVos/Toolbox/issues"
+Changelog = "https://github.com/MerlijndeVos/Toolbox/releases"
 
 [project.optional-dependencies]
 web = [
@@ -42,9 +42,9 @@ pack = [
 ]
 
 [project.scripts]
-media-tool = "cli.__main__:main"
-media-tool-web = "web.__main__:main"
-media-tool-app = "web.desktop:main"
+toolbox = "cli.__main__:main"
+toolbox-web = "web.__main__:main"
+toolbox-app = "web.desktop:main"
 
 [tool.setuptools.packages.find]
 where = ["."]

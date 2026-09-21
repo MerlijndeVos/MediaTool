@@ -25,7 +25,7 @@ def require_port(port: int, host: str = "127.0.0.1") -> int:
         return port
     raise SystemExit(
         f"Port {port} is already in use on {host}.\n"
-        "Another Media Tool server is probably still running with older code.\n"
+        "Another Toolbox server is probably still running with older code.\n"
         "Stop that process, then start the server again.\n"
         "On Windows: netstat -ano | findstr :{port}  then  taskkill /PID <pid> /F"
     )

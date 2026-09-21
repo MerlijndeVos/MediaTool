@@ -2,9 +2,9 @@
 
 Two places are searched:
 
-* ``builtin_mods/`` next to the app: the features that ship with Media Tool. Always on.
+* ``builtin_mods/`` next to the app: the features that ship with Toolbox. Always on.
 * ``<app data>/mods/``: mods the user dropped in. **Off until the user enables them**, and
-  skipped completely in safe mode (``--no-mods`` or ``MEDIA_TOOL_NO_MODS=1``).
+  skipped completely in safe mode (``--no-mods`` or ``TOOLBOX_NO_MODS=1``).
 
 Reading a manifest never runs mod code. A mod's ``main.py`` is imported the first time the
 mod is actually run.
@@ -30,7 +30,11 @@ logger = logging.getLogger(__name__)
 
 BUILTIN_DIRNAME = "builtin_mods"
 USER_DIRNAME = "mods"
-SAFE_MODE_ENV = "MEDIA_TOOL_NO_MODS"
+SAFE_MODE_ENV = "TOOLBOX_NO_MODS"
+# The variable's name before version 3.0. Still honoured: silently ignoring a safety switch
+# someone set to keep a misbehaving mod off would turn that mod back on after the update.
+LEGACY_SAFE_MODE_ENV = "MEDIA_TOOL_NO_MODS"
+_SAFE_MODE_ENVS = (SAFE_MODE_ENV, LEGACY_SAFE_MODE_ENV)
 
 
 class ModError(RuntimeError):
@@ -79,7 +83,7 @@ class Mod:
             if not entry.is_file():
                 raise ModError(f"Mod '{self.id}': entry file {self.manifest.entry} not found.")
             # Flat, dot-free name so relative imports (`from .helpers import x`) work.
-            name = "mediatool_mod_" + self.id.replace("-", "_")
+            name = "toolbox_mod_" + self.id.replace("-", "_")
             spec = importlib.util.spec_from_file_location(
                 name, entry, submodule_search_locations=[str(self.path)]
             )
@@ -120,7 +124,10 @@ class Mod:
 
 
 def safe_mode() -> bool:
-    return os.environ.get(SAFE_MODE_ENV, "").strip().lower() in {"1", "true", "yes", "on"}
+    return any(
+        os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "on"}
+        for name in _SAFE_MODE_ENVS
+    )
 
 
 def set_safe_mode(enabled: bool = True) -> None:
@@ -128,7 +135,8 @@ def set_safe_mode(enabled: bool = True) -> None:
     if enabled:
         os.environ[SAFE_MODE_ENV] = "1"
     else:
-        os.environ.pop(SAFE_MODE_ENV, None)
+        for name in _SAFE_MODE_ENVS:
+            os.environ.pop(name, None)
 
 
 def builtin_mods_dir() -> Path:
