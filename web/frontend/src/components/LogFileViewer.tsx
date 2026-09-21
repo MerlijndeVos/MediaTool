@@ -183,7 +183,7 @@ export function LogFileViewer({ name, onClose }: { name: string; onClose: () => 
           <CardDescription>
             {loading
               ? "Loading…"
-              : `${formatBytes(sizeBytes)} · ${lines.length} line${lines.length === 1 ? "" : "s"} loaded${
+              : `${formatBytes(sizeBytes)} — ${lines.length} line${lines.length === 1 ? "" : "s"} loaded${
                   hasEarlier ? "" : " (start of file)"
                 }`}
           </CardDescription>
@@ -270,7 +270,7 @@ export function LogFileViewer({ name, onClose }: { name: string; onClose: () => 
 
         <p className="text-xs text-muted-foreground">
           {filtered ? `${visible.length} of ${lines.length} loaded lines shown` : `${lines.length} lines`}
-          {filtered && hasEarlier && " · filters only cover the loaded lines, load earlier lines to search further back"}
+          {filtered && hasEarlier && " — filters only cover the loaded lines, load earlier lines to search further back"}
         </p>
 
         {error && (

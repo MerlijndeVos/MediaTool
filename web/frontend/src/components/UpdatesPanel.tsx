@@ -79,7 +79,7 @@ export function UpdatesPanel({
             {check.latest_version && (
               <>
                 {" "}
-                · Latest release:{" "}
+                — Latest release:{" "}
                 <span className="font-medium text-foreground">v{check.latest_version}</span>
               </>
             )}

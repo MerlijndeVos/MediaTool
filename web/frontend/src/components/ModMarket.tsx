@@ -115,7 +115,7 @@ export function ModMarket({ installedIds, busy, onBusy, onPrepared, onError }: M
       {market && !market.error && (
         <p className="text-xs text-muted-foreground" role="status">
           {shown.length} of {market.mods.length} mods
-          {market.problems.length > 0 && ` · ${market.problems.length} entries skipped (not valid)`}
+          {market.problems.length > 0 && ` — ${market.problems.length} entries skipped (not valid)`}
         </p>
       )}
 
@@ -129,7 +129,7 @@ export function ModMarket({ installedIds, busy, onBusy, onPrepared, onError }: M
               </p>
               <p className="text-xs text-muted-foreground">
                 {entry.author ? `by ${entry.author}` : "Author not stated"}
-                {entry.license ? ` · ${entry.license}` : ""}
+                {entry.license ? ` — ${entry.license}` : ""}
               </p>
             </div>
             {entry.description && <p className="text-xs">{entry.description}</p>}

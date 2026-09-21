@@ -42,7 +42,7 @@ function ModRow({
           {mod.name}
           <span className="ml-2 text-xs font-normal text-muted-foreground">
             v{mod.version}
-            {mod.author ? ` · ${mod.author}` : ""}
+            {mod.author ? ` — ${mod.author}` : ""}
           </span>
         </p>
         {mod.description && <p className="text-xs text-muted-foreground">{mod.description}</p>}
@@ -101,10 +101,10 @@ function UserModItem({ mod, busy, onToggle, onReview, onRemove, onError }: UserM
           {install ? (
             <>
               {describeSource(install)}
-              {isGit && install.commit && <> · commit {install.commit.slice(0, 10)}</>}
+              {isGit && install.commit && <> — commit {install.commit.slice(0, 10)}</>}
             </>
           ) : (
-            <>Added by hand · {mod.path}</>
+            <>Added by hand — {mod.path}</>
           )}
         </p>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-1 text-xs">

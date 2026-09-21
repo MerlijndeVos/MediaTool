@@ -146,7 +146,7 @@ export function LoggingPanel({ onFileLoggingChange }: LoggingPanelProps) {
               Total size:{" "}
               <span className="font-medium text-foreground">{formatBytes(settings.logs.total_bytes)}</span>
               {settings.logs.file_count > 0 && (
-                <> · {settings.logs.file_count} file{settings.logs.file_count === 1 ? "" : "s"}</>
+                <> — {settings.logs.file_count} file{settings.logs.file_count === 1 ? "" : "s"}</>
               )}
             </CardDescription>
           </div>

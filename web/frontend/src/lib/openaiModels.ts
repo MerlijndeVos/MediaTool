@@ -103,7 +103,7 @@ export function modelDropdownLabel(profile: OpenAiModelProfile): string {
   const speed = metricLabel("speed", profile.speed).toLowerCase();
   const cost = metricLabel("costEfficiency", profile.costEfficiency).toLowerCase();
   const quality = metricLabel("quality", profile.quality).toLowerCase();
-  const suffix = profile.recommended ? " · recommended" : "";
+  const suffix = profile.recommended ? " — recommended" : "";
   return `${profile.label} — ${speed}, ${cost}, ${quality}${suffix}`;
 }
 

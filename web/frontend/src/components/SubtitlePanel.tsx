@@ -205,7 +205,7 @@ function JunkReviewSection({
                       />
                       <div className="min-w-0 space-y-1">
                         <p className="text-xs text-muted-foreground">
-                          Cue {item.cue_index + 1} · {item.reason_label}
+                          Cue {item.cue_index + 1} — {item.reason_label}
                         </p>
                         <p className="break-words font-mono text-xs">{item.text || "(empty line)"}</p>
                       </div>

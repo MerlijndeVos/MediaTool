@@ -107,7 +107,7 @@ function DownloadRow({
           {job.downloadMeta?.format && (
             <p className="truncate text-[11px] text-muted-foreground">
               {job.downloadMeta.format.toUpperCase()}
-              {job.downloadMeta.output ? ` · ${job.downloadMeta.output}` : ""}
+              {job.downloadMeta.output ? ` — ${job.downloadMeta.output}` : ""}
             </p>
           )}
         </div>
@@ -384,7 +384,7 @@ export function DownloadPanel({
                 <p className="text-xs text-muted-foreground">
                   {pendingEntries.length} file{pendingEntries.length !== 1 ? "s" : ""} found
                   {selectedCount !== pendingEntries.length
-                    ? ` · ${selectedCount} selected`
+                    ? ` — ${selectedCount} selected`
                     : ""}
                 </p>
               </div>

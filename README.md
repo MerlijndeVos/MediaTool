@@ -154,10 +154,10 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for detail. Contributions welcome — see
 
 ## Built with
 
-- [Python](https://python.org) 3.11 · [FastAPI](https://fastapi.tiangolo.com) · [uvicorn](https://www.uvicorn.org)
-- [React](https://react.dev) · [Vite](https://vitejs.dev) · [Tailwind CSS](https://tailwindcss.com)
-- [pywebview](https://pywebview.flowrl.com) · [yt-dlp](https://github.com/yt-dlp/yt-dlp) · [ffmpeg](https://ffmpeg.org)
-- [PyInstaller](https://pyinstaller.org) · GitHub Actions
+- [Python](https://python.org) 3.11 — [FastAPI](https://fastapi.tiangolo.com) — [uvicorn](https://www.uvicorn.org)
+- [React](https://react.dev) — [Vite](https://vitejs.dev) — [Tailwind CSS](https://tailwindcss.com)
+- [pywebview](https://pywebview.flowrl.com) — [yt-dlp](https://github.com/yt-dlp/yt-dlp) — [ffmpeg](https://ffmpeg.org)
+- [PyInstaller](https://pyinstaller.org) — GitHub Actions
 
 ## Legal
 

@@ -20,12 +20,12 @@ Toolbox separates **business logic** from **front-ends**. Every feature is imple
                            │
 ┌──────────────────────────▼──────────────────────────────────┐
 │  core/                                                      │
-│  convert · vts · rename · audio · download · dates          │
-│  tools · ffmpeg_bootstrap · progress · probe · paths        │
+│  convert — vts — rename — audio — download — dates          │
+│  tools — ffmpeg_bootstrap — progress — probe — paths        │
 └──────────────────────────┬──────────────────────────────────┘
                            │ subprocess / filesystem
 ┌──────────────────────────▼──────────────────────────────────┐
-│  ffmpeg · ffprobe · yt-dlp (ffmpeg first-run download)      │
+│  ffmpeg — ffprobe — yt-dlp (ffmpeg first-run download)      │
 └─────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────┐

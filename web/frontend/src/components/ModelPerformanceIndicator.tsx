@@ -58,7 +58,7 @@ export function ModelPerformanceIndicator({ profile }: { profile: OpenAiModelPro
 
       <p className="text-xs text-muted-foreground">
         <span className="font-medium text-foreground">Typical batch time:</span>{" "}
-        {profile.typicalFilmTime} · Estimates are relative for a ~90 minute film; actual time
+        {profile.typicalFilmTime} — Estimates are relative for a ~90 minute film; actual time
         depends on cue count and API load.
       </p>
     </div>

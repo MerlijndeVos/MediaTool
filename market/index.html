@@ -77,7 +77,7 @@
     const h = el("h2", null, m.name);
     h.append(el("small", null, "v" + (m.version || "0.0.0")));
     c.append(h);
-    c.append(el("div", "by", m.author ? "by " + m.author + (m.license ? " · " + m.license : "") : (m.license || "")));
+    c.append(el("div", "by", m.author ? "by " + m.author + (m.license ? " — " + m.license : "") : (m.license || "")));
     c.append(el("p", null, m.description || ""));
     const chips = el("div", "chips");
     for (const t of m.tags || []) chips.append(el("span", "chip", t));
