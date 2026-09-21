@@ -3,16 +3,19 @@ import { ArrowDown, ArrowUp, Check, Loader2, Sparkles, Trash2, X } from "lucide-
 import { generateRenameProfile, testRenameProfile, type RenameGenerateResult, type RenameTestResult } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { CheckField, Field } from "@/components/fields";
+import { CheckField, Field, SelectField } from "@/components/fields";
 import {
   BRACKET_KINDS,
   CASE_OPTIONS,
+  DATE_LOCALE_OPTIONS,
   DEFAULT_PATTERNS,
   PATTERN_LABELS,
   PATTERN_TOKENS,
   RULE_LABELS,
   newRule,
   parseExamples,
+  tokenSnippet,
+  type DateLocale,
   type PatternKey,
   type RenameMode,
   type RenameProfile,
@@ -127,6 +130,12 @@ function RuleRow({
             ))}
           </select>
         )}
+        {rule.type === "prune_date" && (
+          <p className="text-xs text-muted-foreground">
+            Removes dates like 2006, 13 juli 2006 or 2006-07-13 from the name, so a date only appears where the
+            pattern puts it.
+          </p>
+        )}
         {rule.type === "regex_replace" && (
           <div className="grid gap-2 sm:grid-cols-2">
             <Input
@@ -187,16 +196,24 @@ function PatternInput({
             key={t}
             type="button"
             onClick={() => {
-              onChange(`${value || DEFAULT_PATTERNS[patternKey]}{${t}}`);
+              onChange(`${value || DEFAULT_PATTERNS[patternKey]}${tokenSnippet(t)}`);
               inputRef.current?.focus();
             }}
             className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-            title={`Append {${t}}`}
+            title={`Append ${tokenSnippet(t)}`}
           >
             {`{${t}}`}
           </button>
         ))}
       </div>
+      {patternKey === "generic" && (
+        <p className="pt-1 text-xs text-muted-foreground">
+          <code className="rounded bg-muted px-1">{"{date}"}</code> is the earliest date in the video file names inside
+          each folder (DV <em>clip-2006-07-13</em> or MP4 <em>13 juli 2006</em> names). Choose its format after a colon, for
+          example <code className="rounded bg-muted px-1">{"{date:YYYY MMMM D}"}</code>: YYYY year, MMMM month name, MMM
+          short name, MM month, DD day (D without a leading zero). Folders with no date are skipped.
+        </p>
+      )}
     </Field>
   );
 }
@@ -274,6 +291,9 @@ export function ProfileEditor({ mode, profile, onChange }: ProfileEditorProps) {
   };
 
   const patternKeys: PatternKey[] = mode === "media" ? ["tv", "movie"] : ["generic"];
+  const usesDates =
+    mode === "generic" &&
+    ((profile.patterns.generic ?? "").includes("{date") || profile.rules.some((r) => r.type === "prune_date"));
 
   return (
     <div className="space-y-5 rounded-lg border bg-muted/20 p-4">
@@ -392,6 +412,18 @@ export function ProfileEditor({ mode, profile, onChange }: ProfileEditorProps) {
           <PatternInput key={key} patternKey={key} value={profile.patterns[key] ?? ""} onChange={(v) => setPattern(key, v)} />
         ))}
       </div>
+
+      {usesDates && (
+        <div className="max-w-xs">
+          <SelectField
+            label="Month names"
+            value={profile.date_locale ?? "en"}
+            onChange={(v) => patch({ date_locale: v as DateLocale })}
+            options={DATE_LOCALE_OPTIONS}
+            tooltip="The language of month names for {date:MMMM} and for the “Remove dates from name” rule."
+          />
+        </div>
+      )}
 
       {/* Tester */}
       <div className="space-y-2">

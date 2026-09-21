@@ -24,10 +24,9 @@
 | **Stitch** | Join multiple clips end-to-end |
 | **Download** | Save URLs as MP4 or MP3 via yt-dlp |
 | **DVD (VTS)** | Join DVD `VIDEO_TS` VOB segments into MKV per title |
-| **Rename** | Organize TV/movie files for Plex/Jellyfin, or clean up any folder/file names, with reusable format profiles (optionally AI-generated) |
+| **Rename** | Organize TV/movie files for Plex/Jellyfin, or clean up any folder/file names, with reusable format profiles (optionally AI-generated). Includes a built-in *Date + name* profile that date-stamps folders (`2006 juli 13 - Holiday`) from the dates in their video file names |
 | **Audio** | Set default audio track in MKV files |
 | **Dedup** | Strip `(2)` duplicate suffixes from filenames |
-| **Folders** | Date-stamp subfolders (`2006 juli 13 - Holiday`) from video dates |
 
 The UI includes drag-and-drop paths, live logs, per-job progress, dark mode, and native folder pickers in the desktop app.
 
@@ -116,13 +115,13 @@ Every feature is available as a subcommand. Examples:
 ```powershell
 toolbox convert --input "C:\DV_in" --output "D:\DV_out"
 toolbox vts --input "D:\DVD_rips" --output "E:\MKV_out" --dry-run
-toolbox rename --input "Z:\Media" --dry-run
-toolbox rename --input "D:\Samples" --mode generic --targets both --max-depth 3 --profile "Tidy names" --dry-run
+toolbox rename --input "Z:\Media"                # previews; add --apply to rename
+toolbox rename --input "D:\Samples" --mode generic --targets both --max-depth 3 --profile "Tidy names"
 toolbox dedup --input "Z:\Media" --apply
 toolbox download --url "https://youtu.be/…" --output "D:\Downloads"
 toolbox trim --input "clip.mp4" --trim-start 10
 toolbox stitch --input part1.mp4 --input part2.mp4 --output joined.mp4
-toolbox rename_folders --root "D:\DV_out" --dry-run
+toolbox rename --input "D:\DV_out" --mode generic --profile "Date + name (Dutch)" --apply
 ```
 
 `toolbox mods list` shows every mod, `mods enable <id>` turns a user mod on, and `--no-mods` starts without any user mods.

@@ -6,7 +6,9 @@ A profile is shared by both rename modes (shows/movies and folders). It holds
 * ``patterns`` -- optional output patterns per context (``tv``, ``movie``,
   ``generic``) built from ``{token}`` placeholders,
 * ``strip_release_junk`` -- whether shows/movies mode removes the built-in list
-  of release tags (``1080p``, ``WEB-DL``, ...).
+  of release tags (``1080p``, ``WEB-DL``, ...),
+* ``date_locale`` -- the language of month names for the ``{date}`` token and the
+  "remove dates" rule (``en`` or ``nl``).
 
 Profiles are plain JSON so they can be saved, sent over the API and produced by
 the AI helper. Everything here is validated; nothing in a profile is executed.
@@ -22,6 +24,15 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from .dates import (
+    DATE_LOCALES,
+    DEFAULT_DATE_SPEC,
+    literal_regex,
+    date_spec_regex,
+    format_date,
+    prune_date_text,
+    validate_date_spec,
+)
 from .runtime import app_data_dir
 from .text_utils import sentence_case, title_case
 
@@ -29,7 +40,7 @@ MAX_RULES = 40
 MAX_NAME_LEN = 60
 MAX_FIND_LEN = 200
 
-RULE_TYPES = ("replace", "remove_words", "remove_brackets", "case", "regex_replace")
+RULE_TYPES = ("replace", "remove_words", "remove_brackets", "case", "regex_replace", "prune_date")
 CASE_MODES = ("keep", "title", "lower", "upper", "sentence")
 BRACKET_KINDS = ("[]", "()", "{}")
 
@@ -39,7 +50,8 @@ PATTERN_KEYS = ("tv", "movie", "generic")
 PATTERN_TOKENS: Dict[str, Tuple[str, ...]] = {
     "tv": ("show", "season", "episode", "episode_end", "code", "title", "year"),
     "movie": ("title", "year"),
-    "generic": ("name", "parent", "n"),
+    # {date}: the earliest date in the video file names inside the folder (see core.dates)
+    "generic": ("name", "parent", "n", "date"),
 }
 
 DEFAULT_PATTERNS: Dict[str, str] = {
@@ -50,6 +62,7 @@ DEFAULT_PATTERNS: Dict[str, str] = {
 
 STANDARD_ID = "builtin:standard"
 TIDY_ID = "builtin:tidy"
+DATE_NAME_ID = "builtin:date-name"
 
 
 class ProfileError(ValueError):
@@ -64,6 +77,7 @@ class Profile:
     patterns: Dict[str, str] = field(default_factory=dict)
     strip_release_junk: bool = True
     builtin: bool = False
+    date_locale: str = "en"
 
     @property
     def title_case(self) -> bool:
@@ -84,6 +98,7 @@ class Profile:
             "rules": [dict(r) for r in self.rules],
             "patterns": dict(self.patterns),
             "strip_release_junk": self.strip_release_junk,
+            "date_locale": self.date_locale,
             "builtin": self.builtin,
         }
 
@@ -137,6 +152,9 @@ def _normalize_rule(raw: Any, index: int) -> Dict[str, Any]:
             raise ProfileError(f"{where}: 'brackets' must be a non-empty list of {', '.join(BRACKET_KINDS)}.")
         return {"type": rtype, "brackets": [k for k in BRACKET_KINDS if k in kinds]}
 
+    if rtype == "prune_date":
+        return {"type": rtype}
+
     if rtype == "case":
         mode = raw.get("mode")
         if mode not in CASE_MODES:
@@ -172,7 +190,13 @@ def validate_pattern(pattern: str, key: str) -> str:
                 + ", ".join("{" + t + "}" for t in allowed)
                 + "."
             )
-        if spec is not None and not _SPEC_RE.match(spec):
+        if token == "date":
+            if spec is not None:
+                try:
+                    validate_date_spec(spec)
+                except ValueError as exc:
+                    raise ProfileError(str(exc)) from exc
+        elif spec is not None and not _SPEC_RE.match(spec):
             raise ProfileError(f"Invalid format {{{token}:{spec}}} (use e.g. :02, :upper, :lower or :title).")
     if "{" in _TOKEN_RE.sub("", pattern) or "}" in _TOKEN_RE.sub("", pattern):
         raise ProfileError("Unbalanced { } in pattern.")
@@ -207,6 +231,10 @@ def profile_from_dict(data: Any, *, builtin: bool = False) -> Profile:
             continue
         patterns[key] = validate_pattern(value.strip() if isinstance(value, str) else value, key)
 
+    date_locale = data.get("date_locale") or "en"
+    if date_locale not in DATE_LOCALES:
+        raise ProfileError(f"date_locale must be one of {', '.join(DATE_LOCALES)}.")
+
     pid = data.get("id")
     if not isinstance(pid, str) or not pid.strip():
         pid = uuid.uuid4().hex
@@ -217,6 +245,7 @@ def profile_from_dict(data: Any, *, builtin: bool = False) -> Profile:
         patterns=patterns,
         strip_release_junk=bool(data.get("strip_release_junk", True)),
         builtin=builtin,
+        date_locale=date_locale,
     )
 
 
@@ -269,11 +298,18 @@ def _remove_words(text: str, words: List[str]) -> str:
     return rx.sub(" ", text)
 
 
-def apply_rules(text: str, rules: Tuple[Dict[str, Any], ...], *, keep_year_parens: bool = False) -> str:
+def apply_rules(
+    text: str,
+    rules: Tuple[Dict[str, Any], ...],
+    *,
+    keep_year_parens: bool = False,
+    date_locale: str = "en",
+) -> str:
     """Run *rules* in order over *text* and tidy the result.
 
     With ``keep_year_parens`` a ``(2008)`` style year survives bracket removal
-    (shows/movies mode relies on it).
+    (shows/movies mode relies on it). *date_locale* picks the month names the
+    "remove dates" rule recognises.
     """
     for rule in rules:
         rtype = rule["type"]
@@ -296,6 +332,8 @@ def apply_rules(text: str, rules: Tuple[Dict[str, Any], ...], *, keep_year_paren
                 text = sentence_case(text)
         elif rtype == "regex_replace":
             text = re.sub(rule["pattern"], rule["with"], text)
+        elif rtype == "prune_date":
+            text = prune_date_text(text, date_locale)
     return finalize_text(text)
 
 
@@ -303,8 +341,53 @@ def apply_rules(text: str, rules: Tuple[Dict[str, Any], ...], *, keep_year_paren
 # Patterns
 # ---------------------------------------------------------------------------
 
-def render_pattern(pattern: str, values: Dict[str, Any]) -> str:
+def pattern_uses_token(pattern: str, token: str) -> bool:
+    return any(m.group(1) == token for m in _TOKEN_RE.finditer(pattern))
+
+
+def reverse_pattern(pattern: str, text: str, locale: str = "en") -> Optional[Tuple[Tuple[int, int, int], str]]:
+    """Read ``(date, name)`` back out of *text* if it was already made with *pattern*.
+
+    Only patterns built from ``{date}`` and ``{name}`` (plain text around them is fine)
+    can be read back. This is what makes re-running a date rename harmless: a folder that
+    already looks like ``2006 juli 13 - Holiday`` keeps its own date and is renamed from
+    ``Holiday``, instead of getting a second date stuck on the front.
+    """
+    parts: List[str] = []
+    date_rx = None
+    have_name = False
+    pos = 0
+    for m in _TOKEN_RE.finditer(pattern):
+        parts.append(literal_regex(pattern[pos : m.start()]))
+        token, spec = m.group(1), m.group(2)
+        if token == "date" and date_rx is None:
+            date_rx = date_spec_regex(spec or DEFAULT_DATE_SPEC, locale)
+            if date_rx is None:
+                return None
+            parts.append(date_rx.pattern)
+        elif token == "name" and not have_name and spec is None:
+            have_name = True
+            parts.append(r"(?P<name>.+)")
+        else:
+            return None
+        pos = m.end()
+    parts.append(literal_regex(pattern[pos:]))
+    if date_rx is None or not have_name:
+        return None
+    match = re.fullmatch("".join(parts), text.strip(), flags=re.IGNORECASE)
+    if match is None:
+        return None
+    date = date_rx.to_date(match)
+    if date is None:
+        return None
+    return date, match.group("name")
+
+
+def render_pattern(pattern: str, values: Dict[str, Any], *, date_locale: str = "en") -> str:
     """Fill ``{token}`` / ``{token:spec}`` placeholders from *values*.
+
+    ``{date}`` takes a ``(year, month, day)`` tuple and a date format such as
+    ``{date:YYYY MMMM D}`` (see :mod:`core.dates`).
 
     Empty values are dropped together with the separators/brackets around them,
     so ``{show} - {code} - {title}`` without a title gives ``Show - S01E01``
@@ -319,6 +402,8 @@ def render_pattern(pattern: str, values: Dict[str, Any]) -> str:
         if value is None or value == "":
             any_empty = True
             return ""
+        if token == "date":
+            return format_date(value, spec or DEFAULT_DATE_SPEC, date_locale)
         if spec:
             if spec.isdigit():
                 try:
@@ -364,6 +449,16 @@ def builtin_profiles() -> List[Profile]:
             ),
             strip_release_junk=False,
             builtin=True,
+        ),
+        Profile(
+            # Folders mode. Reproduces the old "Rename Folders" tool: 2006 juli 13 - Holiday.
+            id=DATE_NAME_ID,
+            name="Date + name (Dutch)",
+            rules=({"type": "prune_date"},),
+            patterns={"generic": "{date:YYYY MMMM D} - {name}"},
+            strip_release_junk=False,
+            builtin=True,
+            date_locale="nl",
         ),
     ]
 

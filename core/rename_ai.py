@@ -57,12 +57,19 @@ def _system_prompt(mode: str) -> str:
             + ". {name} is the cleaned original name, {parent} the cleaned name of the containing "
             "folder, {n} a 1-based counter among siblings ({n:02} zero-pads). Default pattern "
             "\"{name}\": only set one when the example adds or reorders parts. Set "
-            "\"strip_release_junk\" to false."
+            "\"strip_release_junk\" to false.\n"
+            "{date} is the earliest date found in the video file names inside a folder; it cannot be "
+            "worked out from the example, so only use it when the new names contain a date. Give it a "
+            "format after a colon, e.g. \"{date:YYYY MMMM D} - {name}\" (YYYY year, MMMM month name, "
+            "MMM short month name, MM month number, DD day with 2 digits, D day). Set \"date_locale\" "
+            "to \"nl\" for Dutch month names (juli) or \"en\" for English (July). Folders without a "
+            "date are left alone. When a date moves into the pattern, add the \"prune_date\" rule so "
+            "an old date in the name is not repeated."
         )
     return (
         "You design rename profiles for a file-renaming tool. Reply with ONE JSON object only:\n"
         '{"name": "<short profile name, max 30 chars>", "rules": [...], '
-        '"patterns": {...}, "strip_release_junk": true|false}\n\n'
+        '"patterns": {...}, "strip_release_junk": true|false, "date_locale": "en"|"nl"}\n\n'
         f"{context}\n\n"
         "Rules run in order over each name. Allowed rule objects:\n"
         '- {"type": "replace", "find": "<text>", "with": "<text>"}  (literal, every occurrence)\n'
@@ -71,7 +78,8 @@ def _system_prompt(mode: str) -> str:
         "  (removes the bracket AND its content; pick only the kinds needed)\n"
         f'- {{"type": "case", "mode": one of {", ".join(CASE_MODES)}}}\n'
         '- {"type": "regex_replace", "pattern": "<python regex>", "with": "<text>"}  '
-        "(last resort, only when nothing simpler works)\n\n"
+        "(last resort, only when nothing simpler works)\n"
+        '- {"type": "prune_date"}  (folders mode: removes dates like 2006, 13 juli 2006 or 2006-07-13 from the name)\n\n'
         "Prefer the simplest rules that reproduce ALL examples. Whitespace is collapsed and "
         "leading/trailing spaces, dashes, dots and underscores are trimmed automatically. "
         "Do not invent tokens. Patterns must not contain / or \\. Give a short descriptive "

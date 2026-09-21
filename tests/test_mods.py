@@ -24,7 +24,7 @@ from core.mods.manifest import MISSING  # noqa: E402
 
 BUILTIN_IDS = {
     "convert", "trim", "stitch", "download", "rename", "subtitle_translate",
-    "subtitle_cleanup", "vts", "audio", "dedup", "rename_folders",
+    "subtitle_cleanup", "vts", "audio", "dedup",
 }
 
 # Every route the API had before features became mods; none may disappear.

@@ -20,7 +20,7 @@ Toolbox separates **business logic** from **front-ends**. Every feature is imple
                            │
 ┌──────────────────────────▼──────────────────────────────────┐
 │  core/                                                      │
-│  convert · vts · rename · audio · download · rename_folders │
+│  convert · vts · rename · audio · download · dates          │
 │  tools · ffmpeg_bootstrap · progress · probe · paths        │
 └──────────────────────────┬──────────────────────────────────┘
                            │ subprocess / filesystem
@@ -42,10 +42,11 @@ Toolbox separates **business logic** from **front-ends**. Every feature is imple
 | `vts.py` | DVD VIDEO_TS join |
 | `rename.py` | Media library rename (shows/movies), dedup, undo journal |
 | `rename_profiles.py` | Format profiles: cleanup rules, name patterns, saved-profile store |
-| `rename_generic.py` | Folders mode: rename folders/files in place with a profile |
+| `rename_generic.py` | Folders mode: rename folders/files in place with a profile (incl. `{date}`, idempotent re-runs) |
 | `rename_ai.py` | AI-generated profiles from before/after examples (verified, never renames) |
 | `openai_client.py` | Shared OpenAI key/model settings |
-| `rename_folders.py` | Date-stamp folder names from video filenames |
+| `dates.py` | Dates in names: read them from DV/MP4 file names, format (`{date:YYYY MMMM D}`), prune them |
+| `rename_folders.py` | Deprecated `rename_folders` CLI command, now a shim over the *Date + name (Dutch)* profile |
 | `audio.py` | MKV default audio track |
 | `download.py` | yt-dlp wrapper (CLI + cancellable API downloads) |
 | `tools.py` | ffmpeg discovery, background first-run bootstrap + verify |

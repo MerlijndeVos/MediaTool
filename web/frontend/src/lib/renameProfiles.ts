@@ -3,7 +3,8 @@ export type RuleType =
   | "remove_words"
   | "remove_brackets"
   | "case"
-  | "regex_replace";
+  | "regex_replace"
+  | "prune_date";
 
 export interface RenameRule {
   type: RuleType;
@@ -23,10 +24,19 @@ export interface RenameProfile {
   rules: RenameRule[];
   patterns: Partial<Record<PatternKey, string>>;
   strip_release_junk: boolean;
+  /** Language of month names for the {date} token and the "remove dates" rule. */
+  date_locale?: DateLocale;
   builtin?: boolean;
 }
 
 export type RenameMode = "media" | "generic";
+
+export type DateLocale = "en" | "nl";
+
+export const DATE_LOCALE_OPTIONS: { value: DateLocale; label: string }[] = [
+  { value: "en", label: "English (July)" },
+  { value: "nl", label: "Dutch (juli)" },
+];
 
 export const RULE_LABELS: Record<RuleType, string> = {
   replace: "Replace text",
@@ -34,6 +44,7 @@ export const RULE_LABELS: Record<RuleType, string> = {
   remove_brackets: "Remove bracketed text",
   case: "Letter case",
   regex_replace: "Regex replace (advanced)",
+  prune_date: "Remove dates from name",
 };
 
 export const CASE_OPTIONS = [
@@ -53,8 +64,13 @@ export const BRACKET_KINDS = [
 export const PATTERN_TOKENS: Record<PatternKey, string[]> = {
   tv: ["show", "season", "episode", "episode_end", "code", "title", "year"],
   movie: ["title", "year"],
-  generic: ["name", "parent", "n"],
+  generic: ["name", "parent", "n", "date"],
 };
+
+/** Text a token chip inserts (a date needs a format to be useful). */
+export function tokenSnippet(token: string): string {
+  return token === "date" ? "{date:YYYY-MM-DD}" : `{${token}}`;
+}
 
 export const DEFAULT_PATTERNS: Record<PatternKey, string> = {
   tv: "{show} - {code} - {title}",
@@ -80,6 +96,8 @@ export function newRule(type: RuleType): RenameRule {
       return { type, mode: "title" };
     case "regex_replace":
       return { type, pattern: "", with: "" };
+    case "prune_date":
+      return { type };
   }
 }
 
@@ -117,6 +135,7 @@ export function profilesEqual(a: RenameProfile, b: RenameProfile): boolean {
       rules: p.rules,
       patterns: Object.fromEntries(Object.entries(p.patterns).filter(([, v]) => v)),
       strip_release_junk: p.strip_release_junk,
+      date_locale: p.date_locale ?? "en",
     });
   return strip(a) === strip(b);
 }

@@ -610,10 +610,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     # ------------------------------------------------------------------
     rename_folders = subparsers.add_parser(
         "rename_folders",
-        help='Rename subfolders to "YYYY maand DD - Description" using dates from video filenames.',
+        help="(Deprecated) Date-stamp subfolders, e.g. 2006 juli 13 - Holiday.",
         description=(
-            "Rename direct subfolders of --root to Dutch date-stamped names "
-            "(e.g. 2006 juli 13 - Holiday). Dates are taken from video filenames inside each folder."
+            "Deprecated: use 'rename --mode generic --profile \"Date + name (Dutch)\"' instead, which "
+            "does the same and supports undo. Renames direct subfolders of --root to Dutch date-stamped "
+            "names (e.g. 2006 juli 13 - Holiday); dates come from video filenames inside each folder."
         ),
     )
     rename_folders.add_argument(

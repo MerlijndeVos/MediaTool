@@ -11,7 +11,7 @@ from typing import AsyncIterator, Optional
 from core.download import probe_url
 from core.rename import preview_media_name
 from core.rename_ai import generate_profile
-from core.rename_generic import preview_generic_name
+from core.rename_generic import preview_generic
 from core.rename_profiles import (
     ProfileError,
     delete_profile,
@@ -195,7 +195,7 @@ def rename_profile_test(body: RenameProfileTestRequest) -> RenameProfileTestResp
             result = preview_media_name(profile, sample)
             note = None if result else "Not recognised as an episode or movie (needs SxxExx or a year)."
         else:
-            result, note = preview_generic_name(profile, sample), None
+            result, note = preview_generic(profile, sample)
         results.append(RenameProfileTestItem(sample=sample, result=result, note=note))
     return RenameProfileTestResponse(results=results)
 
