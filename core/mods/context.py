@@ -34,7 +34,7 @@ class ModContext:
         self.cancel_event = cancel_event or threading.Event()
         self._on_log = on_log
         self._on_progress = on_progress
-        self._logger = logging.getLogger(f"media_tool.mod.{mod_id}")
+        self._logger = logging.getLogger(f"toolbox.mod.{mod_id}")
         self._tools: tuple[str, str] | None = None
         self.undo_manifest: Optional[dict] = None
 

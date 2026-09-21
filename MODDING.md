@@ -1,8 +1,8 @@
 # Writing mods
 
-A **mod** adds one tool to Media Tool: it shows up in the sidebar and home screen, gets an
+A **mod** adds one tool to Toolbox: it shows up in the sidebar and home screen, gets an
 automatically generated form, runs as a normal background job (live log, progress, cancel),
-and is also a `media-tool <id>` command. Media Tool's own features are mods too. Their
+and is also a `toolbox <id>` command. Toolbox's own features are mods too. Their
 folders in [`builtin_mods/`](builtin_mods) are working examples.
 
 A mod is a folder with two files:
@@ -16,14 +16,14 @@ my-mod/
 ## Try the example
 
 1. Copy [`examples/mods/count-files`](examples/mods/count-files) into your mods folder.
-   Find it in **Settings → Mods → Open mods folder** or with `media-tool mods folder`.
-2. **Settings → Mods → Rescan**, then turn **Count Files** on (or `media-tool mods enable count-files`).
+   Find it in **Settings → Mods → Open mods folder** or with `toolbox mods folder`.
+2. **Settings → Mods → Rescan**, then turn **Count Files** on (or `toolbox mods enable count-files`).
 3. Open **Count Files** in the sidebar (group *Other*), or run
-   `media-tool count-files --folder D:\Videos`.
+   `toolbox count-files --folder D:\Videos`.
 
 Mods you add yourself always start **off**. Nothing from a mod runs until you turn it on, and
-`main.py` is only imported when you actually run the mod. Start Media Tool with `--no-mods`
-(or set `MEDIA_TOOL_NO_MODS=1`) to load none of them, for example if one misbehaves.
+`main.py` is only imported when you actually run the mod. Start Toolbox with `--no-mods`
+(or set `TOOLBOX_NO_MODS=1`) to load none of them, for example if one misbehaves.
 
 ## `mod.toml`
 
@@ -145,18 +145,18 @@ requests instead. Built-in mods with a custom panel do this (see `builtin_mods/r
 
 ## What a mod can import
 
-Mods run inside Media Tool's own Python, so they can use the **standard library** and the
-packages Media Tool ships with (`yt_dlp`, `openai`, `pydantic`, `certifi`). There is no way to
+Mods run inside Toolbox's own Python, so they can use the **standard library** and the
+packages Toolbox ships with (`yt_dlp`, `openai`, `pydantic`, `certifi`). There is no way to
 install extra packages for a mod. If your mod has helper modules, put them next to `main.py`
 and import them relatively: `from .helpers import tidy`.
 
-In the installed (packaged) app only the parts of the standard library that Media Tool or the
-list in `packaging/media-tool.spec` use are bundled. If a mod needs an unusual stdlib module and
+In the installed (packaged) app only the parts of the standard library that Toolbox or the
+list in `packaging/toolbox.spec` use are bundled. If a mod needs an unusual stdlib module and
 fails with `ModuleNotFoundError`, that module needs adding to the list.
 
 ## Security
 
-**A mod is code that runs with the same access as Media Tool.** It can read, change and delete
+**A mod is code that runs with the same access as Toolbox.** It can read, change and delete
 any file you can, use the network and start programs. Python cannot sandbox that, so:
 
 - Only turn on mods from people you trust, and read `main.py` first (or ask an AI assistant to
@@ -174,7 +174,7 @@ Paste this into any AI assistant and replace the last paragraph with what you wa
 the result (see Security above) before you install it.
 
 ````text
-You are helping me build a mod for Media Tool, a desktop app that converts, renames and
+You are helping me build a mod for Toolbox, a desktop app that converts, renames and
 organizes media files with ffmpeg and yt-dlp. A mod adds one new tool to the app. Write the
 complete mod for the feature I describe at the bottom.
 

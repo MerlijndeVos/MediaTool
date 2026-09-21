@@ -140,7 +140,7 @@ export default function App() {
             type="button"
             onClick={() => setView("home")}
             className="flex items-center gap-2.5 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            aria-label="Media Tool home"
+            aria-label="Toolbox home"
           >
             <img
               src="/app/favicon.svg"
@@ -149,7 +149,7 @@ export default function App() {
               width={32}
               height={32}
             />
-            <h1 className="text-base font-semibold leading-none">Media Tool</h1>
+            <h1 className="text-base font-semibold leading-none">Toolbox</h1>
           </button>
           <div className="flex items-center gap-2">
             <span

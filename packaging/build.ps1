@@ -24,8 +24,8 @@ Write-Host "==> Rendering app icons"
 python packaging/icons/render_icons.py
 
 Write-Host "==> Running PyInstaller"
-pyinstaller packaging/media-tool.spec --noconfirm --clean
+pyinstaller packaging/toolbox.spec --noconfirm --clean
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-Write-Host "==> Done: dist/MediaTool/MediaTool.exe"
+Write-Host "==> Done: dist/Toolbox/Toolbox.exe"
 Write-Host "    Optional installer: iscc /DMyAppVersion=$Version packaging/windows/setup.iss"

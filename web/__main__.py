@@ -1,4 +1,4 @@
-"""Run the Media Tool API server on localhost.
+"""Run the Toolbox API server on localhost.
 
 Usage::
 
@@ -20,7 +20,7 @@ DEFAULT_PORT = 8765
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Media Tool local API server")
+    parser = argparse.ArgumentParser(description="Toolbox local API server")
     parser.add_argument(
         "--port",
         type=int,
@@ -50,7 +50,7 @@ def main() -> None:
         ) from exc
 
     port = require_port(args.port, args.host) if args.host == DEFAULT_HOST else args.port
-    print(f"Media Tool API: http://{args.host}:{port}")
+    print(f"Toolbox API: http://{args.host}:{port}")
     print(f"  OpenAPI docs: http://{args.host}:{port}/docs")
     frontend_dist = Path(__file__).resolve().parent / "frontend" / "dist"
     if frontend_dist.is_dir():

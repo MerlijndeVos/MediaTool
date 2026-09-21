@@ -1,4 +1,4 @@
-"""Media Tool core library.
+"""Toolbox core library.
 
 All business logic lives here, independent of any front-end. The CLI
 (``cli`` package), web API (``web``), and desktop app all call the same

@@ -27,7 +27,7 @@ export function UpdateProgress({ applyStatus, applying }: UpdateProgressProps) {
       )}
       {applyStatus.phase === "installing" && (
         <p className="text-xs text-muted-foreground">
-          A setup progress window should appear on Windows. Media Tool will reopen when installation
+          A setup progress window should appear on Windows. Toolbox will reopen when installation
           finishes.
         </p>
       )}

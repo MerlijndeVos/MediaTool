@@ -1,4 +1,4 @@
-"""Command-line argument definitions for Media Tool."""
+"""Command-line argument definitions for Toolbox."""
 
 import argparse
 import sys
@@ -17,8 +17,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         set_safe_mode(True)
 
     parser = argparse.ArgumentParser(
-        prog="media-tool",
-        description="Media tool: convert DV files to MP4, or rename/organize TV & movie libraries.",
+        prog="toolbox",
+        description="Toolbox: convert DV files to MP4, or rename/organize TV & movie libraries.",
     )
     parser.add_argument(
         "--no-file-log",

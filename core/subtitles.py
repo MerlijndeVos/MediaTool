@@ -341,7 +341,7 @@ def translate_cues_batch(
         from openai import OpenAI
     except ImportError as exc:
         raise RuntimeError(
-            "The openai package is not installed. Reinstall Media Tool with web/desktop extras."
+            "The openai package is not installed. Reinstall Toolbox with web/desktop extras."
         ) from exc
 
     client = OpenAI(api_key=_openai_api_key())

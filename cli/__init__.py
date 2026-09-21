@@ -1,4 +1,4 @@
-"""Media Tool command-line interface."""
+"""Toolbox command-line interface."""
 
 from .args import parse_args
 

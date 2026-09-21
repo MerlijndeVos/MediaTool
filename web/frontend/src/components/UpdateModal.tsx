@@ -67,7 +67,7 @@ export function UpdateModal({
             <div className="min-w-0 space-y-1">
               <CardTitle id="update-modal-title">Update available</CardTitle>
               <CardDescription id="update-modal-description">
-                Media Tool v{latestVersion} is ready to install. You&apos;re on v{currentVersion}.
+                Toolbox v{latestVersion} is ready to install. You&apos;re on v{currentVersion}.
               </CardDescription>
             </div>
           </div>

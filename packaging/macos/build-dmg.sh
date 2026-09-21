@@ -10,13 +10,13 @@ else
 fi
 DIST="$ROOT/dist"
 OUT="$ROOT/packaging/dist"
-APP_NAME="Media Tool.app"
-DMG_NAME="MediaTool-${VERSION}-macos.dmg"
+APP_NAME="Toolbox.app"
+DMG_NAME="Toolbox-${VERSION}-macos.dmg"
 
 cd "$ROOT"
 
 if [[ ! -d "$DIST/$APP_NAME" ]]; then
-  echo "Missing $DIST/$APP_NAME — run pyinstaller packaging/media-tool.spec first." >&2
+  echo "Missing $DIST/$APP_NAME — run pyinstaller packaging/toolbox.spec first." >&2
   exit 1
 fi
 
@@ -26,6 +26,6 @@ rm -rf "$STAGING"
 mkdir -p "$STAGING"
 cp -R "$DIST/$APP_NAME" "$STAGING/"
 
-hdiutil create -volname "Media Tool" -srcfolder "$STAGING" -ov -format UDZO "$OUT/$DMG_NAME"
+hdiutil create -volname "Toolbox" -srcfolder "$STAGING" -ov -format UDZO "$OUT/$DMG_NAME"
 rm -rf "$STAGING"
 echo "Created $OUT/$DMG_NAME"

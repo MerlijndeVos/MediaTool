@@ -10,7 +10,7 @@ import { isDesktopApp } from "@/lib/desktop";
 import { isNewerVersionAvailable } from "@/lib/version";
 
 const CHECK_INTERVAL_MS = 60 * 60 * 1000;
-const SKIPPED_UPDATE_KEY = "media-tool-skipped-update";
+const SKIPPED_UPDATE_KEY = "toolbox-skipped-update";
 
 export function useUpdates() {
   const [check, setCheck] = useState<UpdateCheck | null>(null);

@@ -1,12 +1,12 @@
 # Contributing
 
-Thanks for your interest in Media Tool. New features should land in `core/` first, then get wired into the CLI and web API.
+Thanks for your interest in Toolbox. New features should land in `core/` first, then get wired into the CLI and web API.
 
 ## Development setup
 
 ```powershell
-git clone https://github.com/MerlijndeVos/MediaTool.git
-cd MediaTool
+git clone https://github.com/MerlijndeVos/Toolbox.git
+cd Toolbox
 python -m venv .venv
 .venv\Scripts\activate          # Windows
 pip install -e ".[desktop,pack]"

@@ -318,8 +318,8 @@ def parse_manifest(data: dict[str, Any]) -> ModManifest:
     api_version = _expect(data, "api_version", int, where, API_VERSION)
     if api_version > API_VERSION:
         raise ManifestError(
-            f"needs mod API version {api_version}, but this Media Tool supports {API_VERSION}. "
-            "Update Media Tool or use an older version of the mod."
+            f"needs mod API version {api_version}, but this Toolbox supports {API_VERSION}. "
+            "Update Toolbox or use an older version of the mod."
         )
     if api_version < 1:
         raise ManifestError("'api_version' must be 1 or higher.")

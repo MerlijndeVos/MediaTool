@@ -45,6 +45,6 @@ def app_version() -> str:
     try:
         from importlib.metadata import version
 
-        return normalize_version(version("media-tool"))
+        return normalize_version(version("toolbox"))
     except Exception:
         return read_pyproject_version()

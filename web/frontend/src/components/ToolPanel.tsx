@@ -138,7 +138,7 @@ function BuiltinPanel({
     default:
       return (
         <p className="text-sm text-muted-foreground">
-          This tool needs a panel ({panel}) that this version of Media Tool does not have.
+          This tool needs a panel ({panel}) that this version of Toolbox does not have.
         </p>
       );
   }

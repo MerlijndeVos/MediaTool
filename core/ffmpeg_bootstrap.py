@@ -1,4 +1,4 @@
-"""First-run download of ffmpeg/ffprobe builds sized for Media Tool."""
+"""First-run download of ffmpeg/ffprobe builds sized for Toolbox."""
 
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ EVERMEET_FFPROBE = "https://evermeet.cx/ffprobe/getrelease/zip"
 
 def _download(url: str, dest: Path, log: LogFn) -> None:
     log(f"Downloading {url}")
-    req = urllib.request.Request(url, headers={"User-Agent": "MediaTool/0.1"})
+    req = urllib.request.Request(url, headers={"User-Agent": "Toolbox/0.1"})
     with urllib.request.urlopen(req, timeout=300) as resp:
         data = resp.read()
     dest.write_bytes(data)

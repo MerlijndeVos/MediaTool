@@ -1,8 +1,8 @@
-"""CLI support for mods: ``media-tool mods ...`` and one subcommand per enabled mod without one.
+"""CLI support for mods: ``toolbox mods ...`` and one subcommand per enabled mod without one.
 
 A user mod ``count-files`` with a ``folder`` param becomes::
 
-    media-tool count-files --folder D:\\Videos
+    toolbox count-files --folder D:\\Videos
 
 Built-in features keep their hand-written subcommands in :mod:`cli.args`; a new built-in
 mod without one gets a generated subcommand the same way a user mod does.
@@ -109,7 +109,7 @@ def register(subparsers: Any) -> None:
 
 def _print_mods() -> None:
     if safe_mode():
-        print("Safe mode: user mods are off (--no-mods / MEDIA_TOOL_NO_MODS).")
+        print("Safe mode: user mods are off (--no-mods / TOOLBOX_NO_MODS).")
     for mod in registry.all():
         if mod.builtin:
             state = "built-in"
@@ -146,7 +146,7 @@ def _run_mod(mod: Mod, args: argparse.Namespace) -> None:
     except ModError as exc:
         print(f"Error: {exc}", file=sys.stderr)
         sys.exit(1)
-    except Exception as exc:  # a broken mod must not look like a crash of Media Tool
+    except Exception as exc:  # a broken mod must not look like a crash of Toolbox
         console_log(f"Error in mod '{mod.id}': {exc}", 40)
         sys.exit(1)
 

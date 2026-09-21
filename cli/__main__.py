@@ -1,9 +1,9 @@
-"""Media Tool command-line interface.
+"""Toolbox command-line interface.
 
 Run with::
 
     python -m cli convert --input ... --output ...
-    media-tool convert --input ... --output ...   # after pip install -e .
+    toolbox convert --input ... --output ...   # after pip install -e .
 """
 
 import sys

@@ -1,4 +1,4 @@
-# Media Tool vX.Y.Z
+# Toolbox vX.Y.Z
 
 ## What's new
 
@@ -7,13 +7,13 @@
 
 ## Install
 
-Download from [GitHub Releases](https://github.com/MerlijndeVos/MediaTool/releases/tag/vX.Y.Z):
+Download from [GitHub Releases](https://github.com/MerlijndeVos/Toolbox/releases/tag/vX.Y.Z):
 
 | Platform | File |
 |----------|------|
-| Windows | `MediaTool-Setup-X.Y.Z-win64.exe` |
-| macOS | `MediaTool-X.Y.Z-macos.dmg` |
-| Linux | `MediaTool-X.Y.Z-linux-{arch}.AppImage` |
+| Windows | `Toolbox-Setup-X.Y.Z-win64.exe` |
+| macOS | `Toolbox-X.Y.Z-macos.dmg` |
+| Linux | `Toolbox-X.Y.Z-linux-{arch}.AppImage` |
 
 Installers are **unsigned**. Windows SmartScreen and macOS Gatekeeper may ask you to confirm once (“Run anyway” / “Open”).
 
