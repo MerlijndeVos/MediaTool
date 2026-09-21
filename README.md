@@ -12,8 +12,6 @@
 
 </div>
 
-> **Formerly Media Tool.** The app was renamed in version 3.0. Your settings, mods and the ffmpeg download move over automatically on first launch. The command is now `toolbox` (it was `media-tool`), and the safe-mode variable is `TOOLBOX_NO_MODS` (the old `MEDIA_TOOL_NO_MODS` still works).
-
 ---
 
 ## Features
