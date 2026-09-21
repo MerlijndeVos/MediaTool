@@ -44,7 +44,7 @@ Toolbox separates **business logic** from **front-ends**. Every feature is imple
 | `rename_profiles.py` | Format profiles: cleanup rules, name patterns, saved-profile store |
 | `rename_generic.py` | Other mode: rename folders/files in place with a profile (incl. `{date}`, idempotent re-runs) |
 | `rename_ai.py` | AI-generated profiles from before/after examples (verified, never renames) |
-| `openai_client.py` | Shared OpenAI key/model settings |
+| `ai/` | AI providers behind one interface (see below) |
 | `dates.py` | Dates in names: read them from DV/MP4 file names, format (`{date:YYYY MMMM D}`), prune them |
 | `rename_folders.py` | Deprecated `rename_folders` CLI command, now a shim over the *Date + name (Dutch)* profile |
 | `audio.py` | MKV default audio track |
@@ -54,6 +54,22 @@ Toolbox separates **business logic** from **front-ends**. Every feature is imple
 | `runtime.py` | Frozen-app paths, user data directory |
 | `progress.py` | `on_log` / `on_progress` callbacks for any front-end |
 | `mods/` | The mod system: manifest parser, registry (built-in + user mods), the `ctx` a mod receives |
+
+### AI providers (`core/ai/`)
+
+Subtitle translation (`subtitles.py`) and rename-profile generation (`rename_ai.py`) never talk to an SDK or an HTTP API. They call `get_provider()` and then `provider.complete_json(messages, temperature=...)`, which returns the model's JSON (`JsonResult.text` is what it said, `.data` the parsed value) or raises `AiError` with a message that is safe to show as-is. Tests pass their own `provider=` to both features.
+
+| Module | Responsibility |
+|--------|----------------|
+| `base.py` | `Provider` interface, `AiError` / `AiConfigError` / `InvalidJsonError`, tolerant JSON parsing (code fences, `<think>` blocks, prose around the object), HTTP error text, and the retrying HTTPS transport the native adapters share |
+| `openai_provider.py` | OpenAI **and** any OpenAI-compatible server (custom `base_url`), via the `openai` SDK. Uses `response_format=json_object`; if the server rejects it, retries with a prompt-only JSON instruction and remembers that per (URL, model) for the session |
+| `anthropic_provider.py` | Native Messages API over `httpx`. JSON comes from a forced tool call (there is no JSON mode) |
+| `gemini_provider.py` | Native `generateContent` API over `httpx` with `responseMimeType: application/json` |
+| `config.py` | Which provider is selected, per-provider key/model/base URL, env-var fallback, validation |
+
+Settings live in `settings.json` under `ai` (`provider`, and `providers.<id>.{api_key, model, base_url}` for `openai`, `openai_compatible`, `anthropic`, `gemini`), so switching provider never loses another provider's key. A key saved in settings wins over `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `GEMINI_API_KEY`. Settings from before providers existed (flat `openai_api_key` / `openai_model`) are still read, and moved under `ai` the first time AI settings are saved. The API never returns keys, only whether one is set.
+
+To add a provider: write an adapter with `complete_json`, add a `ProviderSpec` in `config.py`, return it from `build_provider` in `__init__.py`, and add its entry to `web/frontend/src/lib/aiProviders.ts`.
 
 `core` does not import FastAPI, React, pywebview, or argparse.
 

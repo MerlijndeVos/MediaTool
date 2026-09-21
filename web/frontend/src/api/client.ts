@@ -184,11 +184,34 @@ export interface LogsStats {
   files: LogFileInfo[];
 }
 
+export type AiProviderId = "openai" | "openai_compatible" | "anthropic" | "gemini";
+
+export interface AiProviderSettings {
+  api_key_set: boolean;
+  /** The key comes from an environment variable rather than the saved settings. */
+  api_key_from_env: boolean;
+  /** Effective model id (the saved one, or the provider default). */
+  model: string;
+  default_model: string;
+  base_url: string;
+}
+
+export interface AiSettings {
+  provider: AiProviderId;
+  providers: Record<AiProviderId, AiProviderSettings>;
+}
+
 export interface AppSettings {
   file_logging: boolean;
-  openai_api_key_set: boolean;
-  openai_model: string;
+  ai: AiSettings;
   logs: LogsStats;
+}
+
+/** Omitted fields are kept; an empty string clears the field. */
+export interface AiProviderUpdate {
+  api_key?: string;
+  model?: string;
+  base_url?: string;
 }
 
 export function fetchSettings(): Promise<AppSettings> {
@@ -197,12 +220,29 @@ export function fetchSettings(): Promise<AppSettings> {
 
 export function updateSettings(patch: {
   file_logging?: boolean;
-  openai_api_key?: string;
-  openai_model?: string;
+  ai?: {
+    provider?: AiProviderId;
+    providers?: Partial<Record<AiProviderId, AiProviderUpdate>>;
+  };
 }): Promise<AppSettings> {
   return request<AppSettings>("/api/settings", {
     method: "PATCH",
     body: JSON.stringify(patch),
+  });
+}
+
+export interface AiTestResult {
+  ok: boolean;
+  message: string;
+}
+
+/** Try a provider with the form values; blank fields fall back to the saved ones. */
+export function testAiConnection(
+  body: AiProviderUpdate & { provider: AiProviderId },
+): Promise<AiTestResult> {
+  return request<AiTestResult>("/api/ai/test", {
+    method: "POST",
+    body: JSON.stringify(body),
   });
 }
 

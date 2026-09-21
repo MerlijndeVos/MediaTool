@@ -634,9 +634,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     # ------------------------------------------------------------------
     subtitle_translate = subparsers.add_parser(
         "subtitle_translate",
-        help="Translate SRT subtitles with OpenAI.",
+        help="Translate SRT subtitles with an AI provider.",
         description=(
-            "Translate .srt subtitle files using OpenAI. Output files use the target "
+            "Translate .srt subtitle files using the AI provider chosen in settings. Output files use the target "
             "language suffix (e.g. Show.en.srt -> Show.de.srt)."
         ),
     )
@@ -664,7 +664,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     subtitle_translate.add_argument(
         "--dry-run",
         action="store_true",
-        help="Show planned actions without calling OpenAI or writing files.",
+        help="Show planned actions without calling the AI provider or writing files.",
     )
 
     # ------------------------------------------------------------------

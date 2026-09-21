@@ -13,6 +13,8 @@ dependencies = [
     "yt-dlp>=2024.0.0",
     "yt-dlp-ejs>=0.8.0",
     "openai>=1.0.0",
+    # Talks to Anthropic and Gemini directly (see core/ai); already installed with openai.
+    "httpx>=0.27.0",
     # yt-dlp's optional TLS bundle; no longer pulled in transitively (openai 3.x uses truststore).
     "certifi>=2024.0.0",
 ]

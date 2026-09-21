@@ -146,7 +146,7 @@ requests instead. Built-in mods with a custom panel do this (see `builtin_mods/r
 ## What a mod can import
 
 Mods run inside Toolbox's own Python, so they can use the **standard library** and the
-packages Toolbox ships with (`yt_dlp`, `openai`, `pydantic`, `certifi`). There is no way to
+packages Toolbox ships with (`yt_dlp`, `openai`, `httpx`, `pydantic`, `certifi`). To call an AI model, use `core.ai.get_provider()` so the user's chosen provider is used. There is no way to
 install extra packages for a mod. If your mod has helper modules, put them next to `main.py`
 and import them relatively: `from .helpers import tidy`.
 

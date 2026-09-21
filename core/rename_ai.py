@@ -12,7 +12,7 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from .openai_client import new_client, openai_model
+from .ai import InvalidJsonError, Provider, get_provider
 from .rename import SUBTITLE_EXTENSIONS, VIDEO_EXTENSIONS, preview_media_name
 from .rename_generic import preview_generic_name
 from .rename_profiles import (
@@ -152,7 +152,7 @@ def generate_profile(
     mode: str,
     *,
     model: Optional[str] = None,
-    client: Any = None,
+    provider: Optional[Provider] = None,
 ) -> Dict[str, Any]:
     """Ask the model for a profile that turns each *before* into its *after*.
 
@@ -163,8 +163,7 @@ def generate_profile(
     if mode not in MODES:
         raise ProfileError("mode must be 'media' or 'generic'.")
     examples = _clean_examples(examples)
-    model_name = openai_model(model)
-    client = client or new_client()
+    provider = provider or get_provider(model)
 
     messages: List[Dict[str, str]] = [
         {"role": "system", "content": _system_prompt(mode)},
@@ -174,21 +173,24 @@ def generate_profile(
     best: Optional[Dict[str, Any]] = None
     last_error: Optional[str] = None
     for attempt in range(1, MAX_ATTEMPTS + 1):
-        response = client.chat.completions.create(
-            model=model_name,
-            messages=messages,
-            response_format={"type": "json_object"},
-            temperature=0,
-        )
-        raw = response.choices[0].message.content or "{}"
-        messages.append({"role": "assistant", "content": raw})
+        try:
+            reply = provider.complete_json(messages, temperature=0)
+        except InvalidJsonError as exc:
+            # Unusable JSON: let the model see what it sent and try again.
+            last_error = str(exc)
+            messages.append({"role": "assistant", "content": exc.raw})
+            messages.append(
+                {"role": "user", "content": "That was not valid JSON. Reply with the corrected JSON object only."}
+            )
+            continue
+        messages.append({"role": "assistant", "content": reply.text})
 
         try:
-            data = json.loads(raw)
+            data = reply.data
             if isinstance(data, dict):
                 data.pop("id", None)  # never trust an id from the model
             profile = profile_from_dict(data)
-        except (json.JSONDecodeError, ProfileError) as exc:
+        except ProfileError as exc:
             last_error = str(exc)
             messages.append(
                 {"role": "user", "content": f"That profile was invalid: {exc}. Reply with corrected JSON only."}
@@ -202,7 +204,7 @@ def generate_profile(
             "verification": verification,
             "all_ok": all_ok,
             "attempts": attempt,
-            "model": model_name,
+            "model": provider.model,
         }
         if all_ok:
             return best

@@ -7,7 +7,7 @@ import { LogDrawer } from "@/components/LogDrawer";
 import { ToolsBanner } from "@/components/ToolsBanner";
 import { LoggingPanel } from "@/components/LoggingPanel";
 import { ModsPanel } from "@/components/ModsPanel";
-import { OpenAiSettingsPanel } from "@/components/OpenAiSettingsPanel";
+import { AiSettingsPanel } from "@/components/AiSettingsPanel";
 import { ToolPanel } from "@/components/ToolPanel";
 import { UpdateModal } from "@/components/UpdateModal";
 import { UpdatesPanel } from "@/components/UpdatesPanel";
@@ -18,7 +18,7 @@ import { useUpdates } from "@/hooks/useUpdates";
 import type { DownloadJobMeta, ToolId } from "@/lib/types";
 import { useJobRunner } from "@/hooks/useJobRunner";
 
-type AppView = "home" | "tools" | "logs" | "openai" | "updates" | "appearance" | "mods";
+type AppView = "home" | "tools" | "logs" | "ai" | "updates" | "appearance" | "mods";
 
 export default function App() {
   const updates = useUpdates();
@@ -232,16 +232,16 @@ export default function App() {
             </button>
             <button
               type="button"
-              onClick={() => setView("openai")}
+              onClick={() => setView("ai")}
               className={cn(
                 "flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors",
-                view === "openai"
+                view === "ai"
                   ? "bg-primary text-primary-foreground"
                   : "text-muted-foreground hover:bg-accent hover:text-foreground",
               )}
             >
               <Bot className="h-4 w-4" />
-              OpenAI
+              AI
             </button>
             {desktop && (
               <button
@@ -321,8 +321,8 @@ export default function App() {
             />
           ) : view === "logs" ? (
             <LoggingPanel onFileLoggingChange={setFileLogging} />
-          ) : view === "openai" ? (
-            <OpenAiSettingsPanel />
+          ) : view === "ai" ? (
+            <AiSettingsPanel />
           ) : view === "updates" ? (
             <UpdatesPanel {...updates} />
           ) : view === "appearance" ? (

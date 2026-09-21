@@ -1,4 +1,4 @@
-"""Translate: translate SRT subtitles with OpenAI (wraps ``core.subtitles``)."""
+"""Translate: translate SRT subtitles with the configured AI provider (wraps ``core.subtitles``)."""
 
 import argparse
 from pathlib import Path
