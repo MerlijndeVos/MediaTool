@@ -11,10 +11,72 @@
       "repo": "https://github.com/MerlijndeVos/Toolbox",
       "path": "examples/mods/count-files",
       "commit": "1bc5226b2232eea2810b470666d54147f0ee52b8",
-      "tags": ["example", "files"],
+      "tags": [
+        "example",
+        "files"
+      ],
       "license": "MIT",
       "homepage": "https://github.com/MerlijndeVos/Toolbox/tree/main/examples/mods/count-files",
-      "permissions": { "network": false, "writes_files": false, "runs_programs": false }
+      "permissions": {
+        "network": false,
+        "writes_files": false,
+        "runs_programs": false
+      },
+      "group": "Other",
+      "type": "tool"
+    },
+    {
+      "id": "folder-report",
+      "name": "Folder Report",
+      "description": "Summarise a folder: totals, a breakdown by type and the largest files. The example that shows sections, conditional fields, a slider, an action button and results.",
+      "author": "Toolbox",
+      "version": "1.0.0",
+      "api_version": 2,
+      "type": "tool",
+      "group": "Files",
+      "repo": "https://github.com/MerlijndeVos/Toolbox",
+      "path": "examples/mods/folder-report",
+      "commit": "2d7f0a33ba839a2d4370c959e04b12fd5ad0ad9b",
+      "tags": [
+        "example",
+        "files",
+        "report"
+      ],
+      "license": "MIT",
+      "homepage": "https://github.com/MerlijndeVos/Toolbox/tree/main/examples/mods/folder-report",
+      "permissions": {
+        "network": false,
+        "writes_files": false,
+        "runs_programs": false
+      }
+    },
+    {
+      "id": "solarized",
+      "name": "Solarized",
+      "description": "Ethan Schoonover's Solarized palette: warm cream in light mode, deep teal in dark mode. The example theme.",
+      "author": "Toolbox",
+      "version": "1.0.0",
+      "api_version": 2,
+      "type": "theme",
+      "swatches": [
+        "#fdf6e3",
+        "#eee8d5",
+        "#073642",
+        "#1f6f9f",
+        "#c42b78",
+        "#5b60b0"
+      ],
+      "repo": "https://github.com/MerlijndeVos/Toolbox",
+      "path": "examples/mods/solarized-theme",
+      "commit": "2d7f0a33ba839a2d4370c959e04b12fd5ad0ad9b",
+      "tags": [
+        "example",
+        "theme",
+        "light",
+        "dark"
+      ],
+      "license": "MIT",
+      "homepage": "https://github.com/MerlijndeVos/Toolbox/tree/main/examples/mods/solarized-theme"
     }
   ]
 }

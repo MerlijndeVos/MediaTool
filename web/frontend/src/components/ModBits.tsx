@@ -41,13 +41,16 @@ export function PlacementChip({
   type,
   group,
   newSection = false,
+  bare = false,
 }: {
   type: "tool" | "theme";
   group?: string;
   newSection?: boolean;
+  /** Just the section name, for places where a label already says "Appears in". */
+  bare?: boolean;
 }) {
-  const text =
-    type === "theme" ? "Theme" : `Appears in ${group || "Other"}${newSection ? " (a new section)" : ""}`;
+  const name = `${group || "Other"}${newSection ? " (a new section)" : ""}`;
+  const text = type === "theme" ? "Theme" : bare ? name : `Appears in ${name}`;
   return (
     <span
       className="inline-block rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground"

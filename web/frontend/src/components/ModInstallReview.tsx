@@ -101,6 +101,7 @@ export function ModInstallReview({ preview, busy, onConfirm, onCancel, onError }
               <PlacementChip
                 type="tool"
                 group={placement?.name ?? manifest.group}
+                bare
                 newSection={placement?.new_section}
               />
               {placement?.new_section && (
