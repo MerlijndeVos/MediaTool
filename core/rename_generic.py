@@ -1,4 +1,4 @@
-"""Rename mode 2 ("Folders"): apply a format profile to folder and/or file names.
+"""Rename mode 2 ("Other"): apply a format profile to folder and/or file names.
 
 Unlike the shows/movies mode nothing is parsed or moved: each name is cleaned by
 the profile's rules, then run through its ``generic`` pattern (tokens ``{name}``,
@@ -160,7 +160,7 @@ def run_generic_rename(
     logger: logging.Logger,
     profile: Profile,
 ) -> Optional[dict]:
-    """Plan (and optionally apply) a Folders-mode rename. Returns the undo manifest."""
+    """Plan (and optionally apply) a Other-mode rename. Returns the undo manifest."""
     root: Path = args.input
     apply = bool(args.apply)
     targets = getattr(args, "targets", "folders")

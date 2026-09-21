@@ -42,7 +42,7 @@ Toolbox separates **business logic** from **front-ends**. Every feature is imple
 | `vts.py` | DVD VIDEO_TS join |
 | `rename.py` | Media library rename (shows/movies), dedup, undo journal |
 | `rename_profiles.py` | Format profiles: cleanup rules, name patterns, saved-profile store |
-| `rename_generic.py` | Folders mode: rename folders/files in place with a profile (incl. `{date}`, idempotent re-runs) |
+| `rename_generic.py` | Other mode: rename folders/files in place with a profile (incl. `{date}`, idempotent re-runs) |
 | `rename_ai.py` | AI-generated profiles from before/after examples (verified, never renames) |
 | `openai_client.py` | Shared OpenAI key/model settings |
 | `dates.py` | Dates in names: read them from DV/MP4 file names, format (`{date:YYYY MMMM D}`), prune them |

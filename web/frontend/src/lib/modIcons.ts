@@ -53,13 +53,3 @@ const MOD_ICONS: Record<string, LucideIcon> = {
 export function modIcon(name: string): LucideIcon {
   return MOD_ICONS[name] ?? Puzzle;
 }
-
-export type GroupAccent = "video" | "subtitles" | "experimental" | "other";
-
-export function groupAccent(group: string): GroupAccent {
-  const key = group.trim().toLowerCase();
-  if (key === "video") return "video";
-  if (key === "subtitles") return "subtitles";
-  if (key === "experimental") return "experimental";
-  return "other";
-}

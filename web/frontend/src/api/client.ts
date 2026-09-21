@@ -241,6 +241,25 @@ export function clearLogFiles(): Promise<{ deleted_count: number; logs: LogsStat
   return request("/api/settings/logs", { method: "DELETE" });
 }
 
+export interface LogChunk {
+  name: string;
+  size_bytes: number;
+  /** Byte offset where this chunk starts; pass it as `end` to get the lines before it. */
+  start: number;
+  end: number;
+  has_earlier: boolean;
+  lines: string[];
+}
+
+/** Last `lines` lines of a stored log, or the lines before byte offset `end`. */
+export function fetchLogChunk(name: string, opts: { end?: number; lines?: number } = {}): Promise<LogChunk> {
+  const params = new URLSearchParams();
+  if (opts.end != null) params.set("end", String(opts.end));
+  if (opts.lines != null) params.set("lines", String(opts.lines));
+  const query = params.toString();
+  return request<LogChunk>(`/api/settings/logs/${encodeURIComponent(name)}${query ? `?${query}` : ""}`);
+}
+
 export function openLogFolder(): Promise<{ ok: boolean }> {
   return request("/api/settings/logs/open-folder", { method: "POST" });
 }

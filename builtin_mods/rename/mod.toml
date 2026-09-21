@@ -4,8 +4,8 @@ description = "Organize TV shows and movies for Plex/Jellyfin, or clean up any f
 version = "1.0.0"
 author = "Toolbox"
 api_version = 1
-group = "Video"
-order = 50
+group = "Files"
+order = 5
 icon = "pen-line"
 
 [ui]

@@ -79,7 +79,7 @@ def _system_prompt(mode: str) -> str:
         f'- {{"type": "case", "mode": one of {", ".join(CASE_MODES)}}}\n'
         '- {"type": "regex_replace", "pattern": "<python regex>", "with": "<text>"}  '
         "(last resort, only when nothing simpler works)\n"
-        '- {"type": "prune_date"}  (folders mode: removes dates like 2006, 13 juli 2006 or 2006-07-13 from the name)\n\n'
+        '- {"type": "prune_date"}  (Other mode: removes dates like 2006, 13 juli 2006 or 2006-07-13 from the name)\n\n'
         "Prefer the simplest rules that reproduce ALL examples. Whitespace is collapsed and "
         "leading/trailing spaces, dashes, dots and underscores are trimmed automatically. "
         "Do not invent tokens. Patterns must not contain / or \\. Give a short descriptive "
@@ -95,7 +95,7 @@ def _strip_known_ext(name: str) -> str:
 
 
 def _strip_shared_suffix(before: str, after: str) -> tuple[str, str]:
-    """Drop a file extension present on both sides (folders mode examples)."""
+    """Drop a file extension present on both sides (Other mode examples)."""
     sb, sa = Path(before).suffix, Path(after).suffix
     if sb and sb.lower() == sa.lower() and len(sb) <= 6 and " " not in sb:
         return before[: -len(sb)], after[: -len(sa)]

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle, ExternalLink, FolderOpen, Loader2, RefreshCw, Trash2 } from "lucide-react";
+import { AlertTriangle, ExternalLink, FileText, FolderOpen, Loader2, RefreshCw, Trash2 } from "lucide-react";
 import {
   clearLogFiles,
   fetchSettings,
@@ -9,9 +9,10 @@ import {
   type AppSettings,
 } from "@/api/client";
 import { CheckField } from "@/components/fields";
+import { LogFileViewer } from "@/components/LogFileViewer";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatBytes } from "@/lib/utils";
+import { cn, formatBytes } from "@/lib/utils";
 
 interface LoggingPanelProps {
   onFileLoggingChange?: (enabled: boolean) => void;
@@ -25,12 +26,14 @@ export function LoggingPanel({ onFileLoggingChange }: LoggingPanelProps) {
   const [clearing, setClearing] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
   const [opening, setOpening] = useState<string | null>(null);
+  const [viewing, setViewing] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
     try {
       const data = await fetchSettings();
       setSettings(data);
+      setViewing((current) => (current && data.logs.files.some((f) => f.name === current) ? current : null));
       onFileLoggingChange?.(data.file_logging);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -64,6 +67,7 @@ export function LoggingPanel({ onFileLoggingChange }: LoggingPanelProps) {
     try {
       const result = await clearLogFiles();
       setSettings((prev) => (prev ? { ...prev, logs: result.logs } : prev));
+      setViewing(null);
       setConfirmClear(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -175,25 +179,35 @@ export function LoggingPanel({ onFileLoggingChange }: LoggingPanelProps) {
           {settings.logs.files.length > 0 ? (
             <ul className="divide-y rounded-md border text-sm">
               {settings.logs.files.map((file) => (
-                <li key={file.name}>
+                <li key={file.name} className={cn("flex items-stretch", viewing === file.name && "bg-muted/60")}>
                   <button
                     type="button"
-                    className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left transition-colors hover:bg-muted/60 disabled:opacity-60"
-                    onClick={() => void handleOpenFile(file.name)}
-                    disabled={opening != null}
-                    title={`Open ${file.name}`}
+                    className="flex min-w-0 flex-1 items-center justify-between gap-3 px-3 py-2 text-left transition-colors hover:bg-muted/60"
+                    onClick={() => setViewing(viewing === file.name ? null : file.name)}
+                    aria-pressed={viewing === file.name}
+                    title={`View ${file.name}`}
                   >
                     <span className="flex min-w-0 items-center gap-2">
-                      {opening === file.name ? (
-                        <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />
-                      ) : (
-                        <ExternalLink className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                      )}
+                      <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                       <span className="truncate font-mono text-xs">{file.name}</span>
                     </span>
                     <span className="shrink-0 text-xs text-muted-foreground">
                       {formatBytes(file.size_bytes)}
                     </span>
+                  </button>
+                  <button
+                    type="button"
+                    className="flex shrink-0 items-center px-3 text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground disabled:opacity-60"
+                    onClick={() => void handleOpenFile(file.name)}
+                    disabled={opening != null}
+                    title={`Open ${file.name} in the default app`}
+                    aria-label={`Open ${file.name} in the default app`}
+                  >
+                    {opening === file.name ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    )}
                   </button>
                 </li>
               ))}
@@ -249,6 +263,8 @@ export function LoggingPanel({ onFileLoggingChange }: LoggingPanelProps) {
           )}
         </CardContent>
       </Card>
+
+      {viewing && <LogFileViewer key={viewing} name={viewing} onClose={() => setViewing(null)} />}
 
       {error && (
         <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">

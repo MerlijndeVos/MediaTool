@@ -4,7 +4,7 @@ description = "Join multiple clips into a single output file in order."
 version = "1.0.0"
 author = "Toolbox"
 api_version = 1
-group = "Video"
+group = "Media"
 order = 30
 icon = "combine"
 

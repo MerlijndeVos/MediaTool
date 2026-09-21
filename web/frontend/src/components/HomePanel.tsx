@@ -2,7 +2,9 @@ import type { LucideIcon } from "lucide-react";
 import { Bot, Download, Palette, Puzzle, ScrollText } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { ModGroup } from "@/hooks/useMods";
-import { groupAccent, modIcon } from "@/lib/modIcons";
+import { DelayedTooltip } from "@/components/ui/delayed-tooltip";
+import { type GroupAccent, groupStyle } from "@/lib/groups";
+import { modIcon } from "@/lib/modIcons";
 import { cn } from "@/lib/utils";
 import type { ToolId } from "@/lib/types";
 
@@ -51,7 +53,7 @@ const SETTINGS_TILES: SettingsTile[] = [
 ];
 
 interface HomePanelProps {
-  /** Enabled mods grouped for display (Video, Subtitles, ...). */
+  /** Enabled mods grouped for display (Files, Media, Subtitles, ...). */
   groups: ModGroup[];
   desktop: boolean;
   updateAvailable: boolean;
@@ -59,11 +61,15 @@ interface HomePanelProps {
   onOpenSettings: (view: SettingsViewId) => void;
 }
 
-type Accent = "video" | "subtitles" | "experimental" | "other" | "settings";
+type Accent = GroupAccent | "settings";
 
 // Full class strings so Tailwind can see them.
 const ACCENT_STYLES: Record<Accent, { tile: string; chip: string }> = {
-  video: {
+  files: {
+    tile: "bg-rose-500/15 hover:bg-rose-500/25",
+    chip: "bg-rose-600 text-white dark:bg-rose-500",
+  },
+  media: {
     tile: "bg-blue-500/15 hover:bg-blue-500/25",
     chip: "bg-blue-600 text-white dark:bg-blue-500",
   },
@@ -97,29 +103,29 @@ interface TileProps {
 function Tile({ accent, icon: Icon, label, description, badge, onClick }: TileProps) {
   const styles = ACCENT_STYLES[accent];
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "flex items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-        styles.tile,
+    <DelayedTooltip content={description}>
+      {(trigger) => (
+        <button
+          {...trigger}
+          type="button"
+          onClick={onClick}
+          className={cn(
+            "flex min-w-0 items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            styles.tile,
+          )}
+        >
+          <span className={cn("flex size-8 shrink-0 items-center justify-center rounded-md", styles.chip)}>
+            <Icon className="h-4 w-4" />
+          </span>
+          <span className="min-w-0 flex-1 truncate text-sm font-semibold">{label}</span>
+          {badge && (
+            <span className="shrink-0 rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold uppercase text-primary-foreground">
+              {badge}
+            </span>
+          )}
+        </button>
       )}
-    >
-      <span className={cn("flex size-9 shrink-0 items-center justify-center rounded-md", styles.chip)}>
-        <Icon className="h-[18px] w-[18px]" />
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block text-sm font-semibold leading-tight">{label}</span>
-        <span className="mt-0.5 line-clamp-2 block text-xs leading-snug text-muted-foreground">
-          {description}
-        </span>
-      </span>
-      {badge && (
-        <span className="shrink-0 self-start rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold uppercase text-primary-foreground">
-          {badge}
-        </span>
-      )}
-    </button>
+    </DelayedTooltip>
   );
 }
 
@@ -142,16 +148,10 @@ function Section({
         </h2>
         {subtitle && <p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p>}
       </div>
-      <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">{children}</div>
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(10.5rem,1fr))] gap-2">{children}</div>
     </section>
   );
 }
-
-const GROUP_SUBTITLES: Record<string, string> = {
-  video: "Convert, cut, join, download, and organize video files.",
-  subtitles: "Translate and clean up SRT subtitle files.",
-  experimental: "Specialised utilities for less common jobs.",
-};
 
 export function HomePanel({
   groups,
@@ -167,24 +167,23 @@ export function HomePanel({
         <CardDescription>Pick a tool to get started.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        {groups.map((group) => (
-          <Section
-            key={group.name}
-            title={group.name}
-            subtitle={GROUP_SUBTITLES[group.name.trim().toLowerCase()]}
-          >
-            {group.mods.map((mod) => (
-              <Tile
-                key={mod.id}
-                accent={groupAccent(group.name)}
-                icon={modIcon(mod.icon)}
-                label={mod.name}
-                description={mod.description}
-                onClick={() => onOpenTool(mod.id)}
-              />
-            ))}
-          </Section>
-        ))}
+        {groups.map((group) => {
+          const { accent, subtitle } = groupStyle(group.name);
+          return (
+            <Section key={group.name} title={group.name} subtitle={subtitle}>
+              {group.mods.map((mod) => (
+                <Tile
+                  key={mod.id}
+                  accent={accent}
+                  icon={modIcon(mod.icon)}
+                  label={mod.name}
+                  description={mod.description}
+                  onClick={() => onOpenTool(mod.id)}
+                />
+              ))}
+            </Section>
+          );
+        })}
         <Section title="Settings" className="border-t border-border/60 pt-5">
           {SETTINGS_TILES.filter((s) => desktop || !s.desktopOnly).map((s) => (
             <Tile

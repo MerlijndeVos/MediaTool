@@ -108,7 +108,7 @@ const RENAME_DEPTH_OPTS = [
 
 const MODES: { value: RenameMode; label: string; hint: string }[] = [
   { value: "media", label: "Shows & movies", hint: "Organize TV episodes, movies and subtitles" },
-  { value: "generic", label: "Folders", hint: "Clean up any folder or file names" },
+  { value: "generic", label: "Other", hint: "Clean up any folder or file names" },
 ];
 
 interface RenameFormProps {

@@ -968,7 +968,7 @@ def run_undo_from_journal(
     )
     restored, failed, skipped = execute_undo(journal, apply, logger)
     logger.info("Undo result: restored=%d, failed=%d, skipped=%d.", restored, failed, skipped)
-    # Folders mode renames in place, so there are no layout folders to clean up.
+    # Other mode renames in place, so there are no layout folders to clean up.
     if apply and restored > 0 and journal.get("mode", "media") != "generic":
         prune_empty_dirs_after_undo(journal, logger)
     return restored, failed, skipped

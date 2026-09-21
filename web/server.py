@@ -21,14 +21,14 @@ from core.rename_profiles import (
 )
 from core.subtitles import detect_lang_from_path, scan_junk
 from core.subtitle_languages import language_options
-from core.log_storage import clear_logs, logs_dir, logs_stats, resolve_log_file
+from core.log_storage import clear_logs, logs_dir, logs_stats, read_log_chunk, resolve_log_file
 from core.mods import ModError, registry, safe_mode, user_mods_dir
 from core.settings_store import load_settings, save_settings
 from core.shell import open_path
 from core.tools import get_tools_status, retry_bootstrap_background, start_bootstrap_background
 from core.updates import check_for_update, get_apply_status, start_apply_update
 from core.version import app_version
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -46,6 +46,7 @@ from .schemas import (
     JobCreateResponse,
     JobSummary,
     JobUndoResponse,
+    LogChunkResponse,
     LogsStatsResponse,
     ModEnableRequest,
     ModsResponse,
@@ -251,6 +252,23 @@ def subtitle_scan_junk(body: SubtitleScanJunkRequest) -> SubtitleScanJunkRespons
 def delete_logs() -> ClearLogsResponse:
     deleted = clear_logs()
     return ClearLogsResponse(deleted_count=deleted, logs=LogsStatsResponse(**logs_stats()))
+
+
+@app.get("/api/settings/logs/{name}", response_model=LogChunkResponse)
+def read_log_file(
+    name: str,
+    end: Optional[int] = Query(None, ge=0),
+    lines: int = Query(500, ge=1, le=5000),
+) -> LogChunkResponse:
+    """Read the last ``lines`` lines of a stored log, or the lines before byte offset ``end``."""
+    try:
+        return LogChunkResponse(**read_log_chunk(name, end=end, max_lines=lines))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @app.post("/api/settings/logs/open-folder", response_model=OpenPathResponse)

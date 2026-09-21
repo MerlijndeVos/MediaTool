@@ -93,3 +93,55 @@ def resolve_log_file(name: str) -> Path:
     if not path.is_file():
         raise FileNotFoundError(str(path))
     return path
+
+
+class LogChunk(TypedDict):
+    name: str
+    size_bytes: int
+    start: int
+    end: int
+    has_earlier: bool
+    lines: list[str]
+
+
+_READ_BLOCK = 64 * 1024
+_MAX_CHUNK_BYTES = 1024 * 1024
+
+
+def read_log_chunk(name: str, *, end: int | None = None, max_lines: int = 500) -> LogChunk:
+    """Read up to ``max_lines`` whole lines that finish at byte offset ``end`` (default: the end of the file).
+
+    Logs can be large, so this reads backwards in blocks and never loads the whole file. The result
+    carries ``start``: pass it back as ``end`` to get the lines before this chunk. A chunk is capped at
+    about 1 MB, so a file with very long lines comes back in smaller pieces. Offsets are bytes, so a
+    chunk stays valid while the file grows (new lines are only ever appended).
+    """
+    path = resolve_log_file(name)
+    with path.open("rb") as fh:
+        size = fh.seek(0, os.SEEK_END)
+        end = size if end is None else max(0, min(end, size))
+        pos = end
+        data = b""
+        while pos > 0 and data.count(b"\n") <= max_lines and len(data) < _MAX_CHUNK_BYTES:
+            step = min(_READ_BLOCK, pos)
+            pos -= step
+            fh.seek(pos)
+            data = fh.read(step) + data
+        segments = data.splitlines(keepends=True)
+        if pos > 0 and len(segments) > 1:
+            # The first line may have been cut off by the block boundary; leave it for the next chunk.
+            fh.seek(pos - 1)
+            if fh.read(1) != b"\n":
+                pos += len(segments.pop(0))
+    if len(segments) > max_lines:
+        cut = len(segments) - max_lines
+        pos += sum(len(s) for s in segments[:cut])
+        segments = segments[cut:]
+    return {
+        "name": name,
+        "size_bytes": size,
+        "start": pos,
+        "end": end,
+        "has_earlier": pos > 0,
+        "lines": [s.decode("utf-8", errors="replace").rstrip("\r\n") for s in segments],
+    }

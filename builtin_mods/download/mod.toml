@@ -4,7 +4,7 @@ description = "Download videos or playlists from yt-dlp-supported sites as MP4 o
 version = "1.0.0"
 author = "Toolbox"
 api_version = 1
-group = "Video"
+group = "Media"
 order = 40
 icon = "download"
 

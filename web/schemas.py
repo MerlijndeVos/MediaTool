@@ -234,6 +234,15 @@ class OpenLogFileRequest(BaseModel):
     name: str
 
 
+class LogChunkResponse(BaseModel):
+    name: str
+    size_bytes: int
+    start: int
+    end: int
+    has_earlier: bool
+    lines: list[str]
+
+
 class OpenPathResponse(BaseModel):
     ok: bool = True
 

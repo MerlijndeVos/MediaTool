@@ -2,7 +2,7 @@
 
 The old "Rename Folders" tool renamed subfolders to ``YYYY maand DD - Description`` using the
 earliest date in the video file names inside each folder. That is now the built-in profile
-**Date + name (Dutch)** in the Rename tool's Folders mode, which also supports undo, other
+**Date + name (Dutch)** in the Rename tool's Other mode, which also supports undo, other
 date formats and English month names::
 
     toolbox rename --input D:\\DV_out --mode generic --profile "Date + name (Dutch)"

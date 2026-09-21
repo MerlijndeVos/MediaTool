@@ -1,6 +1,6 @@
 """Rename format profiles: user-defined cleanup rules and output patterns.
 
-A profile is shared by both rename modes (shows/movies and folders). It holds
+A profile is shared by both rename modes (shows/movies and other). It holds
 
 * ``rules`` -- an ordered list of text cleanup steps applied to names,
 * ``patterns`` -- optional output patterns per context (``tv``, ``movie``,
@@ -451,7 +451,7 @@ def builtin_profiles() -> List[Profile]:
             builtin=True,
         ),
         Profile(
-            # Folders mode. Reproduces the old "Rename Folders" tool: 2006 juli 13 - Holiday.
+            # Other mode. Reproduces the old "Rename Folders" tool: 2006 juli 13 - Holiday.
             id=DATE_NAME_ID,
             name="Date + name (Dutch)",
             rules=({"type": "prune_date"},),

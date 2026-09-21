@@ -4,7 +4,7 @@ description = "Remove seconds from the start and/or end of one or more files."
 version = "1.0.0"
 author = "Toolbox"
 api_version = 1
-group = "Video"
+group = "Media"
 order = 20
 icon = "scissors"
 

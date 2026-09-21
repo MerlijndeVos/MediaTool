@@ -4,7 +4,7 @@ description = "Batch-convert videos between formats with optional deinterlace an
 version = "1.0.0"
 author = "Toolbox"
 api_version = 1
-group = "Video"
+group = "Media"
 order = 10
 icon = "file-video"
 
