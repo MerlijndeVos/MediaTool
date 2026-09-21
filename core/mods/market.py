@@ -12,6 +12,9 @@ Format (``"format": 1``)::
         "id": "count-files", "name": "Count Files", "description": "...", "author": "...",
         "version": "1.0.0", "repo": "https://github.com/owner/repo", "commit": "<40 hex>",
         "path": "folder/in/repo",            # optional
+        "type": "tool",                      # optional: "tool" (default) or "theme"
+        "group": "Files",                    # optional: the menu section a tool appears in
+        "swatches": ["#fdf6e3", "..."],      # optional: up to 8 #rrggbb colours, for themes
         "tags": ["files"], "license": "MIT", "homepage": "https://...",  # optional
         "permissions": {"network": false, "writes_files": false, "runs_programs": false}
     }]}
@@ -21,12 +24,14 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import threading
 import time
 from typing import Any
 
+from .groups import canonical_group
 from .install import SHA_RE, InstallError, _http_get, parse_git_url
-from .manifest import API_VERSION, ID_RE
+from .manifest import API_VERSION, ID_RE, MOD_TYPES
 from .registry import ModError
 
 DEFAULT_MARKET_URL = "https://raw.githubusercontent.com/MerlijndeVos/Toolbox/main/market/index.json"
@@ -35,6 +40,8 @@ INDEX_FORMAT = 1
 MAX_INDEX_BYTES = 2 * 1024 * 1024
 CACHE_SECONDS = 600
 MAX_TAGS = 8
+MAX_SWATCHES = 8
+SWATCH_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
 
 _lock = threading.Lock()
 _cache: dict[str, Any] = {}
@@ -81,6 +88,15 @@ def parse_entry(raw: Any) -> dict[str, Any]:
     homepage = _text(raw, "homepage", 300)
     if homepage and not homepage.lower().startswith("https://"):
         raise ValueError("'homepage' must be an https address")
+    mod_type = raw.get("type", "tool")
+    if mod_type not in MOD_TYPES:
+        raise ValueError(f"'type' must be one of: {', '.join(MOD_TYPES)}")
+    swatches = raw.get("swatches", [])
+    if not isinstance(swatches, list) or not all(isinstance(c, str) and SWATCH_RE.match(c) for c in swatches):
+        raise ValueError("'swatches' must be a list of #rrggbb colours")
+    if len(swatches) > MAX_SWATCHES:
+        raise ValueError(f"'swatches' can have at most {MAX_SWATCHES} colours")
+    group = _text(raw, "group", 40)
     perms = raw.get("permissions")
     if perms is not None:
         if not isinstance(perms, dict) or not all(isinstance(v, bool) for v in perms.values()):
@@ -93,6 +109,10 @@ def parse_entry(raw: Any) -> dict[str, Any]:
         "author": _text(raw, "author", 80),
         "version": _text(raw, "version", 40) or "0.0.0",
         "api_version": api_version,
+        "type": mod_type,
+        # Empty when the listing does not say; the trust prompt shows the real one from the code.
+        "group": canonical_group(group) if group and mod_type == "tool" else "",
+        "swatches": [c.lower() for c in swatches],
         "repo": source.url,
         "path": source.subdir,
         "commit": commit,
@@ -130,7 +150,7 @@ def parse_index(data: Any) -> tuple[list[dict[str, Any]], list[str]]:
 def matches(entry: dict[str, Any], query: str) -> bool:
     words = query.lower().split()
     haystack = " ".join(
-        [entry["id"], entry["name"], entry["description"], entry["author"], " ".join(entry["tags"])]
+        [entry["id"], entry["name"], entry["description"], entry["author"], entry["type"], entry["group"], " ".join(entry["tags"])]
     ).lower()
     return all(w in haystack for w in words)
 

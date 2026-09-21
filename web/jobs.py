@@ -15,6 +15,7 @@ from typing import Any, Optional
 
 from core import close_log_handlers, config
 from core.mods import Mod, ModCancelled, ModContext, ModError, registry
+from core.mods.results import MAX_RESULTS_PER_JOB, openable_paths
 from core.progress import (
     LogHooks,
     attach_log_callback,
@@ -41,12 +42,24 @@ class Job:
     undo_manifest: Optional[dict] = None
     undo_used: bool = False
     undo_of: Optional[str] = None
+    # What the mod chose to show after the run (ctx.result). Sent to the page as "result" events.
+    results: list[dict[str, Any]] = field(default_factory=list)
     events: queue.Queue = field(default_factory=queue.Queue)
     cancel_event: threading.Event = field(default_factory=threading.Event)
     _thread: Optional[threading.Thread] = field(default=None, repr=False)
 
     def emit(self, event_type: str, payload: dict[str, Any]) -> None:
         self.events.put({"type": event_type, "data": {**payload, "job_id": self.id}})
+
+    def add_result(self, payload: dict[str, Any]) -> None:
+        if len(self.results) >= MAX_RESULTS_PER_JOB:
+            return
+        self.results.append(payload)
+        self.emit("result", payload)
+
+    def result_paths(self) -> set[str]:
+        """The files this job listed in a ``files`` result: the only ones the page may open."""
+        return openable_paths(self.results)
 
     def undo_op_count(self) -> Optional[int]:
         if not self.undo_manifest:
@@ -230,6 +243,9 @@ class JobManager:
         def on_progress(payload: dict) -> None:
             job.emit("progress", payload)
 
+        def on_result(payload: dict) -> None:
+            job.add_result(payload)
+
         hooks = LogHooks(on_log=on_log, on_progress=on_progress)
         set_active_hooks(hooks)
 
@@ -250,6 +266,7 @@ class JobManager:
                 cancel_event=job.cancel_event,
                 on_log=on_log,
                 on_progress=on_progress,
+                on_result=on_result,
             )
             if job.undo_of:
                 self._run_undo(job, mod, ctx)

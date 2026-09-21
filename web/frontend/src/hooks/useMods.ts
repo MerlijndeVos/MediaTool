@@ -7,7 +7,7 @@ export interface ModGroup {
   mods: ModInfo[];
 }
 
-/** Loads the mods (built-in features and user mods) from the API and keeps them fresh. */
+/** Loads the mods (built-in features, user mods and themes) from the API and keeps them fresh. */
 export function useMods() {
   const [data, setData] = useState<ModsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -40,9 +40,17 @@ export function useMods() {
     setData(await reloadMods());
   }, []);
 
-  const enabledMods = useMemo(() => (data?.mods ?? []).filter((m) => m.enabled), [data]);
+  // Tools (what the sidebar and home screen list) and themes (what Appearance offers) are both mods.
+  const enabledMods = useMemo(
+    () => (data?.mods ?? []).filter((m) => m.enabled && m.type === "tool"),
+    [data],
+  );
+  const themes = useMemo(
+    () => (data?.mods ?? []).filter((m) => m.enabled && m.type === "theme"),
+    [data],
+  );
 
-  // The API already sorts mods by group position and order; keep that order.
+  // The API already sorts mods by section (built-in ones first, then new ones A to Z) and order; keep that order.
   const groups = useMemo<ModGroup[]>(() => {
     const out: ModGroup[] = [];
     for (const mod of enabledMods) {
@@ -53,7 +61,7 @@ export function useMods() {
     return out;
   }, [enabledMods]);
 
-  return { data, error, loaded: data !== null, enabledMods, groups, setEnabled, reload };
+  return { data, error, loaded: data !== null, enabledMods, themes, groups, setEnabled, reload };
 }
 
 export type ModsState = ReturnType<typeof useMods>;

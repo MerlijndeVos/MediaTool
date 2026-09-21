@@ -26,6 +26,8 @@ BUILTIN_IDS = {
     "convert", "trim", "stitch", "download", "rename", "subtitle_translate",
     "subtitle_cleanup", "vts", "audio", "dedup",
 }
+# Themes are mods too (data only): the default look and a high-contrast one.
+BUILTIN_THEME_IDS = {"theme-default", "theme-high-contrast"}
 
 # Every route the API had before features became mods; none may disappear.
 ORIGINAL_ROUTES = {
@@ -108,12 +110,13 @@ class BuiltinModTests(unittest.TestCase):
         reg = ModRegistry()
         reg.reload()
         self.assertEqual(reg.errors(), [])
-        builtin = {m.id for m in reg.all() if m.builtin}
-        self.assertEqual(builtin, BUILTIN_IDS)
+        self.assertEqual({m.id for m in reg.all() if m.builtin and not m.is_theme}, BUILTIN_IDS)
+        self.assertEqual({m.id for m in reg.all() if m.builtin and m.is_theme}, BUILTIN_THEME_IDS)
         for mod in reg.all():
             if mod.builtin:
                 self.assertTrue(mod.enabled, mod.id)
-                self.assertTrue(callable(mod.run_fn()), mod.id)
+                if not mod.is_theme:  # a theme is data: there is no code to load
+                    self.assertTrue(callable(mod.run_fn()), mod.id)
 
     def test_generated_models_match_the_previous_api(self):
         from web.mod_params import params_model
@@ -231,7 +234,7 @@ class UserModTests(unittest.TestCase):
         registry.reload()
         self.assertEqual(len(registry.errors()), 1)
         self.assertIn("bad", registry.errors()[0].path)
-        self.assertEqual({m.id for m in registry.all() if m.builtin}, BUILTIN_IDS)
+        self.assertEqual({m.id for m in registry.all() if m.builtin}, BUILTIN_IDS | BUILTIN_THEME_IDS)
 
     def test_user_mods_cannot_claim_builtin_ids_or_panels(self):
         self.make_mod("convert")  # same id as a built-in feature

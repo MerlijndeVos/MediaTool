@@ -7,11 +7,13 @@ import type {
   MarketResponse,
   ModInstallPreview,
   ModPrompts,
+  ModResult,
   ModSourceResponse,
   ModsResponse,
   ModUpdateStatus,
 } from "@/lib/types";
 import type { RenameMode, RenameProfile } from "@/lib/renameProfiles";
+import type { ColorMode } from "@/lib/theme";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 
@@ -152,6 +154,26 @@ export function setModEnabled(id: string, enabled: boolean): Promise<ModsRespons
   });
 }
 
+/** Runs one of a mod's `[[actions]]` (for example "Test connection") and returns what it shows. */
+export function runModAction(
+  modId: string,
+  action: string,
+  params: Record<string, unknown>,
+): Promise<{ ok: boolean; results: ModResult[] }> {
+  return request(`/api/mods/${encodeURIComponent(modId)}/actions/${encodeURIComponent(action)}`, {
+    method: "POST",
+    body: JSON.stringify({ params }),
+  });
+}
+
+/** Open (or show in its folder) a file the job listed in a `files` result. */
+export function openJobResult(jobId: string, path: string, reveal: boolean): Promise<{ ok: boolean }> {
+  return request(`/api/jobs/${encodeURIComponent(jobId)}/results/open`, {
+    method: "POST",
+    body: JSON.stringify({ path, reveal }),
+  });
+}
+
 export function openModsFolder(): Promise<{ ok: boolean }> {
   return request("/api/mods/open-folder", { method: "POST" });
 }
@@ -272,6 +294,9 @@ export interface AppSettings {
   file_logging: boolean;
   ai: AiSettings;
   logs: LogsStats;
+  /** The active theme mod and whether to follow the system's light/dark setting. */
+  theme: string;
+  color_mode: ColorMode;
 }
 
 /** Omitted fields are kept; an empty string clears the field. */
@@ -287,6 +312,8 @@ export function fetchSettings(): Promise<AppSettings> {
 
 export function updateSettings(patch: {
   file_logging?: boolean;
+  theme?: string;
+  color_mode?: ColorMode;
   ai?: {
     provider?: AiProviderId;
     providers?: Partial<Record<AiProviderId, AiProviderUpdate>>;

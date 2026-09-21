@@ -1,0 +1,84 @@
+# Solarized: an example theme. A theme is one data file: no main.py, no code, nothing to trust
+# except what it looks like. Only the tokens listed here change; everything else keeps the default.
+# See "Theme mods" in MODDING.md for the full list of tokens and the rules.
+#
+# Install it from Settings -> Mods -> Add a mod (choose this folder or this file), then pick it
+# under Settings -> Appearance.
+id = "solarized"
+name = "Solarized"
+description = "Ethan Schoonover's Solarized palette: warm cream in light mode, deep teal in dark mode."
+version = "1.0.0"
+author = "Toolbox"
+type = "theme"
+api_version = 2            # themes need mod API 2
+
+[theme]
+radius = "0.5rem"          # corner roundness: 0 to 2rem (or px)
+font = "system"            # system | serif | mono | rounded
+
+[theme.light]
+background = "#fdf6e3"
+foreground = "#073642"
+card = "#eee8d5"
+card-foreground = "#073642"
+primary = "#1f6f9f"
+primary-foreground = "#fdf6e3"
+secondary = "#e3dcc4"
+secondary-foreground = "#073642"
+muted = "#e3dcc4"
+muted-foreground = "#4a616a"
+accent = "#e3dcc4"
+accent-foreground = "#073642"
+border = "#d3ccb4"
+input = "#d3ccb4"
+ring = "#268bd2"
+destructive = "#b3261e"
+destructive-foreground = "#fdf6e3"
+danger = "#dc322f"
+danger-text = "#a8231f"
+warning = "#b58900"
+warning-text = "#6f5200"
+success = "#859900"
+success-text = "#4d5c00"
+log-info = "#4a616a"
+log-warn = "#7a4a00"
+log-error = "#a8231f"
+
+[theme.dark]
+background = "#002b36"
+foreground = "#eee8d5"
+card = "#073642"
+card-foreground = "#eee8d5"
+primary = "#4aa3dc"
+primary-foreground = "#002b36"
+secondary = "#0d4452"
+secondary-foreground = "#eee8d5"
+muted = "#0d4452"
+muted-foreground = "#a6b4b4"
+accent = "#0d4452"
+accent-foreground = "#eee8d5"
+border = "#1a5566"
+input = "#1a5566"
+ring = "#4aa3dc"
+destructive = "#c92a2a"
+destructive-foreground = "#ffffff"
+danger = "#dc322f"
+danger-text = "#ff8a84"
+warning = "#b58900"
+warning-text = "#e0b52e"
+success = "#859900"
+success-text = "#b5c826"
+log-info = "#a6b4b4"
+log-warn = "#e0b52e"
+log-error = "#ff8a84"
+
+# Accent per section, used in light and dark mode. Names: files, media, subtitles,
+# experimental, other, settings.
+[theme.groups]
+files = "#c42b78"
+media = "#1f6f9f"
+subtitles = "#5b60b0"
+experimental = "#b8430f"
+other = "#1f857d"
+settings = "#586e75"
+

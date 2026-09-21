@@ -5,6 +5,7 @@ import type {
   CommandName,
   DownloadProgress,
   LogLine,
+  ModResult,
   StartJobRequest,
   TranslationSample,
 } from "@/lib/types";
@@ -34,6 +35,14 @@ export function useJobRunner() {
       es.addEventListener("log", (e) => {
         const data = JSON.parse(e.data) as { message: string; level: number };
         appendLog({ jobId, message: data.message, level: data.level, ts: Date.now() });
+      });
+
+      // What the mod chose to show (ctx.result): tables, counters, file lists, ... as plain data.
+      es.addEventListener("result", (e) => {
+        const data = JSON.parse(e.data) as ModResult;
+        setJobs((prev) =>
+          prev.map((j) => (j.id === jobId ? { ...j, results: [...(j.results ?? []), data] } : j)),
+        );
       });
 
       es.addEventListener("progress", (e) => {

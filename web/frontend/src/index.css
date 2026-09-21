@@ -3,6 +3,8 @@
 @tailwind utilities;
 
 @layer base {
+  /* The default theme. Keep in step with core/mods/theme.py (a test compares them); a theme mod
+     overrides these at runtime, see lib/theme.ts. */
   :root {
     --background: 220 20% 97%;
     --foreground: 224 30% 12%;
@@ -19,7 +21,27 @@
     --border: 220 13% 88%;
     --input: 220 13% 88%;
     --ring: 221 83% 53%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --danger: 0 84% 60%;
+    --danger-text: 0 74% 42%;
+    --warning: 38 92% 50%;
+    --warning-text: 32 81% 29%;
+    --success: 160 84% 39%;
+    --success-text: 163 94% 24%;
+    --overlay: 0 0% 0%;
+    --log-info: 220 10% 42%;
+    --log-warn: 26 90% 37%;
+    --log-error: 0 72% 51%;
+    --category-files: 346 77% 50%;
+    --category-media: 221 83% 53%;
+    --category-subtitles: 262 83% 58%;
+    --category-experimental: 32 95% 44%;
+    --category-other: 161 94% 30%;
+    --category-settings: 215 19% 35%;
+    --category-foreground: 0 0% 100%;
     --radius: 0.625rem;
+    --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   }
 
   .dark {
@@ -38,6 +60,25 @@
     --border: 224 16% 20%;
     --input: 224 16% 20%;
     --ring: 217 91% 60%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --danger: 0 84% 60%;
+    --danger-text: 0 91% 71%;
+    --warning: 38 92% 50%;
+    --warning-text: 46 97% 65%;
+    --success: 160 84% 39%;
+    --success-text: 158 64% 52%;
+    --overlay: 0 0% 0%;
+    --log-info: 215 15% 58%;
+    --log-warn: 43 96% 56%;
+    --log-error: 0 91% 71%;
+    --category-files: 350 89% 60%;
+    --category-media: 217 91% 60%;
+    --category-subtitles: 258 90% 66%;
+    --category-experimental: 32 95% 44%;
+    --category-other: 161 94% 30%;
+    --category-settings: 215 16% 47%;
+    --category-foreground: 0 0% 100%;
   }
 }
 
@@ -68,7 +109,7 @@
 
   body {
     @apply bg-background text-foreground antialiased;
-    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-family: var(--font-sans);
   }
 
   dialog.app-dialog {
@@ -91,6 +132,6 @@
   }
 
   dialog.app-dialog::backdrop {
-    background: rgb(0 0 0 / 0.55);
+    background: hsl(var(--overlay) / 0.55);
   }
 }

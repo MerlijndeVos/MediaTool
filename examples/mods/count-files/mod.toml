@@ -3,8 +3,15 @@ name = "Count Files"
 description = "Count the files in a folder, grouped by extension."
 version = "1.0.0"
 author = "Toolbox"
-api_version = 1
-group = "Other"
+api_version = 1            # the simplest mods need only API 1 and still work
+# group = the menu section the tool appears in. Use one of these, spelled like this:
+#   Files         rename, move or organize files and folders
+#   Media         convert, cut, join or download video and audio
+#   Subtitles     translate or clean up subtitle files
+#   Experimental  specialised or unfinished utilities
+#   Other         anything else (the default when there is no group)
+# The case does not matter ("files" also works). A new name creates a new section after these.
+group = "Files"
 icon = "puzzle"
 
 [ui]

@@ -217,9 +217,9 @@ export function LoggingPanel({ onFileLoggingChange }: LoggingPanelProps) {
           )}
 
           {confirmClear ? (
-            <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-4">
+            <div className="rounded-lg border border-warning/40 bg-warning/10 p-4">
               <div className="flex gap-3">
-                <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-700 dark:text-amber-300" />
+                <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-warning-text" />
                 <div className="space-y-3">
                   <p className="text-sm">
                     Delete all {settings.logs.file_count} log file

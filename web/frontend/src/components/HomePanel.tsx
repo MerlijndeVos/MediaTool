@@ -3,7 +3,7 @@ import { Bot, Download, Palette, Puzzle, ScrollText } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { ModGroup } from "@/hooks/useMods";
 import { DelayedTooltip } from "@/components/ui/delayed-tooltip";
-import { type GroupAccent, groupStyle } from "@/lib/groups";
+import { ACCENT_STYLES, type Accent, groupStyle } from "@/lib/groups";
 import { modIcon } from "@/lib/modIcons";
 import { cn } from "@/lib/utils";
 import type { ToolId } from "@/lib/types";
@@ -47,7 +47,7 @@ const SETTINGS_TILES: SettingsTile[] = [
   {
     id: "appearance",
     label: "Appearance",
-    description: "Switch between light and dark themes.",
+    description: "Pick a theme and switch between light and dark.",
     icon: Palette,
   },
 ];
@@ -60,36 +60,6 @@ interface HomePanelProps {
   onOpenTool: (tool: ToolId) => void;
   onOpenSettings: (view: SettingsViewId) => void;
 }
-
-type Accent = GroupAccent | "settings";
-
-// Full class strings so Tailwind can see them.
-const ACCENT_STYLES: Record<Accent, { tile: string; chip: string }> = {
-  files: {
-    tile: "bg-rose-500/15 hover:bg-rose-500/25",
-    chip: "bg-rose-600 text-white dark:bg-rose-500",
-  },
-  media: {
-    tile: "bg-blue-500/15 hover:bg-blue-500/25",
-    chip: "bg-blue-600 text-white dark:bg-blue-500",
-  },
-  subtitles: {
-    tile: "bg-violet-500/15 hover:bg-violet-500/25",
-    chip: "bg-violet-600 text-white dark:bg-violet-500",
-  },
-  experimental: {
-    tile: "bg-amber-500/15 hover:bg-amber-500/25",
-    chip: "bg-amber-600 text-white dark:bg-amber-500",
-  },
-  other: {
-    tile: "bg-emerald-500/15 hover:bg-emerald-500/25",
-    chip: "bg-emerald-600 text-white dark:bg-emerald-500",
-  },
-  settings: {
-    tile: "bg-slate-500/15 hover:bg-slate-500/25",
-    chip: "bg-slate-600 text-white dark:bg-slate-500",
-  },
-};
 
 interface TileProps {
   accent: Accent;
@@ -174,7 +144,7 @@ export function HomePanel({
               {group.mods.map((mod) => (
                 <Tile
                   key={mod.id}
-                  accent={accent}
+                  accent={mod.accent || accent}
                   icon={modIcon(mod.icon)}
                   label={mod.name}
                   description={mod.description}

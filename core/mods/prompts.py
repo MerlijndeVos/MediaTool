@@ -1,14 +1,20 @@
-"""The two copy-paste prompts for building and reviewing mods with an AI assistant.
+"""The copy-paste prompts for building a mod, building a theme and reviewing a mod with an AI assistant.
 
-Both are plain text with nothing app-specific, so they work with any assistant. They are the single
+All are plain text with nothing app-specific, so they work with any assistant. They are the single
 source of truth: the Mods panel serves them to its "Copy" buttons and ``MODDING.md`` shows the same
-text (a test keeps the two in sync). The prompt follows ``API_VERSION`` in :mod:`core.mods.manifest`;
-re-test it with a few assistants before a release that changes the mod API.
+text (a test keeps the two in sync). The prompts follow ``API_VERSION`` in :mod:`core.mods.manifest`,
+and the categories and theme tokens come from :mod:`core.mods.groups` and :mod:`core.mods.theme`, so
+they cannot drift from what the app accepts. Re-test them with a few assistants before a release
+that changes the mod API.
 """
 
 from __future__ import annotations
 
-from .manifest import API_VERSION
+import textwrap
+
+from . import theme as _theme
+from .groups import groups_help
+from .manifest import API_VERSION, ICON_NAMES
 
 _BUILD = r'''You are helping me build a mod for Toolbox, a desktop app that converts, renames and
 organizes media files with ffmpeg and yt-dlp. A mod adds one new tool to the app. Write the
@@ -22,10 +28,12 @@ A folder with exactly these files, each in its own code block labelled with its 
 
 ## mod.toml
 - Top level: `id` (lowercase letters, digits, `-`, `_`; e.g. "strip-metadata"), `name`,
-  `description`, `version = "1.0.0"`, `author`, `api_version = @API_VERSION@`, optional `group` (default
-  "Other") and `icon` (one of: archive audio-lines combine copy disc-3 download eraser
-  file-text file-video film folder folder-pen image languages music pen-line puzzle scissors
-  search sparkles tag wrench; default "puzzle").
+  `description`, `version = "1.0.0"`, `author`, `api_version = @API_VERSION@`, optional `group`
+  and `icon` (one of these, default "puzzle"):
+@ICONS@
+- `group` is the menu section the tool appears in. Use exactly one of these names, whichever
+  fits best, spelled exactly like that. Do not invent a new one unless I ask for it:
+@GROUPS@
 - `[ui]`: `run_mode = "run"` (one Run button) for tools that only read or create new files.
   For tools that change existing files use `run_mode = "preview_apply"` and declare a bool
   param `dry_run` with `default = true` (Preview sets it to true, Apply to false).
@@ -35,12 +43,23 @@ A folder with exactly these files, each in its own code block labelled with its 
   `help` (a short tooltip), `default` (omit it to make the field required), `placeholder`,
   `min`/`max` (numbers), `nullable = true` (empty means None), `width = "half"`.
   Types: `text`, `integer`, `number`, `bool`, `choice` (add `choices = ["a", "b"]`),
-  `folder`, `file`, `files` (list of paths, one per line), `list`, `json`.
+  `multichoice` (choices too; the default is a list), `folder`, `file`, `files` (list of
+  paths, one per line), `list`, `json`, `color` ("#rrggbb"), `date` ("YYYY-MM-DD").
+  `widget = "slider"` (with `min` and `max`) shows a number as a slider.
+- Only when the form gets long, or some options only matter sometimes: group fields with
+  `[[sections]]` tables (`id`, `title`, `text`) and `section = "<id>"` on a param, and show a
+  param or a whole section only while another field has a value with
+  `show_if = { param = "mode", equals = "advanced" }` (also `not_equals`, `in = [...]`,
+  `truthy`). A param that can be hidden needs a `default`.
 
 ## main.py
 It must define `run(params, ctx)`. `params` is a dict with the values declared above.
 `ctx` provides:
 - `ctx.log(message)`: write a line to the job log
+- `ctx.result("table", title="...", columns=[...], rows=[[...], ...])`: show what you found
+  after the run. Also `"counters"` (`items={"Files": 12}`), `"files"` (`files=[paths]`),
+  `"markdown"` (`text="..."`), `"image"` (`path="..."`) and `"message"` (`text="..."`,
+  `level="info"|"success"|"warning"|"error"`). Prefer this to dumping results in the log.
 - `ctx.progress(fraction, text=None)`: 0.0 to 1.0
 - `ctx.cancelled()` and `ctx.raise_if_cancelled()`: check these in loops so cancel works
 - `ctx.ffmpeg` and `ctx.ffprobe`: paths to the tools
@@ -95,5 +114,51 @@ something, so say so rather than guessing, and do not call anything "safe".
 ## The mod
 <PASTE mod.toml AND main.py HERE, plus any other .py files in the mod folder.>'''
 
-BUILD_PROMPT = _BUILD.replace("@API_VERSION@", str(API_VERSION))
+_THEME = r'''You are helping me design a theme for Toolbox, a desktop app that converts, renames and
+organizes media files. A theme is one small data file with no code in it: it changes the
+colours, the roundness of corners and the font of the app. Write the complete theme for the
+look I describe at the bottom.
+
+## What to produce
+One code block labelled `mod.toml`, and a short sentence or two about the look. Nothing else.
+
+## mod.toml
+- Top level: `id` (lowercase letters, digits, `-`, `_`; e.g. "warm-dark"), `name`, `description`,
+  `version = "1.0.0"`, `author`, `type = "theme"` and `api_version = @API_VERSION@`.
+- `[theme]`: optional `radius` (corner roundness, for example "0.5rem"; 0 up to 2rem or 32px)
+  and `font` (one of: system, serif, mono, rounded).
+- `[theme.light]` and `[theme.dark]`: colours for light and dark mode. Set only the tokens
+  you want to change; every other token keeps the default. Do both modes, so it looks right
+  whichever the person uses.
+- `[theme.groups]`: optional accent colour per menu section, used in both modes. The names
+  are files, media, subtitles, experimental, other and settings.
+- Write every colour as "#rrggbb" (or hsl(...) / rgb(...)). No transparency.
+
+## Rules
+- Use only the tokens listed below and only the keys above. There is no other CSS: no
+  `url()`, no `@import`, no selectors, no `calc()`, no variables. A theme that uses anything
+  else is refused.
+- Keep text readable: at least 4.5:1 contrast for `foreground` on `background`,
+  `card-foreground` on `card`, `destructive-foreground` on `destructive`, and `danger-text` and
+  `warning-text` on both `background` and `card`. A theme that breaks these is refused.
+- `destructive`, `danger` and `danger-text` must stay red or orange (hue 335-360 or 0-45,
+  clearly saturated), so a delete button and a warning always look like a warning.
+- Tokens (with the default light and dark colour):
+@TOKENS@
+
+## How to answer
+First, in 1-2 sentences, describe the look you are making and any assumptions. Then give the
+file. Finally, remind me that Settings, then Appearance, has a preview and a contrast check
+before I keep it.
+
+## The look I want
+<DESCRIBE THE LOOK HERE: for example "a warm dark theme with rounded corners and a green
+accent" or "a calm light theme in blue-grey, square corners".>'''
+
+_GROUPS = "\n".join("  " + line for line in groups_help().splitlines())
+_ICONS = textwrap.fill(" ".join(ICON_NAMES), width=88, initial_indent="  ", subsequent_indent="  ", break_on_hyphens=False)
+BUILD_PROMPT = (
+    _BUILD.replace("@API_VERSION@", str(API_VERSION)).replace("@GROUPS@", _GROUPS).replace("@ICONS@", _ICONS)
+)
 REVIEW_PROMPT = _REVIEW
+THEME_PROMPT = _THEME.replace("@API_VERSION@", str(API_VERSION)).replace("@TOKENS@", _theme.tokens_help())

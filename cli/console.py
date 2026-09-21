@@ -49,6 +49,35 @@ def console_progress(payload: dict) -> None:
         print(file=sys.stderr, flush=True)
 
 
+def console_result(payload: dict) -> None:
+    """Print a mod's ``ctx.result(...)`` as plain text (the app draws the same data as a table, tiles, ...)."""
+    view = payload.get("view")
+    if payload.get("title"):
+        print(f"\n{payload['title']}", flush=True)
+    if view == "table":
+        columns = [str(c) for c in payload.get("columns", [])]
+        rows = [[str(cell) for cell in row] for row in payload.get("rows", [])]
+        widths = [max(len(c), *(len(r[i]) for r in rows)) if rows else len(c) for i, c in enumerate(columns)]
+        print("  ".join(c.ljust(w) for c, w in zip(columns, widths)).rstrip())
+        for row in rows:
+            print("  ".join(cell.ljust(w) for cell, w in zip(row, widths)).rstrip())
+        if payload.get("truncated"):
+            print("... (more rows were left out)")
+    elif view == "counters":
+        for item in payload.get("items", []):
+            print(f"{item['label']}: {item['value']}")
+    elif view == "files":
+        for item in payload.get("files", []):
+            print(item["path"] + (f"  ({item['label']})" if item.get("label") else ""))
+    elif view == "markdown":
+        print(payload.get("text", ""))
+    elif view == "image":
+        print(f"[image: {payload.get('alt', '')}]")
+    elif view == "message":
+        stream = sys.stderr if payload.get("level") in ("warning", "error") else sys.stdout
+        print(payload.get("text", ""), file=stream, flush=True)
+
+
 @contextmanager
 def cli_session(*, file_logging: bool = True) -> Iterator[LogHooks]:
     """Configure logging/progress hooks for a single CLI invocation."""

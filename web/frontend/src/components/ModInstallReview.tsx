@@ -3,7 +3,16 @@ import { ExternalLink } from "lucide-react";
 import { fetchModPrompts } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { CheckField } from "@/components/fields";
-import { CodeFiles, CopyButton, PermissionChips, TrustNotice, reviewPromptWithCode } from "@/components/ModBits";
+import {
+  CodeFiles,
+  CopyButton,
+  PermissionChips,
+  PlacementChip,
+  ThemeNotice,
+  TrustNotice,
+  reviewPromptWithCode,
+} from "@/components/ModBits";
+import { ThemePreview } from "@/components/ThemePreview";
 import type { ModInstallMeta, ModInstallPreview } from "@/lib/types";
 
 export function describeSource(source: ModInstallMeta): string {
@@ -31,12 +40,13 @@ interface ModInstallReviewProps {
 
 /** The trust prompt: everything about a mod that has been downloaded and checked but not run. */
 export function ModInstallReview({ preview, busy, onConfirm, onCancel, onError }: ModInstallReviewProps) {
-  const { manifest, source } = preview;
+  const { manifest, source, placement } = preview;
+  const isTheme = manifest.type === "theme";
   const updating = preview.replaces !== null;
   const [enable, setEnable] = useState(true);
 
   return (
-    <div className="space-y-4 rounded-lg border border-amber-500/40 bg-amber-500/10 p-4">
+    <div className="space-y-4 rounded-lg border border-warning/40 bg-warning/10 p-4">
       <div>
         <h3 className="text-sm font-semibold">
           {updating
@@ -44,8 +54,9 @@ export function ModInstallReview({ preview, busy, onConfirm, onCancel, onError }
             : `Install ${manifest.name}?`}
         </h3>
         <p className="text-xs text-muted-foreground">
-          It has been downloaded and checked, but nothing has run. Nothing is installed until you
-          say so.
+          {isTheme
+            ? "It has been downloaded and checked. A theme has no code to run. Nothing is installed until you say so."
+            : "It has been downloaded and checked, but nothing has run. Nothing is installed until you say so."}
         </p>
       </div>
 
@@ -76,17 +87,49 @@ export function ModInstallReview({ preview, busy, onConfirm, onCancel, onError }
             </dd>
           </>
         )}
-        <dt className="text-muted-foreground">Says it needs</dt>
-        <dd className="space-y-1">
-          <PermissionChips permissions={manifest.permissions} />
-          <p className="text-muted-foreground">
-            This is what the author declares. It is not enforced: the code can do anything you can.
-          </p>
-        </dd>
+        {isTheme ? (
+          <>
+            <dt className="text-muted-foreground">Kind</dt>
+            <dd>
+              <PlacementChip type="theme" />
+            </dd>
+          </>
+        ) : (
+          <>
+            <dt className="text-muted-foreground">Appears in</dt>
+            <dd className="space-y-1">
+              <PlacementChip
+                type="tool"
+                group={placement?.name ?? manifest.group}
+                newSection={placement?.new_section}
+              />
+              {placement?.new_section && (
+                <p className="text-muted-foreground">
+                  No section has this name yet, so installing it adds a new one after the built-in
+                  sections.
+                </p>
+              )}
+            </dd>
+            <dt className="text-muted-foreground">Says it needs</dt>
+            <dd className="space-y-1">
+              <PermissionChips permissions={manifest.permissions} />
+              <p className="text-muted-foreground">
+                This is what the author declares. It is not enforced: the code can do anything you can.
+              </p>
+            </dd>
+          </>
+        )}
       </dl>
 
+      {isTheme && manifest.theme && (
+        <div className="grid gap-2 sm:grid-cols-2">
+          <ThemePreview theme={manifest.theme} mode="light" />
+          <ThemePreview theme={manifest.theme} mode="dark" />
+        </div>
+      )}
+
       {preview.warnings.length > 0 && (
-        <ul className="list-disc space-y-1 rounded-md border border-red-500/30 bg-red-500/5 py-2 pl-7 pr-3 text-xs">
+        <ul className="list-disc space-y-1 rounded-md border border-danger/30 bg-danger/5 py-2 pl-7 pr-3 text-xs">
           {preview.warnings.map((w) => (
             <li key={w}>{w}</li>
           ))}
@@ -125,27 +168,36 @@ export function ModInstallReview({ preview, busy, onConfirm, onCancel, onError }
 
       <details className="text-xs">
         <summary className="cursor-pointer font-medium">
-          Read the code ({preview.files.length} {preview.files.length === 1 ? "file" : "files"})
+          {isTheme ? "Read the file" : "Read the code"} ({preview.files.length}{" "}
+          {preview.files.length === 1 ? "file" : "files"})
         </summary>
         <div className="mt-2 space-y-2">
           <CodeFiles files={preview.files} />
-          <CopyButton
-            onFailed={onError}
-            getText={async () => reviewPromptWithCode((await fetchModPrompts()).review, preview.files)}
-          >
-            Copy review prompt with the code
-          </CopyButton>
-          <p className="text-muted-foreground">
-            Paste it into an AI assistant to have the code explained in plain language. AI can be
-            wrong; it is a second opinion, not a guarantee.
-          </p>
+          {!isTheme && (
+            <>
+              <CopyButton
+                onFailed={onError}
+                getText={async () => reviewPromptWithCode((await fetchModPrompts()).review, preview.files)}
+              >
+                Copy review prompt with the code
+              </CopyButton>
+              <p className="text-muted-foreground">
+                Paste it into an AI assistant to have the code explained in plain language. AI can be
+                wrong; it is a second opinion, not a guarantee.
+              </p>
+            </>
+          )}
         </div>
       </details>
 
-      <TrustNotice />
+      {isTheme ? <ThemeNotice /> : <TrustNotice />}
 
       {!updating && (
-        <CheckField label="Turn it on after installing" checked={enable} onChange={setEnable} />
+        <CheckField
+          label={isTheme ? "Make it available in Appearance" : "Turn it on after installing"}
+          checked={enable}
+          onChange={setEnable}
+        />
       )}
 
       <div className="flex gap-2">

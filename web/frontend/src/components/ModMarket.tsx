@@ -3,12 +3,21 @@ import { RefreshCw } from "lucide-react";
 import { fetchMarket, prepareModInstall } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { PermissionChips, TrustNotice } from "@/components/ModBits";
+import { PermissionChips, PlacementChip, TrustNotice } from "@/components/ModBits";
+import { Swatches } from "@/components/ThemePreview";
 import type { MarketEntry, MarketResponse, ModInstallPreview } from "@/lib/types";
+
+type TypeFilter = "all" | "tool" | "theme";
+
+const TYPE_FILTERS: { id: TypeFilter; label: string }[] = [
+  { id: "all", label: "All" },
+  { id: "tool", label: "Tools" },
+  { id: "theme", label: "Themes" },
+];
 
 function matches(entry: MarketEntry, query: string): boolean {
   const words = query.toLowerCase().split(/\s+/).filter(Boolean);
-  const haystack = [entry.id, entry.name, entry.description, entry.author, ...entry.tags]
+  const haystack = [entry.id, entry.name, entry.description, entry.author, entry.type, entry.group, ...entry.tags]
     .join(" ")
     .toLowerCase();
   return words.every((w) => haystack.includes(w));
@@ -27,6 +36,7 @@ export function ModMarket({ installedIds, busy, onBusy, onPrepared, onError }: M
   const [market, setMarket] = useState<MarketResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
+  const [kind, setKind] = useState<TypeFilter>("all");
 
   const load = useCallback(async (refresh: boolean) => {
     setLoading(true);
@@ -49,8 +59,11 @@ export function ModMarket({ installedIds, busy, onBusy, onPrepared, onError }: M
   }, [load]);
 
   const shown = useMemo(
-    () => (market?.mods ?? []).filter((entry) => matches(entry, query)),
-    [market, query],
+    () =>
+      (market?.mods ?? []).filter(
+        (entry) => (kind === "all" || entry.type === kind) && matches(entry, query),
+      ),
+    [market, query, kind],
   );
 
   const install = async (entry: MarketEntry) => {
@@ -66,6 +79,8 @@ export function ModMarket({ installedIds, busy, onBusy, onPrepared, onError }: M
           expect: {
             id: entry.id,
             version: entry.version,
+            type: entry.type,
+            ...(entry.group ? { group: entry.group } : {}),
             ...(entry.permissions ? { permissions: entry.permissions } : {}),
           },
         }),
@@ -106,8 +121,26 @@ export function ModMarket({ installedIds, busy, onBusy, onPrepared, onError }: M
         </Button>
       </div>
 
+      <div role="tablist" aria-label="Kind of mod" className="flex w-fit gap-1 rounded-lg bg-muted p-1">
+        {TYPE_FILTERS.map(({ id, label }) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={kind === id}
+            onClick={() => setKind(id)}
+            className={
+              "rounded-md px-3 py-1 text-sm font-medium transition-colors " +
+              (kind === id ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground")
+            }
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
       {market?.error && (
-        <p className="rounded-lg border border-red-500/30 bg-red-500/5 p-3 text-sm text-red-600 dark:text-red-400">
+        <p className="rounded-lg border border-danger/30 bg-danger/5 p-3 text-sm text-danger-text">
           {market.error}
         </p>
       )}
@@ -133,7 +166,16 @@ export function ModMarket({ installedIds, busy, onBusy, onPrepared, onError }: M
               </p>
             </div>
             {entry.description && <p className="text-xs">{entry.description}</p>}
-            <PermissionChips permissions={entry.permissions} />
+            {entry.type === "theme" && entry.swatches.length > 0 && <Swatches colors={entry.swatches} />}
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Where it appears is what the listing says; the real answer comes from the code in the install prompt. */}
+              {entry.type === "theme" || entry.group ? (
+                <PlacementChip type={entry.type} group={entry.group} />
+              ) : (
+                <span className="text-[11px] text-muted-foreground">Section not stated</span>
+              )}
+              {entry.type === "tool" && <PermissionChips permissions={entry.permissions} />}
+            </div>
             {entry.tags.length > 0 && (
               <p className="flex flex-wrap gap-1.5">
                 {entry.tags.map((tag) => (

@@ -52,7 +52,7 @@ function StatusIcon({ status }: { status: JobStatus }) {
     return <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-primary" />;
   }
   if (status === "completed") {
-    return <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />;
+    return <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-success-text" />;
   }
   return <XCircle className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />;
 }
@@ -149,7 +149,7 @@ function DownloadRow({
         )}
       </div>
       {job.status === "failed" && job.error && (
-        <p className="col-span-full text-xs text-red-600 dark:text-red-400">{job.error}</p>
+        <p className="col-span-full text-xs text-danger-text">{job.error}</p>
       )}
     </div>
   );
@@ -333,7 +333,7 @@ export function DownloadPanel({
             </p>
           )}
           {probeError && (
-            <div className="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-300">
+            <div className="rounded-md border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger-text">
               {probeError}
             </div>
           )}
@@ -491,7 +491,7 @@ export function DownloadPanel({
                 Start {selectedCount} download{selectedCount !== 1 ? "s" : ""}
               </Button>
             </div>
-            {queueError && <p className="text-sm text-red-600 dark:text-red-400">{queueError}</p>}
+            {queueError && <p className="text-sm text-danger-text">{queueError}</p>}
           </div>
         )}
 

@@ -1,0 +1,149 @@
+# Folder Report: an example mod that shows what the declarative form can do (mod API 2):
+# sections with explanatory text, fields that appear only when they matter (show_if), a slider,
+# a multi-choice list, a date, an extra action button, and results drawn as counters, a table,
+# a file list and a note instead of log lines. It only reads: it never changes a file.
+#
+# There is no frontend code here. Everything below is data; main.py only computes the numbers.
+id = "folder-report"
+name = "Folder Report"
+description = "Summarise a folder: totals, a breakdown by type and the largest files."
+version = "1.0.0"
+author = "Toolbox"
+api_version = 2            # sections, show_if, the new widgets, actions and results need API 2
+group = "Files"            # the menu section: Files, Media, Subtitles, Experimental or Other
+order = 900                # position inside the section (built-in Rename is 5)
+icon = "clipboard-list"
+accent = "files"           # tile colour: a section name, or primary / success / warning / danger
+
+[ui]
+run_mode = "run"           # only reads, so one Run button
+# layout = "tabs"          # would show each section as a tab instead of one long form
+
+[permissions]
+network = false
+writes_files = false
+runs_programs = false
+
+# --- the folder and what to include ---------------------------------------------------------
+
+[[params]]
+name = "folder"
+type = "folder"
+label = "Folder"
+help = "The folder to report on."
+
+[[sections]]
+id = "include"
+title = "What to include"
+# Text is markdown-lite: **bold**, *italic*, `code`, https links and - lists. It is never HTML.
+text = "Tick the kinds of files to count. Files are sorted by their **extension**, so a renamed file lands where its name says."
+
+[[params]]
+name = "kinds"
+section = "include"
+type = "multichoice"
+label = "Kinds of files"
+choices = [
+  { value = "video", label = "Video" },
+  { value = "audio", label = "Audio" },
+  { value = "image", label = "Images" },
+  { value = "subtitle", label = "Subtitles" },
+  { value = "other", label = "Everything else" },
+]
+default = ["video", "audio", "image", "subtitle", "other"]
+
+[[params]]
+name = "recursive"
+section = "include"
+type = "bool"
+label = "Include subfolders"
+default = true
+
+[[params]]
+name = "min_size_mb"
+section = "include"
+type = "integer"
+widget = "slider"          # a slider needs min and max
+min = 0
+max = 500
+step = 10
+label = "Ignore files smaller than (MB)"
+help = "0 counts every file."
+default = 0
+
+# --- the report -----------------------------------------------------------------------------
+
+[[sections]]
+id = "report"
+title = "Report"
+
+[[params]]
+name = "show_files"
+section = "report"
+type = "bool"
+label = "List the largest files"
+default = true
+
+# These two only appear while "List the largest files" is on. A field that can be hidden needs a default.
+[[params]]
+name = "top"
+section = "report"
+type = "integer"
+label = "How many"
+min = 1
+max = 100
+default = 10
+width = "half"
+show_if = { param = "show_files", equals = true }
+
+[[params]]
+name = "sort_by"
+section = "report"
+type = "choice"
+label = "Order by"
+choices = [
+  { value = "size", label = "Size" },
+  { value = "modified", label = "Last changed" },
+  { value = "name", label = "Name" },
+]
+default = "size"
+width = "half"
+show_if = { param = "show_files", equals = true }
+
+# --- advanced options, hidden until asked for -----------------------------------------------
+
+# This switch only steers the form; the mod does not need it to run.
+[[params]]
+name = "advanced"
+type = "bool"
+label = "Show advanced options"
+default = false
+
+[[sections]]
+id = "advanced"
+title = "Advanced"
+show_if = { param = "advanced", truthy = true }   # the whole section appears with the switch
+
+[[params]]
+name = "include_hidden"
+section = "advanced"
+type = "bool"
+label = "Include hidden files and folders"
+help = "Names that start with a dot."
+default = false
+
+[[params]]
+name = "since"
+section = "advanced"
+type = "date"
+label = "Only files changed since"
+help = "Leave empty for all dates."
+nullable = true
+
+# --- an extra button next to Run ------------------------------------------------------------
+
+[[actions]]
+name = "check_folder"      # calls action_check_folder(params, ctx) in main.py
+label = "Check folder"
+help = "Count the files quickly, without running the whole report."
+params = ["folder", "recursive"]

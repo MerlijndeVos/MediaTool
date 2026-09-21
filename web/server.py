@@ -4,8 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import queue
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FutureTimeout
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import AsyncIterator, Optional
 
 from core.ai import (
@@ -31,10 +35,12 @@ from core.rename_profiles import (
 from core.subtitles import detect_lang_from_path, scan_junk
 from core.subtitle_languages import language_options
 from core.log_storage import clear_logs, logs_dir, logs_stats, read_log_chunk, resolve_log_file
-from core.mods import ModError, install as mod_install, market as mod_market, prompts as mod_prompts
+from core.mods import ModCancelled, ModContext, ModError, install as mod_install, market as mod_market, prompts as mod_prompts
 from core.mods import registry, safe_mode, set_safe_mode, user_mods_dir
+from core.mods.groups import BUILTIN_GROUPS
+from core.mods.results import ResultError, build_result, from_return
 from core.settings_store import load_settings, save_settings
-from core.shell import open_path
+from core.shell import can_open_directly, open_path, reveal_path
 from core.tools import get_tools_status, retry_bootstrap_background, start_bootstrap_background
 from core.updates import check_for_update, get_apply_status, start_apply_update
 from core.version import app_version
@@ -44,7 +50,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from .jobs import job_manager
-from .mod_params import params_model, validate_params
+from .mod_params import action_params_model, get_enabled_mod, params_model, validate_params
 from .schemas import (
     ClearLogsResponse,
     CommandInfo,
@@ -58,6 +64,8 @@ from .schemas import (
     JobUndoResponse,
     LogChunkResponse,
     LogsStatsResponse,
+    ModActionRequest,
+    ModActionResponse,
     ModEnableRequest,
     ModInstallConfirmRequest,
     ModInstallPrepareRequest,
@@ -65,6 +73,7 @@ from .schemas import (
     ModsResponse,
     OpenLogFileRequest,
     OpenPathResponse,
+    OpenResultRequest,
     RenameProfileGenerateRequest,
     RenameProfileGenerateResponse,
     SafeModeRequest,
@@ -90,6 +99,13 @@ from .schemas import (
 )
 
 from .paths import FRONTEND_DIST
+
+logger = logging.getLogger(__name__)
+
+# A mod action runs while the page waits, so it gets a limit. (Python cannot stop a running
+# thread: a slow action is abandoned, not killed.)
+ACTION_TIMEOUT_SECONDS = 120.0
+_action_pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix="mod-action")
 
 
 @asynccontextmanager
@@ -167,6 +183,8 @@ def _settings_response() -> SettingsResponse:
         file_logging=bool(settings.get("file_logging", True)),
         ai=_ai_settings_response(),
         logs=LogsStatsResponse(**logs_stats()),
+        theme=str(settings.get("theme") or "theme-default"),
+        color_mode=settings.get("color_mode") if settings.get("color_mode") in ("system", "light", "dark") else "system",
     )
 
 
@@ -366,7 +384,7 @@ def open_log_file(body: OpenLogFileRequest) -> OpenPathResponse:
 def list_commands() -> CommandsResponse:
     commands = [
         CommandInfo(name=mod.id, description=mod.manifest.description)
-        for mod in registry.enabled()
+        for mod in registry.enabled("tool")
     ]
     return CommandsResponse(commands=commands)
 
@@ -374,7 +392,7 @@ def list_commands() -> CommandsResponse:
 @app.get("/api/commands/{command}/schema")
 def command_schema(command: str) -> dict:
     mod = registry.get(command)
-    if mod is None or not mod.enabled:
+    if mod is None or not mod.enabled or mod.is_theme:
         raise HTTPException(status_code=404, detail=f"Unknown command: {command}")
     try:
         return params_model(mod).model_json_schema()
@@ -386,6 +404,8 @@ def _mods_response() -> ModsResponse:
     return ModsResponse(
         mods=[mod.to_dict() for mod in registry.all()],
         errors=[err.to_dict() for err in registry.errors()],
+        notices=[note.to_dict() for note in registry.notices()],
+        groups=[{"name": name, "description": text} for name, text in BUILTIN_GROUPS],
         safe_mode=safe_mode(),
         mods_dir=str(user_mods_dir()),
     )
@@ -423,7 +443,9 @@ def set_mods_safe_mode(body: SafeModeRequest) -> ModsResponse:
 @app.get("/api/mods/prompts", response_model=ModPromptsResponse)
 def mod_ai_prompts() -> ModPromptsResponse:
     """The copy-paste prompts for building a mod, and for reviewing someone else's, with an AI assistant."""
-    return ModPromptsResponse(build=mod_prompts.BUILD_PROMPT, review=mod_prompts.REVIEW_PROMPT)
+    return ModPromptsResponse(
+        build=mod_prompts.BUILD_PROMPT, review=mod_prompts.REVIEW_PROMPT, theme=mod_prompts.THEME_PROMPT
+    )
 
 
 @app.get("/api/mods/market")
@@ -463,6 +485,52 @@ def cancel_mod_install(token: str) -> OpenPathResponse:
     except ModError:
         pass  # already gone
     return OpenPathResponse()
+
+
+@app.post("/api/mods/{mod_id}/actions/{action}", response_model=ModActionResponse)
+def run_mod_action(mod_id: str, action: str, body: ModActionRequest) -> ModActionResponse:
+    """Run one of a mod's ``[[actions]]`` (for example "Test connection") and return what it shows.
+
+    The function is ``action_<name>(params, ctx)`` in the mod's ``main.py``. It may call
+    ``ctx.result(...)`` and/or return text or a result dict. Only actions the manifest declares can be called.
+    """
+    try:
+        mod = get_enabled_mod(mod_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    spec = next((a for a in mod.manifest.actions if a.name == action), None)
+    if spec is None:
+        raise HTTPException(status_code=404, detail=f"'{mod_id}' has no action '{action}'.")
+    try:
+        params = action_params_model(mod, spec.params).model_validate(body.params).model_dump()
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    try:
+        fn = getattr(mod.load_module(), f"action_{action}", None)
+    except ModError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    if not callable(fn):
+        raise HTTPException(status_code=500, detail=f"'{mod_id}' declares the action '{action}' but does not define action_{action}(params, ctx).")
+
+    results: list[dict] = []
+    ctx = ModContext(mod.id, on_result=results.append)
+    future = _action_pool.submit(fn, params, ctx)
+    try:
+        value = future.result(timeout=ACTION_TIMEOUT_SECONDS)
+        results.extend(from_return(value))
+    except FutureTimeout:
+        return ModActionResponse(
+            ok=False,
+            results=[build_result("message", {"text": f"'{spec.label}' took longer than {ACTION_TIMEOUT_SECONDS:.0f} seconds and was given up on.", "level": "error"})],
+        )
+    except ModCancelled:
+        return ModActionResponse(ok=False, results=[build_result("message", {"text": "Cancelled.", "level": "warning"})])
+    except ResultError as exc:
+        return ModActionResponse(ok=False, results=[build_result("message", {"text": f"The mod returned something that cannot be shown: {exc}", "level": "error"})])
+    except Exception as exc:  # a broken mod must not look like a crash of Toolbox
+        logger.exception("Action %s of mod %s failed", action, mod_id)
+        return ModActionResponse(ok=False, results=[build_result("message", {"text": str(exc) or exc.__class__.__name__, "level": "error"})])
+    return ModActionResponse(ok=True, results=results)
 
 
 @app.get("/api/mods/{mod_id}/source")
@@ -555,6 +623,31 @@ def create_job(body: JobCreateRequest) -> JobCreateResponse:
         job=summary,
         events_url=f"/api/jobs/{job.id}/events",
     )
+
+
+@app.post("/api/jobs/{job_id}/results/open", response_model=OpenPathResponse)
+def open_job_result(job_id: str, body: OpenResultRequest) -> OpenPathResponse:
+    """Open (or show in its folder) a file a job listed in a ``files`` result.
+
+    Only paths the job itself reported can be opened, so a page cannot use this to start
+    arbitrary files; anything that could run a program is only ever shown in its folder.
+    """
+    job = job_manager.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if body.path not in job.result_paths():
+        raise HTTPException(status_code=403, detail="That path was not listed by this job.")
+    path = Path(body.path)
+    try:
+        if body.reveal or not can_open_directly(path):
+            reveal_path(path)
+        else:
+            open_path(path)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="That file no longer exists.") from exc
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    return OpenPathResponse()
 
 
 @app.post("/api/jobs/{job_id}/cancel")

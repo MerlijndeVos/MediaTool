@@ -14,8 +14,8 @@ const PAGE_LINES = 500;
 type Level = "error" | "warning" | "info";
 
 const LEVELS: { id: Level; label: string; value: number; dot: string }[] = [
-  { id: "error", label: "Errors", value: 40, dot: "bg-red-500" },
-  { id: "warning", label: "Warnings", value: 30, dot: "bg-amber-500" },
+  { id: "error", label: "Errors", value: 40, dot: "bg-danger" },
+  { id: "warning", label: "Warnings", value: 30, dot: "bg-warning" },
   { id: "info", label: "Info", value: 20, dot: "bg-muted-foreground/60" },
 ];
 

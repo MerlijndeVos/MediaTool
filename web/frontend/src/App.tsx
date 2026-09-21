@@ -13,6 +13,8 @@ import { UpdateModal } from "@/components/UpdateModal";
 import { UpdatesPanel } from "@/components/UpdatesPanel";
 import { cn } from "@/lib/utils";
 import { isDesktopApp } from "@/lib/desktop";
+import { groupStyle } from "@/lib/groups";
+import { useAppearance } from "@/hooks/useAppearance";
 import { useMods } from "@/hooks/useMods";
 import { useUpdates } from "@/hooks/useUpdates";
 import type { DownloadJobMeta, ToolId } from "@/lib/types";
@@ -23,17 +25,13 @@ type AppView = "home" | "tools" | "logs" | "ai" | "updates" | "appearance" | "mo
 export default function App() {
   const updates = useUpdates();
   const mods = useMods();
+  const appearance = useAppearance(mods.themes, mods.loaded);
   const desktop = isDesktopApp();
   const [view, setView] = useState<AppView>("home");
   const [tool, setTool] = useState<ToolId>("convert");
   const [fileLogging, setFileLogging] = useState(true);
   const [logOpen, setLogOpen] = useState(true);
   const [logHeight, setLogHeight] = useState(256);
-  const [dark, setDark] = useState(() =>
-    typeof window !== "undefined"
-      ? window.matchMedia("(prefers-color-scheme: dark)").matches
-      : false,
-  );
   const [apiOk, setApiOk] = useState<boolean | null>(null);
   const [running, setRunning] = useState(false);
   const logClosedByUser = useRef(false);
@@ -62,10 +60,6 @@ export default function App() {
   );
 
   useEffect(() => {
-    document.documentElement.classList.toggle("dark", dark);
-  }, [dark]);
-
-  useEffect(() => {
     const tick = () => checkHealth().then(setApiOk);
     tick();
     const id = setInterval(tick, 5000);
@@ -89,6 +83,12 @@ export default function App() {
     }
     return undefined;
   }, [jobs, tool]);
+
+  // The latest run of the open tool: what it showed (tables, counters, ...) appears under its form.
+  const resultsJob = useMemo(
+    () => jobs.find((j) => j.command === tool && !j.undo_of),
+    [jobs, tool],
+  );
 
   const downloadJobs = useMemo(
     () => jobs.filter((j) => j.command === "download"),
@@ -162,8 +162,8 @@ export default function App() {
             <span
               className={cn(
                 "flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium",
-                apiOk === true && "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
-                apiOk === false && "bg-red-500/15 text-red-700 dark:text-red-400",
+                apiOk === true && "bg-success/15 text-success-text",
+                apiOk === false && "bg-danger/15 text-danger-text",
                 apiOk === null && "bg-muted text-muted-foreground",
               )}
             >
@@ -190,7 +190,7 @@ export default function App() {
             Home
           </button>
           {mods.groups.map((group) => {
-            const muted = group.name.toLowerCase() === "experimental";
+            const muted = Boolean(groupStyle(group.name).muted);
             return (
               <nav key={group.name} className="space-y-1">
                 <p className="px-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -308,7 +308,7 @@ export default function App() {
 
         <main>
           {apiOk === false && (
-            <div className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
+            <div className="mb-4 rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-sm">
               Start the API server: <code className="rounded bg-muted px-1">python -m web</code>
               {import.meta.env.DEV && (
                 <> — dev UI proxies <code className="rounded bg-muted px-1">/api</code> to port 8765</>
@@ -333,7 +333,11 @@ export default function App() {
           ) : view === "updates" ? (
             <UpdatesPanel {...updates} />
           ) : view === "appearance" ? (
-            <AppearancePanel dark={dark} onDarkChange={setDark} />
+            <AppearancePanel
+              appearance={appearance}
+              themes={mods.themes}
+              onOpenMods={() => setView("mods")}
+            />
           ) : view === "mods" ? (
             <ModsPanel mods={mods} />
           ) : (
@@ -348,6 +352,7 @@ export default function App() {
               onCancelDownload={cancel}
               onDismissFinishedDownloads={dismissFinishedDownloads}
               renamedRoot={renamedRoot}
+              resultsJob={resultsJob}
             />
           )}
         </main>

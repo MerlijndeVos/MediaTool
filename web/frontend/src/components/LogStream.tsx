@@ -35,7 +35,7 @@ function UndoConfirmDialog({
     >
       <div className="space-y-4 p-6" onClick={(e) => e.stopPropagation()}>
         <div className="flex gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-warning/15 text-warning-text">
             <AlertTriangle className="h-5 w-5" />
           </div>
           <div className="space-y-1">
@@ -106,7 +106,7 @@ export function LogStream({
       ref={ref}
       onScroll={handleScroll}
       className={cn(
-        "cursor-text select-text overflow-auto font-mono text-xs leading-relaxed text-muted-foreground",
+        "cursor-text select-text overflow-auto font-mono text-xs leading-relaxed text-log-info",
         wrap ? "whitespace-pre-wrap break-words" : "whitespace-pre",
         className,
       )}
@@ -118,8 +118,8 @@ export function LogStream({
           <div
             key={`${line.ts}-${i}`}
             className={cn(
-              line.level >= 40 && "text-red-500 dark:text-red-400",
-              line.level === 30 && "text-amber-600 dark:text-amber-400",
+              line.level >= 40 && "text-log-error",
+              line.level === 30 && "text-log-warn",
             )}
           >
             {line.message}
@@ -145,8 +145,8 @@ export function UndoRenameBar({
 
   return (
     <>
-      <div className="flex flex-wrap items-center gap-2 border-b bg-amber-500/10 px-4 py-2">
-        <span className="text-xs font-medium text-amber-950 dark:text-amber-100">
+      <div className="flex flex-wrap items-center gap-2 border-b bg-warning/10 px-4 py-2">
+        <span className="text-xs font-medium text-warning-text">
           {jobs.every((job) => job.command === "rename") ? "Undo rename" : "Undo"}
         </span>
         {jobs.map((job) => (
@@ -156,7 +156,7 @@ export function UndoRenameBar({
             size="sm"
             variant="outline"
             disabled={undoing}
-            className="h-7 border-amber-500/40 bg-background/80 text-xs"
+            className="h-7 border-warning/40 bg-background/80 text-xs"
             onClick={() => setConfirmJob(job)}
           >
             <RotateCcw className="h-3 w-3" />

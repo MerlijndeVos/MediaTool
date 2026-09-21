@@ -87,7 +87,7 @@ export function UpdatesPanel({
         )}
 
         {error && (
-          <p className={cn("text-sm", "text-red-600 dark:text-red-400")}>{error}</p>
+          <p className={cn("text-sm", "text-danger-text")}>{error}</p>
         )}
         {!error && status && !applying && (
           <p className="text-sm text-muted-foreground">{status}</p>

@@ -193,7 +193,7 @@ function JunkReviewSection({
                       className={cn(
                         "flex cursor-pointer gap-3 rounded-md border px-3 py-2 text-sm transition-colors",
                         remove
-                          ? "border-amber-500/40 bg-amber-500/10"
+                          ? "border-warning/40 bg-warning/10"
                           : "border-border/60 bg-muted/30",
                       )}
                     >
@@ -219,7 +219,7 @@ function JunkReviewSection({
       )}
 
       {junkReviewRequired && normalizedInput && (
-        <p className="text-xs text-amber-700 dark:text-amber-300">
+        <p className="text-xs text-warning-text">
           Run “Scan for junk” and review lines before Preview or Apply.
         </p>
       )}

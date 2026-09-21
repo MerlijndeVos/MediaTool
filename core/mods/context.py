@@ -8,9 +8,11 @@ import threading
 from typing import Any, Callable, Optional, Sequence
 
 from ..subprocess_utils import no_window_kwargs
+from .results import build_result
 
 LogCallback = Callable[[str, int], None]
 ProgressCallback = Callable[[dict], None]
+ResultCallback = Callable[[dict], None]
 
 
 class ModCancelled(Exception):
@@ -28,12 +30,14 @@ class ModContext:
         cancel_event: Optional[threading.Event] = None,
         on_log: Optional[LogCallback] = None,
         on_progress: Optional[ProgressCallback] = None,
+        on_result: Optional[ResultCallback] = None,
     ) -> None:
         self.mod_id = mod_id
         self.job_id = job_id
         self.cancel_event = cancel_event or threading.Event()
         self._on_log = on_log
         self._on_progress = on_progress
+        self._on_result = on_result
         self._logger = logging.getLogger(f"toolbox.mod.{mod_id}")
         self._tools: tuple[str, str] | None = None
         self.undo_manifest: Optional[dict] = None
@@ -57,6 +61,18 @@ class ModContext:
         if status:
             payload["status"] = status
         self._on_progress(payload)
+
+    def result(self, view: str, **fields: Any) -> None:
+        """Show something after the run instead of (or as well as) log lines.
+
+        ``view`` is ``table``, ``counters``, ``files``, ``markdown``, ``image`` or ``message``; see
+        :mod:`core.mods.results` for the fields each one takes. Nothing here is drawn as HTML.
+        """
+        payload = build_result(view, fields)
+        if self._on_result is not None:
+            self._on_result(payload)
+        else:
+            self._logger.info("result (%s): %s", view, payload.get("title") or "")
 
     def cancelled(self) -> bool:
         """True once the user asked to cancel. Check it in loops and stop early."""

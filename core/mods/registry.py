@@ -18,17 +18,20 @@ import logging
 import os
 import sys
 import threading
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from types import ModuleType
 from typing import Any, Callable, Optional
 
 from ..runtime import app_data_dir, resource_root
 from ..settings_store import load_settings, save_settings
+from .groups import BUILTIN_GROUP_NAMES, canonical_group, group_key, group_rank, near_miss, near_miss_message
 from .manifest import MANIFEST_NAME, ManifestError, ModManifest, load_manifest
 
 logger = logging.getLogger(__name__)
 
+# The theme that is active when nothing else was chosen (a built-in theme mod, see builtin_mods/).
+DEFAULT_THEME_ID = "theme-default"
 BUILTIN_DIRNAME = "builtin_mods"
 USER_DIRNAME = "mods"
 # Written into a mod's folder when it is installed from a git URL, folder, zip or file:
@@ -57,6 +60,17 @@ class LoadError:
 
 
 @dataclass
+class Notice:
+    """Something worth telling the user about a mod that still loads fine (unlike a :class:`LoadError`)."""
+
+    mod_id: str
+    message: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"id": self.mod_id, "message": self.message}
+
+
+@dataclass
 class Mod:
     manifest: ModManifest
     source: str  # "builtin" | "user"
@@ -75,8 +89,14 @@ class Mod:
     def builtin(self) -> bool:
         return self.source == "builtin"
 
+    @property
+    def is_theme(self) -> bool:
+        return self.manifest.is_theme
+
     def load_module(self) -> ModuleType:
         """Import the mod's entry file once. Raises :class:`ModError` if it cannot be loaded."""
+        if self.manifest.is_theme:
+            raise ModError(f"'{self.id}' is a theme: it only holds colours and has no code to run.")
         with self._lock:
             if self._module is not None:
                 return self._module
@@ -181,6 +201,7 @@ class ModRegistry:
         self._lock = threading.RLock()
         self._mods: dict[str, Mod] = {}
         self._errors: list[LoadError] = []
+        self._notices: list[Notice] = []
         self._loaded = False
 
     def _scan(self, directory: Path, source: str, enabled_user: set[str]) -> None:
@@ -222,33 +243,81 @@ class ModRegistry:
         with self._lock:
             self._mods = {}
             self._errors = []
+            self._notices = []
             enabled_user = {str(x) for x in load_settings().get("enabled_mods", [])}
             self._scan(builtin_mods_dir(), "builtin", enabled_user)
             if not safe_mode():
                 self._scan(user_mods_dir(), "user", enabled_user)
+            self._merge_groups()
             self._loaded = True
+
+    def _merge_groups(self) -> None:
+        """Make mods that spell a new category differently ('my tools', 'My Tools') share one section.
+
+        The built-in sections keep their spelling; among new ones the first mod (in folder order)
+        decides. A name that only looks like an existing one is left alone but reported.
+        """
+        spelled: dict[str, str] = {}
+        for mod in self._mods.values():
+            if mod.is_theme:
+                continue
+            group = mod.manifest.group
+            chosen = spelled.setdefault(group_key(group), group)
+            if chosen != group:
+                mod.manifest = replace(mod.manifest, group=chosen)
+        known = [g for g in spelled.values() if g not in BUILTIN_GROUP_NAMES]
+        for mod in self._mods.values():
+            if mod.is_theme:
+                continue
+            others = [g for g in known if g != mod.manifest.group]
+            similar = near_miss(mod.manifest.group, others)
+            if similar:
+                self._notices.append(Notice(mod.id, near_miss_message(mod.manifest.group, similar)))
 
     def _ensure(self) -> None:
         if not self._loaded:
             self.reload()
 
     def all(self) -> list[Mod]:
-        """Every discovered mod, ordered by group position, then order, then name."""
+        """Every discovered mod: tools by section, then themes.
+
+        Sections have a fixed position (the built-in ones first, then new ones A to Z); a mod's
+        ``order`` only places it inside its section, then by name.
+        """
         with self._lock:
             self._ensure()
             mods = list(self._mods.values())
-        group_rank: dict[str, int] = {}
-        for mod in mods:
-            group_rank[mod.manifest.group] = min(
-                group_rank.get(mod.manifest.group, mod.manifest.order), mod.manifest.order
-            )
-        return sorted(
-            mods,
-            key=lambda m: (group_rank[m.manifest.group], m.manifest.group, m.manifest.order, m.manifest.name.lower()),
-        )
 
-    def enabled(self) -> list[Mod]:
-        return [m for m in self.all() if m.enabled]
+        def key(m: Mod) -> tuple:
+            if m.is_theme:  # after the tools: the built-in themes first, then the user's, by name
+                return (1, 0 if m.builtin else 1, m.manifest.name.lower())
+            return (0, *group_rank(m.manifest.group), m.manifest.order, m.manifest.name.lower())
+
+        return sorted(mods, key=key)
+
+    def enabled(self, kind: str | None = None) -> list[Mod]:
+        """The mods that are on; ``kind`` ("tool" or "theme") narrows it."""
+        return [m for m in self.all() if m.enabled and (kind is None or m.manifest.type == kind)]
+
+    def group_names(self) -> list[str]:
+        """The categories in use right now: the built-in ones plus any that installed mods introduced."""
+        extra = [m.manifest.group for m in self.all() if not m.is_theme and m.manifest.group not in BUILTIN_GROUP_NAMES]
+        return list(dict.fromkeys([*BUILTIN_GROUP_NAMES, *extra]))
+
+    def place(self, group: str) -> dict[str, Any]:
+        """Where a mod asking for *group* would appear: the section's spelling and whether it is a new one."""
+        names = self.group_names()
+        name = canonical_group(group, names)
+        return {
+            "name": name,
+            "new_section": name not in names,
+            "near_miss": near_miss(name, names),
+        }
+
+    def notices(self) -> list[Notice]:
+        with self._lock:
+            self._ensure()
+            return list(self._notices)
 
     def get(self, mod_id: str) -> Mod | None:
         with self._lock:
@@ -267,6 +336,13 @@ class ModRegistry:
             if mod_id in current:
                 current.discard(mod_id)
                 save_settings(enabled_mods=sorted(current))
+            self.reset_theme_if_active(mod_id)
+
+    @staticmethod
+    def reset_theme_if_active(mod_id: str) -> None:
+        """Go back to the default theme when the theme that is in use is turned off or removed."""
+        if load_settings().get("theme") == mod_id:
+            save_settings(theme=DEFAULT_THEME_ID)
 
     def set_enabled(self, mod_id: str, enabled: bool) -> Mod:
         with self._lock:
@@ -283,6 +359,8 @@ class ModRegistry:
                 current.discard(mod_id)
             save_settings(enabled_mods=sorted(current))
             mod.enabled = enabled
+            if not enabled:
+                self.reset_theme_if_active(mod_id)
             return mod
 
 

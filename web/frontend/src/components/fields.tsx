@@ -48,7 +48,7 @@ function ApplyConfirmDialog({
     >
       <div className="space-y-4 p-6" onClick={(e) => e.stopPropagation()}>
         <div className="flex gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-500/15 text-red-700 dark:text-red-300">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-danger/15 text-danger-text">
             <AlertTriangle className="h-5 w-5" />
           </div>
           <div className="space-y-1">
@@ -107,7 +107,7 @@ export function ToolRunActions({
           variant="secondary"
           size="lg"
           className={cn(
-            "border-amber-500/50 bg-amber-500/15 text-amber-950 hover:bg-amber-500/25 dark:text-amber-50",
+            "border-warning/50 bg-warning/15 text-warning-text hover:bg-warning/25",
           )}
         >
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />}

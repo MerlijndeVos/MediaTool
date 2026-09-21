@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from datetime import date
 from typing import Any
 
 from core.mods import (
@@ -29,7 +30,9 @@ from core.mods import (
     user_mods_dir,
 )
 
-from .console import console_log, console_progress
+from core.mods.manifest import COLOR_RE
+
+from .console import console_log, console_progress, console_result
 
 
 def _bounded(base: type, spec: ParamSpec):
@@ -58,6 +61,20 @@ def _json_object(text: str) -> dict:
     return value
 
 
+def _color(text: str) -> str:
+    if not COLOR_RE.match(text):
+        raise argparse.ArgumentTypeError(f"{text!r} is not a colour; write it as #rrggbb")
+    return text
+
+
+def _iso_date(text: str) -> str:
+    try:
+        date.fromisoformat(text)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(f"{text!r} is not a date; write it as YYYY-MM-DD") from exc
+    return text
+
+
 def _add_param(parser: argparse.ArgumentParser, spec: ParamSpec) -> None:
     flag = "--" + spec.name.replace("_", "-")
     help_text = spec.help or spec.label
@@ -74,8 +91,15 @@ def _add_param(parser: argparse.ArgumentParser, spec: ParamSpec) -> None:
         kwargs["type"] = _bounded(float, spec)
     elif spec.type in ("files", "list"):
         kwargs["nargs"] = "+"
+    elif spec.type == "multichoice":
+        kwargs["nargs"] = "+"
+        kwargs["choices"] = [c.value for c in spec.choices]
     elif spec.type == "json":
         kwargs["type"] = _json_object
+    elif spec.type == "color":
+        kwargs["type"] = _color
+    elif spec.type == "date":
+        kwargs["type"] = _iso_date
     if spec.type == "choice" and spec.strict:
         kwargs["choices"] = [c.value for c in spec.choices]
 
@@ -127,11 +151,14 @@ def register(subparsers: Any) -> None:
     prompt.add_argument(
         "--review", action="store_true", help="Print the prompt for reviewing a mod instead of writing one."
     )
+    prompt.add_argument(
+        "--theme", action="store_true", help="Print the prompt for designing a theme (colours and styling) instead."
+    )
     for name, text in (("enable", "Turn a user mod on."), ("disable", "Turn a user mod off.")):
         sub = actions.add_parser(name, help=text)
         sub.add_argument("id", help="Mod id (see 'mods list').")
 
-    for mod in registry.enabled():
+    for mod in registry.enabled("tool"):
         # Built-in features that already have a hand-written subcommand (cli/args.py) keep it.
         if mod.id in subparsers.choices:
             continue
@@ -153,9 +180,12 @@ def _print_mods() -> None:
             state = "built-in"
         else:
             state = "on" if mod.enabled else "off"
-        print(f"{mod.id:<22} {state:<9} {mod.manifest.version:<8} {mod.manifest.description}")
+        kind = "theme" if mod.is_theme else mod.manifest.group
+        print(f"{mod.id:<22} {state:<9} {mod.manifest.version:<8} {kind:<13} {mod.manifest.description}")
     for err in registry.errors():
         print(f"! {err.path}: {err.message}", file=sys.stderr)
+    for note in registry.notices():
+        print(f"? {note.mod_id}: {note.message}", file=sys.stderr)
 
 
 def _fail(message: str) -> None:
@@ -188,7 +218,8 @@ def _print_preview(preview: dict) -> None:
     """The trust prompt, as text."""
     manifest, source = preview["manifest"], preview["source"]
     declared = [label for key, label in _ACCESS_LABELS if manifest["permissions"].get(key)]
-    print(f"\n{manifest['name']}  v{manifest['version']}  (id: {manifest['id']})")
+    is_theme = manifest.get("type") == "theme"
+    print(f"\n{manifest['name']}  v{manifest['version']}  (id: {manifest['id']})" + ("  [theme]" if is_theme else ""))
     if manifest["author"]:
         print(f"  Author:      {manifest['author']}")
     if manifest["description"]:
@@ -198,7 +229,13 @@ def _print_preview(preview: dict) -> None:
         print(f"  Commit:      {source['commit']}  (pinned)")
     else:
         print(f"  From:        {source['type']} {source.get('path', '')}")
-    print(f"  Declares:    {', '.join(declared) if declared else 'no special access'}  (not enforced)")
+    if is_theme:
+        print("  Declares:    only colours and settings. No code runs.")
+    else:
+        placement = preview.get("placement")
+        if placement:
+            print(f"  Appears in:  {placement['name']}" + ("  (a new section)" if placement["new_section"] else ""))
+        print(f"  Declares:    {', '.join(declared) if declared else 'no special access'}  (not enforced)")
     print(f"  Files:       {', '.join(f['path'] for f in preview['files'])}")
     if preview.get("replaces"):
         old = preview["replaces"]
@@ -209,11 +246,14 @@ def _print_preview(preview: dict) -> None:
             print(f"  Changes:     {preview['compare_url']}")
     for warning in preview["warnings"]:
         print(f"  ! {warning}")
-    print(
-        "\nA mod is code that runs with the same access as Toolbox. It can read, change and delete your\n"
-        "files. Toolbox does not vet mods, and the access above is only what the author says.\n"
-        "Read the code first (the files are staged; nothing has run)."
-    )
+    if is_theme:
+        print("\nA theme is data: it changes colours and styling and cannot run code or reach your files.")
+    else:
+        print(
+            "\nA mod is code that runs with the same access as Toolbox. It can read, change and delete your\n"
+            "files. Toolbox does not vet mods, and the access above is only what the author says.\n"
+            "Read the code first (the files are staged; nothing has run)."
+        )
 
 
 def _review_and_commit(preview: dict, question: str, assume_yes: bool, *, enable: bool = False) -> None:
@@ -282,7 +322,8 @@ def _search(args: argparse.Namespace) -> None:
         _fail(result["error"])
     found = [e for e in result["mods"] if market.matches(e, " ".join(args.query))]
     for entry in found:
-        print(f"{entry['id']:<22} {entry['version']:<8} {entry['name']}: {entry['description']}")
+        label = "theme" if entry["type"] == "theme" else entry["group"]
+        print(f"{entry['id']:<22} {entry['version']:<8} {label + ' - ' if label else ''}{entry['name']}: {entry['description']}")
         where = entry["repo"] + (f" --subdir {entry['path']}" if entry["path"] else "")
         print(f"{'':<22} toolbox mods install {where} --ref {entry['commit']}")
     print(f"{len(found)} of {len(result['mods'])} mods. Listed is not reviewed: read the code before you install.")
@@ -303,7 +344,7 @@ def _handle_mods(args: argparse.Namespace) -> None:
     elif action == "search":
         _search(args)
     elif action == "prompt":
-        print(prompts.REVIEW_PROMPT if args.review else prompts.BUILD_PROMPT)
+        print(prompts.REVIEW_PROMPT if args.review else prompts.THEME_PROMPT if args.theme else prompts.BUILD_PROMPT)
     else:
         try:
             mod = registry.set_enabled(args.id, action == "enable")
@@ -315,7 +356,7 @@ def _handle_mods(args: argparse.Namespace) -> None:
 
 def _run_mod(mod: Mod, args: argparse.Namespace) -> None:
     params = {spec.name: getattr(args, spec.name, None) for spec in mod.manifest.params}
-    ctx = ModContext(mod.id, on_progress=console_progress)
+    ctx = ModContext(mod.id, on_progress=console_progress, on_result=console_result)
     try:
         mod.run_fn()(params, ctx)
     except ModCancelled:

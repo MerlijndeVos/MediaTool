@@ -1,3 +1,5 @@
+import type { ModAccent } from "@/lib/groups";
+
 /** A mod id: built-in features and user mods are all addressed by id. */
 export type CommandName = string;
 
@@ -66,7 +68,20 @@ export interface TranslationSample {
   target: string;
 }
 
+export type ResultLevel = "info" | "success" | "warning" | "error";
+
+/** What a mod chose to show after a run (`ctx.result(...)`), as plain data. Never HTML. */
+export type ModResult =
+  | { view: "table"; title: string; columns: string[]; rows: (string | number)[][]; truncated: boolean }
+  | { view: "counters"; title: string; items: { label: string; value: string }[] }
+  | { view: "files"; title: string; files: { path: string; label?: string }[]; truncated: boolean }
+  | { view: "markdown"; title: string; text: string }
+  | { view: "image"; title: string; src: string; alt: string }
+  | { view: "message"; title: string; text: string; level: ResultLevel };
+
 export interface ActiveJob extends JobSummary {
+  /** What the mod showed after the run; grows while the job runs. */
+  results?: ModResult[];
   logs: LogLine[];
   progress?: number | null;
   progressLabel?: string;
@@ -103,7 +118,51 @@ export type ModParamType =
   | "file"
   | "files"
   | "list"
-  | "json";
+  | "json"
+  | "multichoice"
+  | "color"
+  | "date";
+
+export type ModType = "tool" | "theme";
+
+/** `show_if`: show a field or section only while another param has a certain value. */
+export interface ShowIf {
+  param: string;
+  op: "equals" | "not_equals" | "in" | "truthy" | "falsy";
+  value?: unknown;
+}
+
+export interface ModSection {
+  id: string;
+  title: string;
+  /** Markdown-lite text shown under the title. */
+  text: string;
+  show_if: ShowIf | null;
+}
+
+export interface ModAction {
+  name: string;
+  label: string;
+  help: string;
+  /** Which params the action receives; null = all of them. */
+  params: string[] | null;
+}
+
+/** A theme as the API sends it: what it sets, and every token resolved against the default. */
+export interface ThemeData {
+  light: Record<string, string>;
+  dark: Record<string, string>;
+  radius: string | null;
+  font: string | null;
+  resolved: {
+    light: Record<string, string>;
+    dark: Record<string, string>;
+    radius: string;
+    font_stack: string;
+  };
+  swatches: { light: string[]; dark: string[] };
+  warnings: string[];
+}
 
 export interface ModParam {
   name: string;
@@ -122,6 +181,11 @@ export interface ModParam {
   ui: boolean;
   width: "full" | "half";
   nullable: boolean;
+  /** The section this field sits in; empty = above all sections. */
+  section: string;
+  show_if: ShowIf | null;
+  widget: "default" | "slider";
+  step?: number | null;
 }
 
 export interface ModInfo {
@@ -130,7 +194,10 @@ export interface ModInfo {
   description: string;
   version: string;
   author: string;
+  type: ModType;
   group: string;
+  /** Tile colour: a category or status name, or empty for the category's own. */
+  accent: ModAccent;
   order: number;
   icon: string;
   source: "builtin" | "user";
@@ -141,6 +208,7 @@ export interface ModInfo {
   install?: ModInstallMeta | null;
   ui: {
     kind: "form" | "builtin";
+    layout: "sections" | "tabs";
     panel: string;
     run_mode: "preview_apply" | "run";
     mode_param: string;
@@ -150,6 +218,10 @@ export interface ModInfo {
   run: { max_concurrent: number; cancel: "immediate" | "cooperative"; undo: boolean };
   permissions: { network: boolean; writes_files: boolean; runs_programs: boolean };
   params: ModParam[];
+  sections: ModSection[];
+  actions: ModAction[];
+  /** Set for theme mods. */
+  theme: ThemeData | null;
 }
 
 export interface ModLoadError {
@@ -158,9 +230,18 @@ export interface ModLoadError {
   id?: string | null;
 }
 
+export interface ModNotice {
+  id: string;
+  message: string;
+}
+
 export interface ModsResponse {
   mods: ModInfo[];
   errors: ModLoadError[];
+  /** Things worth a look that do not stop a mod from loading (a category that looks like another). */
+  notices: ModNotice[];
+  /** The built-in categories, in on-screen order, with what belongs in each. */
+  groups: { name: string; description: string }[];
   safe_mode: boolean;
   mods_dir: string;
 }
@@ -186,9 +267,18 @@ export interface ModSourceFile {
   truncated: boolean;
 }
 
+/** Where a tool would appear once installed. */
+export interface ModPlacement {
+  name: string;
+  new_section: boolean;
+  near_miss: string | null;
+}
+
 export interface ModInstallPreview {
   token: string;
   manifest: Omit<ModInfo, "source" | "builtin" | "enabled" | "path" | "install">;
+  /** null for themes. */
+  placement: ModPlacement | null;
   source: ModInstallMeta;
   files: ModSourceFile[];
   warnings: string[];
@@ -221,6 +311,11 @@ export interface MarketEntry {
   author: string;
   version: string;
   api_version: number;
+  type: ModType;
+  /** The section a tool appears in, as the listing states it (empty when it does not say). */
+  group: string;
+  /** Colours of a theme, so it can be judged without installing it. */
+  swatches: string[];
   repo: string;
   path: string;
   commit: string;
@@ -240,4 +335,5 @@ export interface MarketResponse {
 export interface ModPrompts {
   build: string;
   review: string;
+  theme: string;
 }

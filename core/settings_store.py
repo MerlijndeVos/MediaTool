@@ -12,6 +12,9 @@ _DEFAULTS: dict[str, Any] = {
     # AI provider choice and per-provider keys live under "ai" (see core/ai/config.py).
     # Ids of user-installed mods the user has turned on (built-in features are always on).
     "enabled_mods": [],
+    # Appearance: the id of the active theme mod (see core/mods/theme.py) and light/dark/system.
+    "theme": "theme-default",
+    "color_mode": "system",
 }
 
 

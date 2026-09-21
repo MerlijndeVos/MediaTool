@@ -418,7 +418,7 @@ export function ProfileEditor({ mode, profile, onChange, folderScope }: ProfileE
           )}
         </div>
         {allExamples.length > MAX_AI_EXAMPLES && (
-          <p className="text-xs text-amber-700 dark:text-amber-400">
+          <p className="text-xs text-warning-text">
             At most {MAX_AI_EXAMPLES} examples can be used at once. Remove some of the examples above or below.
           </p>
         )}
@@ -433,11 +433,11 @@ export function ProfileEditor({ mode, profile, onChange, folderScope }: ProfileE
           </p>
         )}
         {aiError && (
-          <p className="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-700 dark:text-red-300">{aiError}</p>
+          <p className="rounded-md border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger-text">{aiError}</p>
         )}
         {aiResult && (
           <div className="space-y-1 text-xs">
-            <p className={aiResult.all_ok ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-400"}>
+            <p className={aiResult.all_ok ? "text-success-text" : "text-warning-text"}>
               {aiResult.verification.length === 0
                 ? `Profile "${aiResult.profile.name}" suggested from the names in your folder. Check the examples below, then save it.`
                 : aiResult.all_ok
@@ -454,9 +454,9 @@ export function ProfileEditor({ mode, profile, onChange, folderScope }: ProfileE
             {aiResult.verification.map((v, i) => (
               <p key={i} className="flex items-start gap-1.5 font-mono">
                 {v.ok ? (
-                  <Check className="mt-0.5 h-3 w-3 shrink-0 text-emerald-600" />
+                  <Check className="mt-0.5 h-3 w-3 shrink-0 text-success-text" />
                 ) : (
-                  <X className="mt-0.5 h-3 w-3 shrink-0 text-red-600" />
+                  <X className="mt-0.5 h-3 w-3 shrink-0 text-danger-text" />
                 )}
                 <span className="min-w-0 break-all">
                   {v.ok ? v.expected : `${v.actual ?? "(not recognised)"}  (expected: ${v.expected})`}
@@ -536,7 +536,7 @@ export function ProfileEditor({ mode, profile, onChange, folderScope }: ProfileE
             <ul className="space-y-1">
               {reviewed.map((ex) => (
                 <li key={ex.before} className="flex items-start gap-1.5 font-mono">
-                  <Check className="mt-0.5 h-3 w-3 shrink-0 text-emerald-600" />
+                  <Check className="mt-0.5 h-3 w-3 shrink-0 text-success-text" />
                   <span className="min-w-0 flex-1 break-all">
                     {ex.before} <span className="text-muted-foreground">&rarr;</span> {ex.after}
                   </span>
@@ -639,13 +639,13 @@ export function ProfileEditor({ mode, profile, onChange, folderScope }: ProfileE
           className="w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           aria-label="Sample names"
         />
-        {testError && <p className="text-xs text-red-600 dark:text-red-400">{testError}</p>}
+        {testError && <p className="text-xs text-danger-text">{testError}</p>}
         {results.length > 0 && (
           <div className="overflow-hidden rounded-md border bg-card text-xs">
             {results.map((r, i) => (
               <div key={i} className="grid gap-x-3 border-b px-3 py-1.5 last:border-b-0 sm:grid-cols-2">
                 <span className="break-all font-mono text-muted-foreground">{r.sample}</span>
-                <span className={cn("break-all font-mono", r.result ? "text-foreground" : "text-amber-700 dark:text-amber-400")}>
+                <span className={cn("break-all font-mono", r.result ? "text-foreground" : "text-warning-text")}>
                   {r.result ?? r.note ?? "—"}
                 </span>
               </div>

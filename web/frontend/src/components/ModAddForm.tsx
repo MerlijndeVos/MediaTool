@@ -13,7 +13,7 @@ interface ModAddFormProps {
   onError: (message: string) => void;
 }
 
-/** Add a mod from a git address, or from a folder, zip or .py file. It only fetches and checks: the review comes next. */
+/** Add a mod from a git address, or from a folder, zip, .py or (for a theme) .toml file. It only fetches and checks: the review comes next. */
 export function ModAddForm({ busy, onBusy, onPrepared, onError }: ModAddFormProps) {
   const [location, setLocation] = useState("");
   const [ref, setRef] = useState("");
@@ -53,7 +53,8 @@ export function ModAddForm({ busy, onBusy, onPrepared, onError }: ModAddFormProp
       <p className="text-sm font-medium">Add a mod</p>
       <p className="text-xs text-muted-foreground">
         Paste a git address (for example https://github.com/name/my-mod), or choose a folder, a
-        .zip or a .py file. You get to review it before anything is installed.
+        .zip, a .py file or, for a theme, a single .toml file. You get to review it before anything
+        is installed.
       </p>
       <div className="flex flex-wrap gap-2">
         <Input
@@ -85,7 +86,7 @@ export function ModAddForm({ busy, onBusy, onPrepared, onError }: ModAddFormProp
           </Button>
           <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => void choose("file")}>
             <FileIcon className="h-4 w-4" />
-            Choose zip or .py file
+            Choose zip, .py or .toml file
           </Button>
         </div>
       )}

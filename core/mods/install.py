@@ -1,4 +1,5 @@
-"""Install, update and remove user mods: from a git URL, a folder, a ``.zip`` or a single ``.py`` file.
+"""Install, update and remove user mods: from a git URL, a folder, a ``.zip`` or a single ``.py`` file
+(a theme can also be a single ``.toml`` file).
 
 Installing is two steps so nothing reaches the mods folder before the user has seen what they
 are getting:
@@ -23,6 +24,7 @@ import shutil
 import stat
 import subprocess
 import time
+import tomllib
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -34,6 +36,7 @@ from pathlib import Path
 from typing import Any
 
 from ..runtime import app_data_dir
+from .groups import group_key, near_miss_message
 from .manifest import MANIFEST_NAME, ManifestError, ModManifest, load_manifest
 from .registry import INSTALL_META, ModError, read_install_meta, registry, unload_modules, user_mods_dir
 
@@ -479,7 +482,16 @@ def _check_expectations(manifest: ModManifest, expect: dict[str, Any]) -> list[s
         raise InstallError(
             f"The listing says this is '{expect['id']}' but the code declares '{manifest.id}'. Nothing was installed."
         )
+    # A listing that says "theme" promises there is no code; a tool behind it must never pass as one.
+    if expect.get("type") and expect["type"] != manifest.type:
+        raise InstallError(
+            f"The listing says this is a {expect['type']} but the code is a {manifest.type}. Nothing was installed."
+        )
     warnings: list[str] = []
+    if expect.get("group") and not manifest.is_theme and group_key(expect["group"]) != group_key(manifest.group):
+        warnings.append(
+            f"The listing says this mod appears under '{expect['group']}', the code puts it under '{manifest.group}'."
+        )
     if expect.get("version") and str(expect["version"]) != manifest.version:
         warnings.append(f"The listing says version {expect['version']}, the code says {manifest.version}.")
     listed = expect.get("permissions")
@@ -502,6 +514,8 @@ def _validate(root: Path) -> ModManifest:
         raise InstallError(f"{MANIFEST_NAME}: {exc}") from exc
     if manifest.ui_kind == "builtin":
         raise InstallError('Only built-in features can use ui kind "builtin"; use kind = "form".')
+    if manifest.is_theme:
+        return manifest  # data only: nothing to import, so no entry file
     entry = (root / manifest.entry).resolve()
     try:
         entry.relative_to(root.resolve())
@@ -570,6 +584,20 @@ def prepare(
         _rmtree(staged)
         files, file_warnings = describe_dir(final)
         warnings += file_warnings
+        placement = None
+        if manifest.is_theme:
+            warnings += list(manifest.theme.warnings) if manifest.theme else []
+            code = [f["path"] for f in files if f["path"].lower().endswith((".py", ".pyw"))]
+            if code:
+                warnings.append(
+                    "This is a theme, so none of its files is ever run, but the folder also contains "
+                    + ", ".join(code[:6])
+                    + ". A theme does not need code: ask the author why it is there."
+                )
+        else:
+            placement = registry.place(manifest.group)
+            if placement["near_miss"]:
+                warnings.append(near_miss_message(manifest.group, placement["near_miss"]))
 
         replaces = None
         changes = None
@@ -584,6 +612,7 @@ def prepare(
         return {
             "token": token,
             "manifest": manifest.to_dict(),
+            "placement": placement,
             "source": source,
             "files": files,
             "warnings": warnings,
@@ -622,7 +651,20 @@ def _stage_local(path: Path, staged: Path) -> dict[str, Any]:
         (staged / MANIFEST_NAME).write_text(manifest_toml, encoding="utf-8")
         shutil.copyfile(path, staged / "main.py")
         return {"type": "file", "path": str(path)}
-    raise InstallError("Choose a folder, a .zip file or a .py file.")
+    if suffix == ".toml":
+        text = path.read_text(encoding="utf-8", errors="replace")
+        try:
+            data = tomllib.loads(text)
+        except tomllib.TOMLDecodeError as exc:
+            raise InstallError(f"That file is not valid TOML: {exc}") from exc
+        if data.get("type") != "theme":
+            raise InstallError(
+                'A single .toml file can only be a theme (type = "theme"). A tool needs a folder, a .zip or a .py file.'
+            )
+        staged.mkdir(parents=True)
+        (staged / MANIFEST_NAME).write_text(text, encoding="utf-8")
+        return {"type": "file", "path": str(path)}
+    raise InstallError("Choose a folder, a .zip file, a .py file or (for a theme) a .toml file.")
 
 
 # --------------------------------------------------------------------------------------------

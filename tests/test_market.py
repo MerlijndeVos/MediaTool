@@ -22,7 +22,7 @@ if str(ROOT) not in sys.path:
 
 from core.mods import API_VERSION, market, registry  # noqa: E402
 from core.mods.install import InstallError  # noqa: E402
-from core.mods.prompts import BUILD_PROMPT, REVIEW_PROMPT  # noqa: E402
+from core.mods.prompts import BUILD_PROMPT, REVIEW_PROMPT, THEME_PROMPT  # noqa: E402
 
 SHA = "c" * 40
 
@@ -146,7 +146,7 @@ class PromptTests(unittest.TestCase):
 
     def test_modding_md_shows_the_same_prompts_the_app_copies(self):
         doc = (ROOT / "MODDING.md").read_text(encoding="utf-8").replace("\r\n", "\n")
-        for prompt in (BUILD_PROMPT, REVIEW_PROMPT):
+        for prompt in (BUILD_PROMPT, REVIEW_PROMPT, THEME_PROMPT):
             self.assertIn("````text\n" + prompt + "\n````", doc)
 
     def test_review_prompt_asks_for_the_important_things(self):
@@ -240,7 +240,9 @@ class ModApiTests(unittest.TestCase):
 
     def test_prompts_and_market_endpoints(self):
         prompts = self.client.get("/api/mods/prompts").json()
-        self.assertEqual((prompts["build"], prompts["review"]), (BUILD_PROMPT, REVIEW_PROMPT))
+        self.assertEqual(
+            (prompts["build"], prompts["review"], prompts["theme"]), (BUILD_PROMPT, REVIEW_PROMPT, THEME_PROMPT)
+        )
         with mock.patch.object(market, "_http_get", side_effect=InstallError("offline")):
             res = self.client.get("/api/mods/market?refresh=true")
         self.assertEqual(res.status_code, 200)

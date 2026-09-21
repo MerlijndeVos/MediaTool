@@ -14,20 +14,23 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
-import { CodeFiles, CopyButton, PermissionChips, TrustNotice } from "@/components/ModBits";
+import { CodeFiles, CopyButton, PermissionChips, PlacementChip, TrustNotice } from "@/components/ModBits";
+import { Swatches } from "@/components/ThemePreview";
 import { ModAddForm } from "@/components/ModAddForm";
 import { ModInstallReview, describeSource } from "@/components/ModInstallReview";
 import { ModMarket } from "@/components/ModMarket";
 import type { ModsState } from "@/hooks/useMods";
 import { modIcon } from "@/lib/modIcons";
-import type { ModInfo, ModInstallPreview, ModSourceFile, ModUpdateStatus } from "@/lib/types";
+import type { ModInfo, ModInstallPreview, ModNotice, ModSourceFile, ModUpdateStatus } from "@/lib/types";
 
 function ModRow({
   mod,
+  notices = [],
   onToggle,
   children,
 }: {
   mod: ModInfo;
+  notices?: ModNotice[];
   onToggle?: (mod: ModInfo) => void;
   children?: React.ReactNode;
 }) {
@@ -46,7 +49,21 @@ function ModRow({
           </span>
         </p>
         {mod.description && <p className="text-xs text-muted-foreground">{mod.description}</p>}
-        <PermissionChips permissions={mod.permissions} />
+        <div className="flex flex-wrap items-center gap-2">
+          <PlacementChip type={mod.type} group={mod.group} />
+          {mod.type === "tool" && <PermissionChips permissions={mod.permissions} />}
+        </div>
+        {mod.theme && <Swatches colors={mod.theme.swatches.light} className="w-40" />}
+        {mod.theme?.warnings.map((w) => (
+          <p key={w} className="text-[11px] text-warning-text">
+            {w}
+          </p>
+        ))}
+        {notices.map((n) => (
+          <p key={n.message} className="text-[11px] text-warning-text">
+            {n.message}
+          </p>
+        ))}
         {children}
       </div>
       {onToggle && (
@@ -62,6 +79,7 @@ function ModRow({
 
 interface UserModItemProps {
   mod: ModInfo;
+  notices: ModNotice[];
   busy: boolean;
   onToggle: (mod: ModInfo) => void;
   onReview: (preview: ModInstallPreview) => void;
@@ -69,7 +87,7 @@ interface UserModItemProps {
   onError: (message: string) => void;
 }
 
-function UserModItem({ mod, busy, onToggle, onReview, onRemove, onError }: UserModItemProps) {
+function UserModItem({ mod, notices, busy, onToggle, onReview, onRemove, onError }: UserModItemProps) {
   const [files, setFiles] = useState<ModSourceFile[] | null>(null);
   const [update, setUpdate] = useState<ModUpdateStatus | null>(null);
   const [checking, setChecking] = useState(false);
@@ -96,7 +114,7 @@ function UserModItem({ mod, busy, onToggle, onReview, onRemove, onError }: UserM
 
   return (
     <div className="space-y-2">
-      <ModRow mod={mod} onToggle={busy ? undefined : onToggle}>
+      <ModRow mod={mod} notices={notices} onToggle={busy ? undefined : onToggle}>
         <p className="break-all text-[11px] text-muted-foreground">
           {install ? (
             <>
@@ -109,7 +127,7 @@ function UserModItem({ mod, busy, onToggle, onReview, onRemove, onError }: UserM
         </p>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-1 text-xs">
           <button type="button" className="text-primary hover:underline" onClick={() => void toggleCode()}>
-            {files ? "Hide code" : "View code"}
+            {files ? "Hide " : "View "}{mod.type === "theme" ? "file" : "code"}
           </button>
           {isGit && (
             <button
@@ -127,7 +145,7 @@ function UserModItem({ mod, busy, onToggle, onReview, onRemove, onError }: UserM
             ) : update.available ? (
               <button
                 type="button"
-                className="font-medium text-amber-700 hover:underline dark:text-amber-300"
+                className="font-medium text-warning-text hover:underline"
                 disabled={busy}
                 onClick={() => void guard(async () => onReview(await prepareModUpdate(mod.id)))}
               >
@@ -138,7 +156,7 @@ function UserModItem({ mod, busy, onToggle, onReview, onRemove, onError }: UserM
             ))}
           <button
             type="button"
-            className="inline-flex items-center gap-1 text-red-600 hover:underline dark:text-red-400"
+            className="inline-flex items-center gap-1 text-danger-text hover:underline"
             disabled={busy}
             onClick={() => setRemoving(true)}
           >
@@ -149,7 +167,7 @@ function UserModItem({ mod, busy, onToggle, onReview, onRemove, onError }: UserM
       </ModRow>
       {files && <CodeFiles files={files} />}
       {removing && (
-        <div className="space-y-3 rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm">
+        <div className="space-y-3 rounded-lg border border-danger/40 bg-danger/10 p-3 text-sm">
           <p>
             Remove <span className="font-semibold">{mod.name}</span>? Its folder is deleted from
             your computer. Files the mod created elsewhere are not touched.
@@ -234,8 +252,9 @@ export function ModsPanel({ mods }: { mods: ModsState }) {
   };
 
   const handleToggle = (mod: ModInfo) => {
-    if (mod.enabled) {
-      void attempt(() => setEnabled(mod.id, false));
+    // A theme is data with no code, so there is nothing to confirm; a tool runs code from its folder.
+    if (mod.enabled || mod.type === "theme") {
+      void attempt(() => setEnabled(mod.id, !mod.enabled));
     } else {
       setConfirming(mod);
     }
@@ -246,13 +265,13 @@ export function ModsPanel({ mods }: { mods: ModsState }) {
       <CardHeader>
         <CardTitle>Mods</CardTitle>
         <CardDescription>
-          Mods add tools to Toolbox. The built-in features are mods too; the ones you add
-          yourself start turned off unless you choose otherwise.
+          Mods add tools and themes to Toolbox. The built-in features are mods too; the ones you
+          add yourself start turned off unless you choose otherwise.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         {data.safe_mode && (
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-sm">
             <span>Safe mode is on: your own mods are not loaded.</span>
             <Button
               type="button"
@@ -304,6 +323,13 @@ export function ModsPanel({ mods }: { mods: ModsState }) {
               title="Copy a prompt that tells an AI assistant how to write a mod for you"
             >
               Copy AI prompt
+            </CopyButton>
+            <CopyButton
+              onFailed={setError}
+              getText={async () => (await fetchModPrompts()).theme}
+              title="Copy a prompt that tells an AI assistant how to design a theme for you"
+            >
+              Copy AI theme prompt
             </CopyButton>
             {!data.safe_mode && (
               <Button
@@ -401,6 +427,7 @@ export function ModsPanel({ mods }: { mods: ModsState }) {
                     <div key={mod.id} className="space-y-2">
                       <UserModItem
                         mod={mod}
+                        notices={data.notices.filter((n) => n.id === mod.id)}
                         busy={busy}
                         onToggle={handleToggle}
                         onReview={showReview}
@@ -413,7 +440,7 @@ export function ModsPanel({ mods }: { mods: ModsState }) {
                         }
                       />
                       {confirming?.id === mod.id && (
-                        <div className="space-y-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+                        <div className="space-y-3 rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm">
                           <p>
                             Turn on <span className="font-semibold">{mod.name}</span>? It will run
                             code from{" "}
@@ -451,7 +478,7 @@ export function ModsPanel({ mods }: { mods: ModsState }) {
                 {data.errors.map((err) => (
                   <div
                     key={err.path}
-                    className="rounded-lg border border-red-500/30 bg-red-500/5 p-3 text-xs"
+                    className="rounded-lg border border-danger/30 bg-danger/5 p-3 text-xs"
                   >
                     <p className="break-all font-medium">{err.path}</p>
                     <p className="text-muted-foreground">{err.message}</p>
@@ -466,14 +493,14 @@ export function ModsPanel({ mods }: { mods: ModsState }) {
               </h2>
               <div className="space-y-2">
                 {builtinMods.map((mod) => (
-                  <ModRow key={mod.id} mod={mod} />
+                  <ModRow key={mod.id} mod={mod} notices={data.notices.filter((n) => n.id === mod.id)} />
                 ))}
               </div>
             </section>
           </>
         )}
 
-        {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+        {error && <p className="text-sm text-danger-text">{error}</p>}
       </CardContent>
     </Card>
   );

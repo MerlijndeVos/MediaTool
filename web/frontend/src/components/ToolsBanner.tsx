@@ -33,8 +33,8 @@ export function ToolsBanner() {
   const busy = ACTIVE_PHASES.has(phase);
 
   return (
-    <div className="border-b border-amber-500/30 bg-amber-500/10 px-4 py-2">
-      <div className="mx-auto flex max-w-6xl flex-wrap items-start gap-3 text-sm text-amber-950 dark:text-amber-100">
+    <div className="border-b border-warning/30 bg-warning/10 px-4 py-2">
+      <div className="mx-auto flex max-w-6xl flex-wrap items-start gap-3 text-sm text-warning-text">
         {busy ? (
           <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin" />
         ) : (

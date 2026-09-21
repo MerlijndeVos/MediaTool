@@ -269,12 +269,12 @@ export function AiSettingsPanel() {
               role="status"
               className={
                 testResult.ok
-                  ? "flex items-start gap-2 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-sm"
+                  ? "flex items-start gap-2 rounded-lg border border-success/40 bg-success/10 px-4 py-3 text-sm"
                   : "flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive"
               }
             >
               {testResult.ok ? (
-                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success-text" />
               ) : (
                 <XCircle className="mt-0.5 h-4 w-4 shrink-0" />
               )}

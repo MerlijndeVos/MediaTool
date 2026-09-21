@@ -236,6 +236,11 @@ class CommandsResponse(BaseModel):
 class ModsResponse(BaseModel):
     mods: list[dict[str, Any]]
     errors: list[dict[str, Any]]
+    # Things that do not stop a mod from loading but are worth a look (for example a category
+    # name that looks like an existing one).
+    notices: list[dict[str, Any]] = Field(default_factory=list)
+    # The built-in categories with what belongs in each, in on-screen order.
+    groups: list[dict[str, Any]] = Field(default_factory=list)
     safe_mode: bool = False
     mods_dir: str
 
@@ -268,6 +273,23 @@ class SafeModeRequest(BaseModel):
 class ModPromptsResponse(BaseModel):
     build: str
     review: str
+    theme: str = ""
+
+
+class ModActionRequest(BaseModel):
+    """The current form values; only the params the action declares are used."""
+
+    params: dict[str, Any] = Field(default_factory=dict)
+
+
+class ModActionResponse(BaseModel):
+    ok: bool
+    results: list[dict[str, Any]]
+
+
+class OpenResultRequest(BaseModel):
+    path: str
+    reveal: bool = False
 
 
 class LogFileInfo(BaseModel):
@@ -302,6 +324,9 @@ class SettingsResponse(BaseModel):
     file_logging: bool
     ai: AiSettingsResponse
     logs: LogsStatsResponse
+    # Appearance: the active theme mod and light / dark / follow the system.
+    theme: str = "theme-default"
+    color_mode: Literal["system", "light", "dark"] = "system"
 
 
 class AiProviderUpdate(BaseModel):
@@ -320,6 +345,8 @@ class AiSettingsUpdate(BaseModel):
 class SettingsUpdateRequest(BaseModel):
     file_logging: Optional[bool] = None
     ai: Optional[AiSettingsUpdate] = None
+    theme: Optional[str] = Field(default=None, pattern=r"^[a-z][a-z0-9_-]{0,39}$")
+    color_mode: Optional[Literal["system", "light", "dark"]] = None
 
 
 class AiTestRequest(AiProviderUpdate):

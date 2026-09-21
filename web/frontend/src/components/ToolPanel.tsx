@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Progress } from "@/components/ui/progress";
 import { CheckField, PathField, SelectField, ToolRunActions } from "@/components/fields";
 import { ModForm } from "@/components/ModForm";
+import { ModResults } from "@/components/ModResults";
 import { OrderedFileList, type FileListItem } from "@/components/OrderedFileList";
 import { DownloadPanel } from "@/components/DownloadPanel";
 import { RenameForm, type RenamedRoot } from "@/components/RenameForm";
@@ -31,6 +32,8 @@ interface ToolPanelProps {
   onDismissFinishedDownloads?: () => void;
   /** Set when the last rename also renamed the folder the user had selected. */
   renamedRoot?: RenamedRoot;
+  /** The latest run of this tool, whose `ctx.result(...)` output is shown under the form. */
+  resultsJob?: ActiveJob;
 }
 
 export function ToolPanel({
@@ -44,6 +47,7 @@ export function ToolPanel({
   onCancelDownload,
   onDismissFinishedDownloads,
   renamedRoot,
+  resultsJob,
 }: ToolPanelProps) {
   const [error, setError] = useState<string | null>(null);
 
@@ -91,7 +95,7 @@ export function ToolPanel({
           onCancel={onCancelDownload}
           onDismissFinished={onDismissFinishedDownloads}
         />
-        {error && <p className="px-6 pb-4 text-sm text-red-600 dark:text-red-400">{error}</p>}
+        {error && <p className="px-6 pb-4 text-sm text-danger-text">{error}</p>}
       </Card>
     );
   }
@@ -109,10 +113,17 @@ export function ToolPanel({
           <BuiltinPanel panel={mod.ui.panel} onRun={run} disabled={running} renamedRoot={renamedRoot} />
         )}
 
-        {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+        {error && <p className="text-sm text-danger-text">{error}</p>}
 
         {activeJob && (
           <SubtitleJobStatus job={activeJob} />
+        )}
+
+        {resultsJob?.results && resultsJob.results.length > 0 && (
+          <div className="space-y-3 border-t border-border/60 pt-4">
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Results</h2>
+            <ModResults results={resultsJob.results} jobId={resultsJob.id} />
+          </div>
         )}
       </CardContent>
     </Card>

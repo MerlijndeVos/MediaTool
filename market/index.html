@@ -34,6 +34,11 @@
   .chips { display: flex; flex-wrap: wrap; gap: .35rem; }
   .chip { background: var(--chip); border-radius: 999px; padding: .1rem .55rem; font-size: .75rem; }
   .chip.access { background: var(--warn-bg); border: 1px solid var(--warn-line); }
+  .swatches { display: flex; border: 1px solid var(--line); border-radius: .4rem; overflow: hidden; }
+  .swatches span { flex: 1; height: 1.25rem; }
+  .tabs { display: inline-flex; gap: .25rem; margin: .75rem 0 0; padding: .25rem; background: var(--chip); border-radius: .6rem; }
+  .tabs button { border: 0; background: transparent; }
+  .tabs button[aria-selected=true] { background: var(--card); box-shadow: 0 1px 2px rgba(0,0,0,.15); }
   .install { margin-top: auto; display: flex; flex-direction: column; gap: .4rem; }
   code { font: .78rem/1.4 ui-monospace, SFMono-Regular, Consolas, monospace; word-break: break-all; background: var(--chip); padding: .35rem .5rem; border-radius: .4rem; display: block; }
   .row { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
@@ -46,9 +51,14 @@
 <body>
 <main>
   <h1>Toolbox mod market</h1>
-  <p class="lede">Extra tools for <a href="https://toolbox.murly.nl">Toolbox</a>, made by other people. Search below, then install from <strong>Settings → Mods → Browse</strong> in the app.</p>
-  <div class="warn"><strong>Listed is not reviewed.</strong> A mod is code that runs with the same access as Toolbox: it can read, change and delete your files. The project does not check these mods. Toolbox shows you the code and what the mod declares before it installs anything; read it first.</div>
-  <input id="q" type="search" placeholder="Search by name, description, author or tag" aria-label="Search mods" autofocus>
+  <p class="lede">Extra tools and themes for <a href="https://toolbox.murly.nl">Toolbox</a>, made by other people. Search below, then install from <strong>Settings → Mods → Browse</strong> in the app.</p>
+  <div class="warn"><strong>Listed is not reviewed.</strong> A mod is code that runs with the same access as Toolbox: it can read, change and delete your files. The project does not check these mods. Toolbox shows you the code and what the mod declares before it installs anything; read it first. A <em>theme</em> is only colours and settings: it has no code.</div>
+  <input id="q" type="search" placeholder="Search by name, description, author, section or tag" aria-label="Search mods" autofocus>
+  <div class="tabs" role="tablist" aria-label="Kind of mod" id="tabs">
+    <button type="button" role="tab" data-kind="all" aria-selected="true">All</button>
+    <button type="button" role="tab" data-kind="tool" aria-selected="false">Tools</button>
+    <button type="button" role="tab" data-kind="theme" aria-selected="false">Themes</button>
+  </div>
   <div class="meta" id="meta" role="status"></div>
   <div class="grid" id="grid"></div>
   <footer>Want your mod here? <a href="README.md">Open a pull request</a> that adds it to <code style="display:inline;padding:.05rem .3rem">index.json</code>.</footer>
@@ -61,9 +71,12 @@
   const meta = document.getElementById("meta");
   const box = document.getElementById("q");
   let mods = [];
+  let kind = "all";
 
   // The index is written by third parties: build the page with textContent, and only link to https.
   const safeHttps = (u) => { try { return new URL(u).protocol === "https:" ? u : null; } catch { return null; } };
+  const isTheme = (m) => m.type === "theme";
+  const HEX = /^#[0-9a-fA-F]{6}$/;
   const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
 
   function installCommand(m) {
@@ -79,12 +92,23 @@
     c.append(h);
     c.append(el("div", "by", m.author ? "by " + m.author + (m.license ? " — " + m.license : "") : (m.license || "")));
     c.append(el("p", null, m.description || ""));
+    if (isTheme(m) && Array.isArray(m.swatches) && m.swatches.length) {
+      // Only #rrggbb values reach a style property.
+      const strip = el("div", "swatches");
+      for (const color of m.swatches.filter((c) => typeof c === "string" && HEX.test(c))) {
+        const dot = el("span"); dot.style.backgroundColor = color; strip.append(dot);
+      }
+      c.append(strip);
+    }
     const chips = el("div", "chips");
+    chips.append(el("span", "chip", isTheme(m) ? "Theme" : m.group ? "Appears in " + m.group : "Tool"));
     for (const t of m.tags || []) chips.append(el("span", "chip", t));
     const p = m.permissions || {};
-    if (p.network) chips.append(el("span", "chip access", "uses the network"));
-    if (p.writes_files) chips.append(el("span", "chip access", "writes files"));
-    if (p.runs_programs) chips.append(el("span", "chip access", "runs programs"));
+    if (!isTheme(m)) {
+      if (p.network) chips.append(el("span", "chip access", "uses the network"));
+      if (p.writes_files) chips.append(el("span", "chip access", "writes files"));
+      if (p.runs_programs) chips.append(el("span", "chip access", "runs programs"));
+    }
     if (chips.childNodes.length) c.append(chips);
 
     const inst = el("div", "install");
@@ -110,7 +134,8 @@
   function render() {
     const words = box.value.toLowerCase().split(/\s+/).filter(Boolean);
     const shown = mods.filter((m) => {
-      const hay = [m.id, m.name, m.description, m.author, ...(m.tags || [])].join(" ").toLowerCase();
+      if (kind !== "all" && (isTheme(m) ? "theme" : "tool") !== kind) return false;
+      const hay = [m.id, m.name, m.description, m.author, m.type, m.group, ...(m.tags || [])].join(" ").toLowerCase();
       return words.every((w) => hay.includes(w));
     });
     grid.replaceChildren(...shown.map(card));
@@ -127,6 +152,13 @@
     })
     .catch((e) => { meta.textContent = "Could not load the list (" + e.message + ")."; });
   box.addEventListener("input", render);
+  document.getElementById("tabs").addEventListener("click", (e) => {
+    const tab = e.target.closest("button[data-kind]");
+    if (!tab) return;
+    kind = tab.dataset.kind;
+    for (const b of document.querySelectorAll("#tabs button")) b.setAttribute("aria-selected", String(b === tab));
+    render();
+  });
 </script>
 </body>
 </html>

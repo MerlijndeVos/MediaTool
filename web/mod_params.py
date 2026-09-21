@@ -7,13 +7,23 @@ express); otherwise the model is generated from the ``[[params]]`` tables in ``m
 from __future__ import annotations
 
 import threading
-from typing import Any, Literal, Optional
+from datetime import date
+from typing import Annotated, Any, Literal, Optional
 
-from pydantic import BaseModel, Field, create_model
+from pydantic import AfterValidator, BaseModel, Field, create_model
 
 from core.mods import Mod, ModError, ParamSpec, registry
 
 _lock = threading.Lock()
+COLOR_PATTERN = r"^#[0-9a-fA-F]{6}$"
+
+
+def _iso_date(value: str) -> str:
+    try:
+        date.fromisoformat(value)
+    except ValueError as exc:
+        raise ValueError("must be a date written as YYYY-MM-DD") from exc
+    return value
 
 
 def _annotation(spec: ParamSpec) -> Any:
@@ -30,6 +40,12 @@ def _annotation(spec: ParamSpec) -> Any:
         base = Literal[tuple(c.value for c in spec.choices)] if spec.strict else str  # type: ignore[valid-type]
     elif kind in ("files", "list"):
         base = list[str]
+    elif kind == "multichoice":
+        base = list[Literal[tuple(c.value for c in spec.choices)]]  # type: ignore[valid-type]
+    elif kind == "color":
+        base = Annotated[str, Field(pattern=COLOR_PATTERN)]
+    elif kind == "date":
+        base = Annotated[str, AfterValidator(_iso_date)]
     else:  # json
         base = dict[str, Any]
     return Optional[base] if spec.nullable else base
@@ -49,10 +65,16 @@ def _field(spec: ParamSpec) -> Any:
     return Field(default=default, **kwargs)
 
 
-def _generate(mod: Mod) -> type[BaseModel]:
-    fields = {spec.name: (_annotation(spec), _field(spec)) for spec in mod.manifest.params}
+def _generate(mod: Mod, names: tuple[str, ...] | None = None) -> type[BaseModel]:
+    specs = [spec for spec in mod.manifest.params if names is None or spec.name in names]
+    fields = {spec.name: (_annotation(spec), _field(spec)) for spec in specs}
     title = "".join(part.capitalize() for part in mod.id.replace("-", "_").split("_")) + "Params"
     return create_model(title, **fields)  # type: ignore[call-overload]
+
+
+def action_params_model(mod: Mod, names: tuple[str, ...] | None) -> type[BaseModel]:
+    """Validates just the params an action receives (all of them when *names* is None)."""
+    return _generate(mod, names)
 
 
 def params_model(mod: Mod) -> type[BaseModel]:
@@ -81,6 +103,8 @@ def get_enabled_mod(mod_id: str) -> Mod:
     mod = registry.get(mod_id)
     if mod is None:
         raise ValueError(f"Unknown command: {mod_id}")
+    if mod.is_theme:
+        raise ValueError(f"'{mod_id}' is a theme, not a tool: there is nothing to run.")
     if not mod.enabled:
         raise ValueError(f"Mod '{mod_id}' is turned off. Enable it in Settings → Mods.")
     return mod

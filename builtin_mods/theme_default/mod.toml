@@ -1,0 +1,12 @@
+# The look Toolbox ships with. It sets nothing: every token falls back to the default palette,
+# so this theme is exactly what the app looks like without any theme, and Reset to default
+# always returns here. Use it as the smallest possible theme file (see MODDING.md).
+id = "theme-default"
+name = "Default"
+description = "The default look: light and dark, blue accent."
+version = "1.0.0"
+author = "Toolbox"
+type = "theme"
+api_version = 2
+
+[theme]

@@ -53,7 +53,7 @@ Toolbox separates **business logic** from **front-ends**. Every feature is imple
 | `ffmpeg_bootstrap.py` | Download static ffmpeg builds per OS |
 | `runtime.py` | Frozen-app paths, user data directory |
 | `progress.py` | `on_log` / `on_progress` callbacks for any front-end |
-| `mods/` | The mod system: manifest parser, registry (built-in + user mods), the `ctx` a mod receives, `install.py` (stage → trust prompt → commit, pinned git installs, update checks, remove), `market.py` (the public index), `prompts.py` (the AI prompts) |
+| `mods/` | The mod system: manifest parser, registry (built-in + user mods), the `ctx` a mod receives, `install.py` (stage → trust prompt → commit, pinned git installs, update checks, remove), `market.py` (the public index), `prompts.py` (the AI prompts), `groups.py` (categories: name matching, fixed section order, near-miss detection), `theme.py` (theme tokens, strict validation, contrast rules), `results.py` (the `ctx.result` views) |
 
 ### AI providers (`core/ai/`)
 
@@ -95,7 +95,7 @@ Long-running work uses background threads with cancel support. The UI polls job 
 ## Mods
 
 Every feature is a **mod**: a folder with a `mod.toml` manifest (name, group, parameters, ...)
-and a `main.py` with `run(params, ctx)`. Toolbox's own features live in `builtin_mods/`;
+and a `main.py` with `run(params, ctx)`. A **theme** is a mod with `type = "theme"` and no code. Toolbox's own features live in `builtin_mods/`;
 users can add more under `<app data>/mods/` (off until enabled). See [MODDING.md](MODDING.md).
 
 ```
@@ -107,8 +107,23 @@ core/mods/registry.py   discovers manifests (never runs mod code), imports main.
 web/mod_params.py       manifest [[params]] → pydantic model   ─┐
 web/jobs.py             validate → mod.run(params, ctx)          ├─ /api/jobs, /api/mods, /api/commands
 web/frontend            /api/mods → nav, home tiles, generated ModForm (or a built-in custom panel)
+web/frontend/src/lib/theme.ts   theme tokens → CSS variables (re-validated), Appearance picker
 cli/mods_cli.py         manifest [[params]] → argparse flags (user mods; built-ins keep cli/args.py)
 ```
+
+**Categories.** A tool's `group` is normalised in `core/mods/groups.py`: names match ignoring case and
+spacing, the five built-in sections (Files, Media, Subtitles, Experimental, Other) have a fixed order,
+and new ones follow A to Z. `order` only positions a mod inside its section. The registry merges
+different spellings of a new category and records a notice for a name that merely looks like another.
+
+**Themes and the declarative UI are data, not code.** The colours the interface uses are CSS variables
+(`web/frontend/src/index.css`, mapped in `tailwind.config.js`); `core/mods/theme.py` holds the same
+token list and defaults (a test compares them), validates a theme down to colours, one length and a font
+choice, and refuses a theme that would make warnings or the destructive buttons unreadable. The page
+turns the resolved tokens into a `<style>` element (`lib/theme.ts`, values re-checked). A tool's form
+(`ModForm.tsx`) is drawn from `[[params]]`, `[[sections]]` (with `show_if`) and `[[actions]]`; results
+that a run reports with `ctx.result(...)` arrive as `result` SSE events and are drawn by `ModResults.tsx`.
+No mod code runs in the page, and nothing a mod sends is rendered as HTML.
 
 The built-in mods are thin wrappers around the `core` functions. Features whose form is too
 rich for a manifest (Stitch, Download, Rename, the subtitle tools) set `[ui] kind = "builtin"`

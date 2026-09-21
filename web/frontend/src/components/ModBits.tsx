@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { AlertTriangle, Check, Copy } from "lucide-react";
+import { AlertTriangle, Check, Copy, ShieldCheck } from "lucide-react";
 import { Button, type ButtonProps } from "@/components/ui/button";
 import { copyText } from "@/lib/clipboard";
 import type { ModSourceFile } from "@/lib/types";
@@ -27,7 +27,7 @@ export function PermissionChips({ permissions }: { permissions: Access | null })
       {chips.map((chip) => (
         <span
           key={chip}
-          className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-medium text-amber-900 dark:text-amber-200"
+          className="rounded-full bg-warning/15 px-2 py-0.5 text-[11px] font-medium text-warning-text"
         >
           {chip}
         </span>
@@ -36,10 +36,45 @@ export function PermissionChips({ permissions }: { permissions: Access | null })
   );
 }
 
+/** Where a tool appears in the menu, or that a mod is a theme. Shown before and after installing. */
+export function PlacementChip({
+  type,
+  group,
+  newSection = false,
+}: {
+  type: "tool" | "theme";
+  group?: string;
+  newSection?: boolean;
+}) {
+  const text =
+    type === "theme" ? "Theme" : `Appears in ${group || "Other"}${newSection ? " (a new section)" : ""}`;
+  return (
+    <span
+      className="inline-block rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground"
+      title={type === "theme" ? "Changes colours and styling. No code runs." : "The menu section this tool is in"}
+    >
+      {text}
+    </span>
+  );
+}
+
+/** What replaces the code warning for a theme: it is data, and there is nothing to run. */
+export function ThemeNotice() {
+  return (
+    <div className="flex gap-3 rounded-lg border border-success/40 bg-success/10 p-3 text-xs text-muted-foreground">
+      <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-success-text" />
+      <p>
+        This only changes colours and settings. No code runs. It is checked before it is used: a
+        theme that would make warnings or the Remove button hard to read is refused.
+      </p>
+    </div>
+  );
+}
+
 export function TrustNotice({ children }: { children?: React.ReactNode }) {
   return (
-    <div className="flex gap-3 rounded-lg border border-red-500/30 bg-red-500/5 p-3 text-xs text-muted-foreground">
-      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-600 dark:text-red-400" />
+    <div className="flex gap-3 rounded-lg border border-danger/30 bg-danger/5 p-3 text-xs text-muted-foreground">
+      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-danger-text" />
       <p>
         {children ?? (
           <>

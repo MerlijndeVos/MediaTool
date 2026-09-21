@@ -28,7 +28,7 @@ python app.py
 | `web/frontend/` | React UI |
 | `web/jobs.py` | API job runner (runs any mod) |
 | `tests/` | Unit tests (`python -m unittest discover -s tests`) |
-| `examples/mods/` | Example user mod |
+| `examples/mods/` | Example mods: a small tool, a tool with the full declarative form, and a theme |
 | `app.py` | Desktop entry point |
 | `packaging/` | PyInstaller spec and installer scripts |
 

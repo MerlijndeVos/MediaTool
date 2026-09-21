@@ -24,6 +24,8 @@ this folder, and each entry points at a git repository and an **exact commit**.
      "author": "Your name",
      "version": "1.0.0",
      "api_version": 1,
+     "type": "tool",
+     "group": "Subtitles",
      "repo": "https://github.com/you/my-mod",
      "path": "",
      "commit": "0123456789abcdef0123456789abcdef01234567",
@@ -39,6 +41,9 @@ this folder, and each entry points at a git repository and an **exact commit**.
    | `id`, `name` | required. `id` must match the `id` in your `mod.toml`, and cannot be a built-in id |
    | `repo`, `commit` | required. A plain `https://` repository address and the full commit hash |
    | `path` | folder inside the repo that holds `mod.toml`; leave out or `""` for the repo root |
+   | `type` | `"tool"` (default) or `"theme"`. The app can filter by it. If it says theme, the code has to be a theme: a tool behind a theme listing is refused |
+   | `group` | the menu section a tool appears in (Files, Media, Subtitles, Experimental, Other, or your own). Shown in the list; the app warns if the code disagrees |
+   | `swatches` | themes: up to 8 `#rrggbb` colours shown on the card so the theme can be judged without installing it |
    | `description`, `author`, `version`, `tags`, `license`, `homepage` | shown in the list; `homepage` must be https |
    | `permissions` | what you declare in `mod.toml`. Be honest: the app compares it with the real manifest |
 
