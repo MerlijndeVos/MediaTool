@@ -9,8 +9,7 @@ from .runtime import app_data_dir
 
 _DEFAULTS: dict[str, Any] = {
     "file_logging": True,
-    "openai_api_key": "",
-    "openai_model": "gpt-4o-mini",
+    # AI provider choice and per-provider keys live under "ai" (see core/ai/config.py).
     # Ids of user-installed mods the user has turned on (built-in features are always on).
     "enabled_mods": [],
 }

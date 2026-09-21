@@ -8,6 +8,15 @@ import queue
 from contextlib import asynccontextmanager
 from typing import AsyncIterator, Optional
 
+from core.ai import (
+    PROVIDERS as AI_PROVIDERS,
+    AiConfigError,
+    AiError,
+    check_connection,
+    resolve_provider,
+    save_ai_settings,
+    stored_ai_settings,
+)
 from core.download import probe_url
 from core.rename import preview_media_name
 from core.rename_ai import generate_profile
@@ -59,6 +68,10 @@ from .schemas import (
     RenameProfileTestItem,
     RenameProfileTestRequest,
     RenameProfileTestResponse,
+    AiProviderSettings,
+    AiSettingsResponse,
+    AiTestRequest,
+    AiTestResponse,
     SettingsResponse,
     SettingsUpdateRequest,
     SubtitleLanguagesResponse,
@@ -129,13 +142,25 @@ def tools_bootstrap_retry() -> dict:
     return get_tools_status(auto_bootstrap=False)
 
 
+def _ai_settings_response() -> AiSettingsResponse:
+    providers = {}
+    for pid, spec in AI_PROVIDERS.items():
+        resolved = resolve_provider(pid)
+        providers[pid] = AiProviderSettings(
+            api_key_set=bool(resolved.api_key),
+            api_key_from_env=resolved.key_from_env,
+            model=resolved.model,
+            default_model=spec.default_model,
+            base_url=resolved.base_url,
+        )
+    return AiSettingsResponse(provider=stored_ai_settings()["provider"], providers=providers)
+
+
 def _settings_response() -> SettingsResponse:
     settings = load_settings()
-    api_key = str(settings.get("openai_api_key") or "").strip()
     return SettingsResponse(
         file_logging=bool(settings.get("file_logging", True)),
-        openai_api_key_set=bool(api_key),
-        openai_model=str(settings.get("openai_model") or "gpt-4o-mini"),
+        ai=_ai_settings_response(),
         logs=LogsStatsResponse(**logs_stats()),
     )
 
@@ -148,13 +173,30 @@ def get_settings() -> SettingsResponse:
 @app.patch("/api/settings", response_model=SettingsResponse)
 def update_settings(body: SettingsUpdateRequest) -> SettingsResponse:
     updates = body.model_dump(exclude_unset=True)
-    if "openai_api_key" in updates:
-        key = updates["openai_api_key"]
-        if key is not None and not str(key).strip():
-            updates["openai_api_key"] = ""
+    ai_update = updates.pop("ai", None)
+    if ai_update:
+        try:
+            save_ai_settings(provider=ai_update.get("provider"), providers=ai_update.get("providers"))
+        except AiConfigError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
     if updates:
         save_settings(**updates)
     return _settings_response()
+
+
+@app.post("/api/ai/test", response_model=AiTestResponse)
+def ai_test(body: AiTestRequest) -> AiTestResponse:
+    """Blocking network call, so a plain ``def`` (FastAPI runs it in a worker thread)."""
+    try:
+        message = check_connection(
+            body.provider,
+            overrides={"api_key": body.api_key or "", "model": body.model or "", "base_url": body.base_url or ""},
+        )
+    except AiError as exc:
+        return AiTestResponse(ok=False, message=str(exc))
+    except Exception as exc:  # a broken SDK/TLS setup should still reach the UI as text
+        return AiTestResponse(ok=False, message=f"Unexpected error: {exc}")
+    return AiTestResponse(ok=True, message=message)
 
 
 @app.get("/api/rename/profiles", response_model=RenameProfilesResponse)

@@ -17,9 +17,7 @@ from .logging_setup import setup_simple_logging
 from .paths import clean_path_string, path_exists, path_is_dir, path_is_file
 from .progress import get_active_hooks
 from .rename import SUB_FLAG_TOKENS, split_subtitle_suffix
-from .openai_client import DEFAULT_OPENAI_MODEL
-from .openai_client import openai_api_key as _openai_api_key
-from .openai_client import openai_model as _openai_model
+from .ai import Provider, get_provider, resolve_model
 from .subtitle_languages import (
     LANGUAGE_LABELS,
     normalize_lang_code,
@@ -330,21 +328,15 @@ def translate_cues_batch(
     *,
     source_lang: str,
     target_lang: str,
-    model: str,
+    model: Optional[str],
     logger: logging.Logger,
     on_progress: Optional[Callable[[dict], None]] = None,
+    provider: Optional[Provider] = None,
 ) -> list[SubtitleCue]:
     if not cues:
         return []
 
-    try:
-        from openai import OpenAI
-    except ImportError as exc:
-        raise RuntimeError(
-            "The openai package is not installed. Reinstall Toolbox with web/desktop extras."
-        ) from exc
-
-    client = OpenAI(api_key=_openai_api_key())
+    provider = provider or get_provider(model)
 
     translated: list[SubtitleCue] = []
     total_batches = max(1, (len(cues) + TRANSLATE_BATCH_SIZE - 1) // TRANSLATE_BATCH_SIZE)
@@ -361,20 +353,13 @@ def translate_cues_batch(
             target_lang=target_lang,
             context_pairs=context_pairs,
         )
-        response = client.chat.completions.create(
-            model=model,
-            messages=[
+        parsed = provider.complete_json(
+            [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ],
-            response_format={"type": "json_object"},
             temperature=0.15,
-        )
-        raw = response.choices[0].message.content or "{}"
-        try:
-            parsed = json.loads(raw)
-        except json.JSONDecodeError as exc:
-            raise RuntimeError(f"OpenAI returned invalid JSON: {raw[:200]}") from exc
+        ).data
 
         items = parsed.get("translations") if isinstance(parsed, dict) else parsed
         if isinstance(parsed, dict) and items is None:
@@ -384,7 +369,7 @@ def translate_cues_batch(
                     items = value
                     break
         if not isinstance(items, list):
-            raise RuntimeError(f"Unexpected OpenAI response shape: {raw[:200]}")
+            raise RuntimeError(f"Unexpected response shape from {provider.label}: {str(parsed)[:200]}")
 
         by_id: dict[int, str] = {}
         for item in items:
@@ -397,6 +382,15 @@ def translate_cues_batch(
             text = item.get("text")
             if isinstance(text, str):
                 by_id[cue_id] = text
+
+        missing = sum(1 for i in range(len(batch)) if (i + 1) not in by_id)
+        if missing:
+            logger.warning(
+                "%s did not return %d of %d cue(s) in this batch; they keep their original text.",
+                provider.label,
+                missing,
+                len(batch),
+            )
 
         for i, cue in enumerate(batch):
             new_text = by_id.get(i + 1, cue.text)
@@ -542,7 +536,7 @@ def run_subtitle_translate(args: argparse.Namespace) -> None:
     )
     logger.info("Subtitle translate: input=%s target=%s dry_run=%s", input_path, target_lang, args.dry_run)
 
-    model = _openai_model(getattr(args, "model", None))
+    model = resolve_model(getattr(args, "model", None))
     files = collect_srt_files(input_path)
     total = len(files)
 

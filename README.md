@@ -33,6 +33,8 @@ The UI includes drag-and-drop paths, live logs, per-job progress, dark mode, and
 
 **Mods:** every tool above is a *mod*, and you can add your own without touching the app's code. A mod is a folder with a `mod.toml` and a `main.py`; it gets a generated form, live logs and a `toolbox <id>` command. Mods you add start turned off. See **[MODDING.md](MODDING.md)** (it includes a prompt you can give an AI assistant to write one for you).
 
+**AI (optional):** subtitle translation and AI-generated rename profiles need an AI provider. Pick one on the **AI** page in settings: **OpenAI** (the default), any **OpenAI-compatible** server (Ollama, LM Studio, OpenRouter, Groq, ... using a base URL, so a local model keeps everything on your machine), **Anthropic (Claude)** or **Google Gemini**. Each provider keeps its own key, and **Test connection** checks the settings before you use them. Keys can also come from `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` or `GEMINI_API_KEY`.
+
 ## Install (end users)
 
 Download the installer for your OS from **[GitHub Releases](https://github.com/MerlijndeVos/Toolbox/releases)** (tag `v0.1.0` or newer).

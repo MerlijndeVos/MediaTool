@@ -8,7 +8,7 @@ import { modIcon } from "@/lib/modIcons";
 import { cn } from "@/lib/utils";
 import type { ToolId } from "@/lib/types";
 
-export type SettingsViewId = "logs" | "openai" | "updates" | "mods" | "appearance";
+export type SettingsViewId = "logs" | "ai" | "updates" | "mods" | "appearance";
 
 interface SettingsTile {
   id: SettingsViewId;
@@ -26,9 +26,9 @@ const SETTINGS_TILES: SettingsTile[] = [
     icon: ScrollText,
   },
   {
-    id: "openai",
-    label: "OpenAI",
-    description: "API key and model used for subtitle translation.",
+    id: "ai",
+    label: "AI",
+    description: "Choose OpenAI, Claude, Gemini or a local model for translation and rename profiles.",
     icon: Bot,
   },
   {

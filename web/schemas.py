@@ -212,17 +212,54 @@ class LogsStatsResponse(BaseModel):
     files: list[LogFileInfo]
 
 
+class AiProviderSettings(BaseModel):
+    """One provider's saved settings. The key itself is never sent back."""
+
+    api_key_set: bool = False
+    api_key_from_env: bool = False
+    model: str = ""
+    default_model: str = ""
+    base_url: str = ""
+
+
+class AiSettingsResponse(BaseModel):
+    provider: str
+    providers: dict[str, AiProviderSettings]
+
+
 class SettingsResponse(BaseModel):
     file_logging: bool
-    openai_api_key_set: bool = False
-    openai_model: str = "gpt-4o-mini"
+    ai: AiSettingsResponse
     logs: LogsStatsResponse
+
+
+class AiProviderUpdate(BaseModel):
+    """Omitted/null fields are kept; an empty string clears the field."""
+
+    api_key: Optional[str] = None
+    model: Optional[str] = None
+    base_url: Optional[str] = None
+
+
+class AiSettingsUpdate(BaseModel):
+    provider: Optional[str] = None
+    providers: Optional[dict[str, AiProviderUpdate]] = None
 
 
 class SettingsUpdateRequest(BaseModel):
     file_logging: Optional[bool] = None
-    openai_api_key: Optional[str] = None
-    openai_model: Optional[str] = None
+    ai: Optional[AiSettingsUpdate] = None
+
+
+class AiTestRequest(AiProviderUpdate):
+    """Try a provider with the (possibly unsaved) form values; blank fields use saved ones."""
+
+    provider: str
+
+
+class AiTestResponse(BaseModel):
+    ok: bool
+    message: str
 
 
 class ClearLogsResponse(BaseModel):
