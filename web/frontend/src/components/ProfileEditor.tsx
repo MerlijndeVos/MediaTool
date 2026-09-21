@@ -1,6 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDown, ArrowUp, Check, Loader2, Sparkles, Trash2, X } from "lucide-react";
-import { generateRenameProfile, testRenameProfile, type RenameGenerateResult, type RenameTestResult } from "@/api/client";
+import { ArrowDown, ArrowUp, Check, FolderSearch, Info, Loader2, RefreshCw, Sparkles, Trash2, X } from "lucide-react";
+import {
+  generateRenameProfile,
+  testRenameProfile,
+  type RenameExample,
+  type RenameFolderScope,
+  type RenameGenerateResult,
+  type RenameProposedExample,
+  type RenameTestResult,
+} from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CheckField, Field, SelectField } from "@/components/fields";
@@ -218,13 +226,39 @@ function PatternInput({
   );
 }
 
+/** At most this many examples go to the AI at once (typed ones and confirmed ones together). */
+const MAX_AI_EXAMPLES = 12;
+
+/** How many names a folder suggestion sends at most. Keep in step with SAMPLE_MAX_NAMES in core/rename_ai.py. */
+const SAMPLE_MAX_NAMES = 60;
+
+/** A name picked from the folder, with the result the user is reviewing. */
+interface Proposal extends RenameProposedExample {
+  /** What the profile made of it; `after` is what the user has typed since. */
+  original: string;
+  accepted: boolean;
+}
+
+const isCorrected = (p: Proposal) => p.after.trim() !== p.original.trim();
+const isConfirmed = (p: Proposal) => p.accepted || isCorrected(p);
+
+const toExample = (p: Proposal): RenameExample => ({
+  before: p.before,
+  after: p.after.trim(),
+  parent: p.parent,
+  n: p.n,
+  date: p.date ?? undefined,
+});
+
 interface ProfileEditorProps {
   mode: RenameMode;
   profile: RenameProfile;
   onChange: (profile: RenameProfile) => void;
+  /** The folder the rename will run on (Other mode); lets the AI read its names. */
+  folderScope?: RenameFolderScope;
 }
 
-export function ProfileEditor({ mode, profile, onChange }: ProfileEditorProps) {
+export function ProfileEditor({ mode, profile, onChange, folderScope }: ProfileEditorProps) {
   const [samples, setSamples] = useState(SAMPLE_DEFAULTS[mode]);
   const [results, setResults] = useState<RenameTestResult[]>([]);
   const [testError, setTestError] = useState<string | null>(null);
@@ -233,13 +267,26 @@ export function ProfileEditor({ mode, profile, onChange }: ProfileEditorProps) {
   const [generating, setGenerating] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
   const [aiResult, setAiResult] = useState<RenameGenerateResult | null>(null);
+  // Names picked from the folder for the user to check, and the ones already confirmed or corrected.
+  const [proposals, setProposals] = useState<Proposal[]>([]);
+  const [reviewed, setReviewed] = useState<RenameExample[]>([]);
+
+  const folder = folderScope?.folder ?? "";
 
   // Reset the sample box when the mode changes.
   useEffect(() => {
     setSamples(SAMPLE_DEFAULTS[mode]);
     setAiResult(null);
     setAiError(null);
+    setProposals([]);
+    setReviewed([]);
   }, [mode]);
+
+  // Reviewed names belong to one folder.
+  useEffect(() => {
+    setProposals([]);
+    setReviewed([]);
+  }, [folder]);
 
   // Live preview of the profile on sample names (debounced).
   const profileKey = useMemo(() => JSON.stringify(profile), [profile]);
@@ -273,22 +320,47 @@ export function ProfileEditor({ mode, profile, onChange }: ProfileEditorProps) {
     patch({ patterns: { ...profile.patterns, [key]: value } });
 
   const parsedExamples = parseExamples(examples);
+  const allExamples: RenameExample[] = [...parsedExamples, ...reviewed];
+  const confirmed = proposals.filter(isConfirmed);
+  const blankCorrection = confirmed.some((p) => !p.after.trim());
+  const tooMany = allExamples.length + confirmed.length > MAX_AI_EXAMPLES;
 
-  const generate = async () => {
+  /** Ask the AI; with a scope it also reads the folder's names. Returns whether it worked. */
+  const run = async (send: RenameExample[], scope?: RenameFolderScope): Promise<boolean> => {
     setGenerating(true);
     setAiError(null);
     setAiResult(null);
     try {
-      const result = await generateRenameProfile(mode, parsedExamples);
+      const result = await generateRenameProfile(mode, send, scope);
       setAiResult(result);
+      setProposals(result.proposed_examples.map((p) => ({ ...p, original: p.after, accepted: false })));
       // Use the AI profile as the working draft; its suggested name is kept unless edited.
       onChange({ ...result.profile, id: undefined, builtin: false });
+      return true;
     } catch (e) {
       setAiError(e instanceof Error ? e.message : String(e));
+      return false;
     } finally {
       setGenerating(false);
     }
   };
+
+  const generate = () => run(allExamples);
+  const suggest = () => run(allExamples, folderScope);
+
+  // The confirmed and corrected names become examples, and the AI has to reproduce them.
+  const regenerate = async () => {
+    if (!folderScope) return;
+    const byName = new Map(reviewed.map((ex) => [ex.before, ex]));
+    for (const p of confirmed) byName.set(p.before, toExample(p));
+    const next = [...byName.values()];
+    if (await run([...parsedExamples, ...next], folderScope)) setReviewed(next);
+  };
+
+  const setProposalAfter = (before: string, after: string) =>
+    setProposals((list) => list.map((p) => (p.before === before ? { ...p, after } : p)));
+  const toggleAccepted = (before: string) =>
+    setProposals((list) => list.map((p) => (p.before === before ? { ...p, accepted: !p.accepted } : p)));
 
   const patternKeys: PatternKey[] = mode === "media" ? ["tv", "movie"] : ["generic"];
   const usesDates =
@@ -301,11 +373,12 @@ export function ProfileEditor({ mode, profile, onChange }: ProfileEditorProps) {
       <div className="space-y-2 rounded-md border border-primary/30 bg-primary/5 p-3">
         <p className="flex items-center gap-1.5 text-sm font-medium">
           <Sparkles className="h-4 w-4 text-primary" />
-          Create a profile from an example
+          Create a profile with AI
         </p>
         <p className="text-xs text-muted-foreground">
-          One example per line as <code className="rounded bg-muted px-1">before -&gt; after</code>. The AI writes the rules and a
-          name; nothing is renamed. It is checked against your examples below.
+          Give examples, one per line as <code className="rounded bg-muted px-1">before -&gt; after</code>
+          {mode === "generic" ? ", or let the AI look at the names in your folder" : ""}. The AI writes the rules and a name;
+          nothing is renamed. It is checked against your examples below.
         </p>
         <textarea
           value={examples}
@@ -315,26 +388,69 @@ export function ProfileEditor({ mode, profile, onChange }: ProfileEditorProps) {
           className="w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         />
         <div className="flex flex-wrap items-center gap-3">
-          <Button type="button" size="sm" disabled={generating || parsedExamples.length === 0} onClick={() => void generate()}>
+          <Button
+            type="button"
+            size="sm"
+            disabled={generating || allExamples.length === 0 || allExamples.length > MAX_AI_EXAMPLES}
+            onClick={() => void generate()}
+          >
             {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
             Generate profile
           </Button>
-          {parsedExamples.length > 0 && (
+          {mode === "generic" && (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={generating || !folderScope || allExamples.length > MAX_AI_EXAMPLES}
+              onClick={() => void suggest()}
+              title={folderScope ? undefined : "Choose a folder above first"}
+            >
+              {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <FolderSearch className="h-4 w-4" />}
+              Suggest from folder names
+            </Button>
+          )}
+          {allExamples.length > 0 && (
             <span className="text-xs text-muted-foreground">
-              {parsedExamples.length} example{parsedExamples.length !== 1 ? "s" : ""} recognised
+              {allExamples.length} example{allExamples.length !== 1 ? "s" : ""}
+              {reviewed.length > 0 ? ` (${reviewed.length} confirmed from your folder)` : " recognised"}
             </span>
           )}
         </div>
+        {allExamples.length > MAX_AI_EXAMPLES && (
+          <p className="text-xs text-amber-700 dark:text-amber-400">
+            At most {MAX_AI_EXAMPLES} examples can be used at once. Remove some of the examples above or below.
+          </p>
+        )}
+        {mode === "generic" && (
+          <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
+            <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <span>
+              &ldquo;Suggest from folder names&rdquo; sends up to {SAMPLE_MAX_NAMES} names from the chosen folder (and a few video file
+              names inside some folders) to the AI provider you set up in Settings, so it can see what they look like. File contents are never sent. Generating from
+              your own examples sends only those examples.
+            </span>
+          </p>
+        )}
         {aiError && (
           <p className="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-700 dark:text-red-300">{aiError}</p>
         )}
         {aiResult && (
           <div className="space-y-1 text-xs">
             <p className={aiResult.all_ok ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-400"}>
-              {aiResult.all_ok
-                ? `Profile "${aiResult.profile.name}" reproduces all examples. Review it below, then save it.`
-                : "The AI could not reproduce every example. Adjust the rules below or reword the example."}
+              {aiResult.verification.length === 0
+                ? `Profile "${aiResult.profile.name}" suggested from the names in your folder. Check the examples below, then save it.`
+                : aiResult.all_ok
+                  ? `Profile "${aiResult.profile.name}" reproduces all examples. Review it below, then save it.`
+                  : "The AI could not reproduce every example. Adjust the rules below or reword the example."}
             </p>
+            {aiResult.sample && (
+              <p className="text-muted-foreground">
+                Sent {aiResult.sample.sent} of {aiResult.sample.total}
+                {aiResult.sample.truncated ? "+" : ""} names from the folder to the AI
+                {aiResult.sample.truncated ? " (a very large folder is only read up to a limit)" : ""}.
+              </p>
+            )}
             {aiResult.verification.map((v, i) => (
               <p key={i} className="flex items-start gap-1.5 font-mono">
                 {v.ok ? (
@@ -347,6 +463,94 @@ export function ProfileEditor({ mode, profile, onChange }: ProfileEditorProps) {
                 </span>
               </p>
             ))}
+          </div>
+        )}
+
+        {/* Real names from the folder and what the profile makes of them: confirm or correct. */}
+        {proposals.length > 0 && (
+          <div className="space-y-2 rounded-md border bg-background/70 p-3">
+            <p className="text-xs font-medium">Check how it renames some real names from your folder</p>
+            <p className="text-xs text-muted-foreground">
+              Nothing is renamed. Mark a result as right, or fix it: what you confirm or type becomes an example the AI has to
+              reproduce when you regenerate.
+            </p>
+            <ul className="space-y-2">
+              {proposals.map((p) => {
+                const corrected = isCorrected(p);
+                return (
+                  <li key={p.before} className="grid gap-1.5 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-center">
+                    <span className="min-w-0 break-all font-mono text-xs" title={p.before}>
+                      {p.before}
+                      {!p.changed && !corrected && <span className="ml-1.5 text-muted-foreground">(unchanged)</span>}
+                    </span>
+                    <div className="min-w-0 space-y-0.5">
+                      <Input
+                        value={p.after}
+                        onChange={(e) => setProposalAfter(p.before, e.target.value)}
+                        aria-label={`Result for ${p.before}`}
+                        className={cn("h-8 font-mono text-xs", corrected && "border-primary")}
+                      />
+                      {p.date && <p className="text-[11px] text-muted-foreground">Date read from the videos: {p.date}</p>}
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={isConfirmed(p) ? "secondary" : "outline"}
+                      aria-pressed={isConfirmed(p)}
+                      disabled={corrected}
+                      onClick={() => toggleAccepted(p.before)}
+                    >
+                      <Check className="h-3.5 w-3.5" />
+                      {corrected ? "Corrected" : p.accepted ? "Right" : "Looks right"}
+                    </Button>
+                  </li>
+                );
+              })}
+            </ul>
+            <div className="flex flex-wrap items-center gap-3 pt-1">
+              <Button
+                type="button"
+                size="sm"
+                disabled={generating || confirmed.length === 0 || blankCorrection || tooMany}
+                onClick={() => void regenerate()}
+              >
+                {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                Regenerate with {confirmed.length} confirmed
+              </Button>
+              <span className="text-xs text-muted-foreground">
+                {confirmed.length === 0
+                  ? "Mark or fix at least one result first."
+                  : blankCorrection
+                    ? "A corrected name cannot be empty."
+                    : tooMany
+                      ? `At most ${MAX_AI_EXAMPLES} examples can be used at once.`
+                      : "The AI also sees the folder names again, plus your confirmed examples."}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {reviewed.length > 0 && (
+          <div className="space-y-1 text-xs">
+            <p className="font-medium">Confirmed examples ({reviewed.length}): the AI has to reproduce these</p>
+            <ul className="space-y-1">
+              {reviewed.map((ex) => (
+                <li key={ex.before} className="flex items-start gap-1.5 font-mono">
+                  <Check className="mt-0.5 h-3 w-3 shrink-0 text-emerald-600" />
+                  <span className="min-w-0 flex-1 break-all">
+                    {ex.before} <span className="text-muted-foreground">&rarr;</span> {ex.after}
+                  </span>
+                  <button
+                    type="button"
+                    className="shrink-0 rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                    aria-label={`Remove the confirmed example ${ex.before}`}
+                    onClick={() => setReviewed((list) => list.filter((e) => e.before !== ex.before))}
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </li>
+              ))}
+            </ul>
           </div>
         )}
       </div>

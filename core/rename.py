@@ -842,9 +842,14 @@ def build_undo_journal(
     dest_root: Optional[Path] = None,
     input_root: Optional[Path] = None,
     mode: str = "media",
+    renamed_root: Optional[dict] = None,
 ) -> dict:
-    """Build a structured undo manifest from completed rename operations."""
-    return {
+    """Build a structured undo manifest from completed rename operations.
+
+    *renamed_root* (``{"from": old path, "to": new path}``) is set when the selected folder itself
+    was renamed, so callers can point at the new path.
+    """
+    manifest = {
         "version": 1,
         "mode": mode,
         "created": time.strftime("%Y-%m-%d %H:%M:%S"),
@@ -855,6 +860,9 @@ def build_undo_journal(
             {"src": str(op.src), "dst": str(op.dst), "kind": op.kind} for op in done
         ],
     }
+    if renamed_root:
+        manifest["renamed_root"] = renamed_root
+    return manifest
 
 
 def _write_undo_journal_file(path: Path, data: dict, logger: logging.Logger) -> None:
@@ -913,6 +921,7 @@ def write_undo_journal(
     *,
     input_root: Optional[Path] = None,
     mode: str = "media",
+    renamed_root: Optional[dict] = None,
 ) -> None:
     """Record completed operations so they can be reversed later.
 
@@ -923,7 +932,8 @@ def write_undo_journal(
         return
     path = undo_journal_path(dest_root)
     data = build_undo_journal(
-        done, use_copy, dest_root=dest_root, input_root=input_root, mode=mode
+        done, use_copy, dest_root=dest_root, input_root=input_root, mode=mode,
+        renamed_root=renamed_root,
     )
     _write_undo_journal_file(path, data, logger)
     _remove_legacy_undo_journal(dest_root, logger)
@@ -1137,10 +1147,18 @@ def run_rename(args: argparse.Namespace) -> Optional[dict]:
         run_rename_undo(args, logger)
         return None
 
+    if getattr(args, "include_root", False) and getattr(args, "mode", "media") != "generic":
+        logger.error("--include-root only works with --mode generic.")
+        sys.exit(2)
+
     if getattr(args, "mode", "media") == "generic":
         from .rename_generic import run_generic_rename
 
-        return run_generic_rename(args, logger, profile or standard_profile())
+        try:
+            return run_generic_rename(args, logger, profile or standard_profile())
+        except ValueError as exc:  # unusable options, e.g. renaming a drive root
+            logger.error("%s", exc)
+            sys.exit(2)
 
     mode = "APPLY" if apply else "DRY-RUN"
     action = "copy" if use_copy else "move"

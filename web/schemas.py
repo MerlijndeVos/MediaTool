@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any, Literal, Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from core.paths import clean_path_string
 
@@ -87,6 +87,8 @@ class JobSummary(BaseModel):
     undo_used: bool = False
     undo_op_count: Optional[int] = None
     undo_of: Optional[str] = None
+    # Set when the job renamed the folder the user had selected: {"from": old path, "to": new path}.
+    renamed_root: Optional[dict[str, str]] = None
 
 
 class JobUndoResponse(BaseModel):
@@ -127,11 +129,30 @@ class RenameProfileTestResponse(BaseModel):
 class RenameExample(BaseModel):
     before: str
     after: str
+    # Where the name sat, so a real folder's result can be checked exactly (see core.rename_ai).
+    parent: Optional[str] = None
+    n: Optional[int] = None
+    date: Optional[str] = None
 
 
 class RenameProfileGenerateRequest(BaseModel):
     mode: Literal["media", "generic"] = "media"
-    examples: list[RenameExample] = Field(min_length=1, max_length=5)
+    examples: list[RenameExample] = Field(default_factory=list, max_length=12)
+    # Other mode: also look at (a capped sample of) the real names in this folder.
+    folder: Optional[str] = None
+    targets: Literal["folders", "files", "both"] = "folders"
+    max_depth: int = Field(default=1, ge=1, le=50)
+    include_root: bool = False
+
+    @model_validator(mode="after")
+    def _needs_examples_or_folder(self) -> "RenameProfileGenerateRequest":
+        if self.folder is not None and not self.folder.strip():
+            self.folder = None
+        if self.folder is not None and self.mode != "generic":
+            raise ValueError("Suggesting from a folder only works in the Other mode.")
+        if not self.examples and self.folder is None:
+            raise ValueError("Give at least one example, or pick a folder to look at.")
+        return self
 
 
 class RenameProfileVerification(BaseModel):
@@ -141,12 +162,36 @@ class RenameProfileVerification(BaseModel):
     ok: bool
 
 
+class RenameProposedExample(BaseModel):
+    """A name picked from the folder, with what the profile makes of it (for the user to review)."""
+
+    before: str
+    after: str
+    kind: str
+    parent: str
+    n: int
+    date: Optional[str] = None
+    changed: bool
+
+
+class RenameSampleInfo(BaseModel):
+    """How much of the folder was sent to the model."""
+
+    sent: int
+    total: int
+    truncated: bool
+    shapes: int
+    folders_with_files: int
+
+
 class RenameProfileGenerateResponse(BaseModel):
     profile: dict[str, Any]
     verification: list[RenameProfileVerification]
     all_ok: bool
     attempts: int
     model: str
+    sample: Optional[RenameSampleInfo] = None
+    proposed_examples: list[RenameProposedExample] = Field(default_factory=list)
 
 
 class HealthResponse(BaseModel):

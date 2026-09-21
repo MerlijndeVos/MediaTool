@@ -54,6 +54,13 @@ class Job:
         ops = self.undo_manifest.get("operations")
         return len(ops) if isinstance(ops, list) else None
 
+    def renamed_root(self) -> Optional[dict]:
+        """``{"from", "to"}`` when the job renamed the folder the user had selected, else None."""
+        if not self.undo_manifest:
+            return None
+        value = self.undo_manifest.get("renamed_root")
+        return value if isinstance(value, dict) else None
+
     def undo_available(self) -> bool:
         return (
             self.undo_of is None
@@ -76,6 +83,7 @@ class Job:
             "undo_used": self.undo_used,
             "undo_op_count": self.undo_op_count(),
             "undo_of": self.undo_of,
+            "renamed_root": self.renamed_root(),
         }
 
 
@@ -190,6 +198,7 @@ class JobManager:
             "undo_available": job.undo_available(),
             "undo_used": job.undo_used,
             "undo_op_count": job.undo_op_count(),
+            "renamed_root": job.renamed_root(),
         }
         if job.undo_of and job.status == "completed":
             payload["undo_source_job_id"] = job.undo_of

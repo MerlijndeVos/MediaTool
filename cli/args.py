@@ -320,6 +320,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="With --mode generic: how many levels below --input to rename (1 = direct children; default: 1).",
     )
     rename.add_argument(
+        "--include-root",
+        action="store_true",
+        help=(
+            "With --mode generic: also rename the --input folder itself (after everything inside it). "
+            "Needs --targets folders or both. To undo, point --input at the folder's new path."
+        ),
+    )
+    rename.add_argument(
         "--no-layout",
         dest="layout",
         action="store_false",

@@ -42,8 +42,8 @@ Toolbox separates **business logic** from **front-ends**. Every feature is imple
 | `vts.py` | DVD VIDEO_TS join |
 | `rename.py` | Media library rename (shows/movies), dedup, undo journal |
 | `rename_profiles.py` | Format profiles: cleanup rules, name patterns, saved-profile store |
-| `rename_generic.py` | Other mode: rename folders/files in place with a profile (incl. `{date}`, idempotent re-runs) |
-| `rename_ai.py` | AI-generated profiles from before/after examples (verified, never renames) |
+| `rename_generic.py` | Other mode: rename folders/files in place with a profile (incl. `{date}`, idempotent re-runs). Optionally renames the selected folder itself, last, so the planned child paths stay valid; the undo journal is then filed under the new path |
+| `rename_ai.py` | AI-generated profiles (verified, never renames). From typed before/after examples (only those are sent), or from a capped, shape-balanced sample of the real names in the chosen folder (at most 60 names, a few video file names inside some folders; never file contents). After a folder suggestion it picks representative names, shows what the profile makes of them, and takes the user's confirmations and corrections back as examples |
 | `ai/` | AI providers behind one interface (see below) |
 | `dates.py` | Dates in names: read them from DV/MP4 file names, format (`{date:YYYY MMMM D}`), prune them |
 | `rename_folders.py` | Deprecated `rename_folders` CLI command, now a shim over the *Date + name (Dutch)* profile |

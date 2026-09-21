@@ -84,6 +84,7 @@ export function useJobRunner() {
           undo_available?: boolean;
           undo_used?: boolean;
           undo_op_count?: number | null;
+          renamed_root?: { from: string; to: string } | null;
           undo_source_job_id?: string;
           source_undo_used?: boolean;
         };
@@ -94,6 +95,7 @@ export function useJobRunner() {
           undo_available: data.undo_available ?? false,
           undo_used: data.undo_used ?? false,
           undo_op_count: data.undo_op_count ?? null,
+          renamed_root: data.renamed_root ?? null,
         });
         if (data.undo_source_job_id && data.source_undo_used) {
           updateJob(data.undo_source_job_id, {

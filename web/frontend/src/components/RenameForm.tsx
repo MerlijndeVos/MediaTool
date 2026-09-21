@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Loader2, Pencil, Plus, Save, Trash2 } from "lucide-react";
 import { deleteRenameProfile, fetchRenameProfiles, saveRenameProfile } from "@/api/client";
 import { CheckField, PathField, SelectField, ToolRunActions } from "@/components/fields";
@@ -10,7 +10,7 @@ import {
   type RenameMode,
   type RenameProfile,
 } from "@/lib/renameProfiles";
-import { cn } from "@/lib/utils";
+import { cn, normalizeFilePath } from "@/lib/utils";
 
 const STANDARD_ID = "builtin:standard";
 const TIDY_ID = "builtin:tidy";
@@ -111,12 +111,27 @@ const MODES: { value: RenameMode; label: string; hint: string }[] = [
   { value: "generic", label: "Other", hint: "Clean up any folder or file names" },
 ];
 
+/** A folder path compared loosely: no quotes, no trailing slash, and Windows paths ignore case. */
+const samePath = (a: string, b: string) => {
+  const clean = (p: string) => normalizeFilePath(p).replace(/[\\/]+$/, "");
+  return clean(a).toLowerCase() === clean(b).toLowerCase();
+};
+
+/** A finished rename that renamed the folder the user had selected (or its undo). */
+export interface RenamedRoot {
+  from: string;
+  to: string;
+  jobId: string;
+  undone: boolean;
+}
+
 interface RenameFormProps {
   onRun: (p: Record<string, unknown>) => void;
   disabled?: boolean;
+  renamedRoot?: RenamedRoot;
 }
 
-export function RenameForm({ onRun, disabled }: RenameFormProps) {
+export function RenameForm({ onRun, disabled, renamedRoot }: RenameFormProps) {
   const [mode, setMode] = useState<RenameMode>("media");
   const [input, setInput] = useState("");
   const [output, setOutput] = useState("");
@@ -125,6 +140,25 @@ export function RenameForm({ onRun, disabled }: RenameFormProps) {
   const [layout, setLayout] = useState(true);
   const [targets, setTargets] = useState("folders");
   const [maxDepth, setMaxDepth] = useState("1");
+  const [includeRoot, setIncludeRoot] = useState(false);
+
+  // When the rename changed the name of the chosen folder, the field follows it (and goes back on undo),
+  // so the next preview does not point at a folder that no longer exists.
+  const seenRoot = useRef<string | null>(null);
+  useEffect(() => {
+    if (!renamedRoot) return;
+    const key = `${renamedRoot.jobId}:${renamedRoot.undone}`;
+    if (seenRoot.current === key) return;
+    seenRoot.current = key;
+    setInput((current) => {
+      if (!renamedRoot.undone && samePath(current, renamedRoot.from)) return renamedRoot.to;
+      if (renamedRoot.undone && samePath(current, renamedRoot.to)) return renamedRoot.from;
+      return current;
+    });
+  }, [renamedRoot]);
+
+  // The selected folder is a folder, so it can only be renamed when folders are renamed.
+  const rootPossible = targets !== "files";
 
   const [profiles, setProfiles] = useState<RenameProfile[]>([]);
   const [draft, setDraft] = useState<RenameProfile>(() => emptyProfile());
@@ -233,8 +267,20 @@ export function RenameForm({ onRun, disabled }: RenameFormProps) {
           mode: "generic",
           targets,
           max_depth: Number(maxDepth),
+          include_root: includeRoot && rootPossible,
           profile: draft,
         };
+
+  // What the AI may read when it suggests a profile from the names in the chosen folder.
+  const folderScope =
+    mode === "generic" && input.trim()
+      ? {
+          folder: input,
+          targets,
+          maxDepth: Number(maxDepth),
+          includeRoot: includeRoot && rootPossible,
+        }
+      : undefined;
 
   return (
     <div className="space-y-4">
@@ -321,6 +367,18 @@ export function RenameForm({ onRun, disabled }: RenameFormProps) {
               options={RENAME_DEPTH_OPTS}
             />
           </div>
+          <CheckField
+            label="Also rename the selected folder itself"
+            checked={includeRoot && rootPossible}
+            onChange={setIncludeRoot}
+            disabled={!rootPossible}
+            hint={
+              rootPossible
+                ? "It is renamed last, after everything inside it, and the folder field then follows its new name."
+                : "Choose Folders, or Folders and files, to rename the selected folder as well."
+            }
+            tooltip="For the selected folder, {parent} is the folder it sits in and {n} is 1. A drive (C:\) can't be renamed. If another folder next to it already has the new name, a number is added. Undo puts the name back."
+          />
         </>
       )}
 
@@ -382,7 +440,7 @@ export function RenameForm({ onRun, disabled }: RenameFormProps) {
             {profileError}
           </p>
         )}
-        {editing && <ProfileEditor mode={mode} profile={draft} onChange={setDraft} />}
+        {editing && <ProfileEditor mode={mode} profile={draft} onChange={setDraft} folderScope={folderScope} />}
       </div>
 
       <ToolRunActions

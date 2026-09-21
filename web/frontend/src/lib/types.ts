@@ -16,6 +16,8 @@ export interface JobSummary {
   undo_used?: boolean;
   undo_op_count?: number | null;
   undo_of?: string | null;
+  /** Set when the job renamed the folder the user had selected. */
+  renamed_root?: { from: string; to: string } | null;
 }
 
 export interface JobCreateResponse {

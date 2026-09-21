@@ -388,12 +388,46 @@ export interface RenameTestResult {
   note: string | null;
 }
 
+/** A before -> after pair. `parent`, `n` and `date` say where a real folder's name sat. */
+export interface RenameExample {
+  before: string;
+  after: string;
+  parent?: string;
+  n?: number;
+  date?: string | null;
+}
+
+/** A name picked from the folder, with what the profile makes of it, for the user to review. */
+export interface RenameProposedExample extends RenameExample {
+  kind: "folder" | "file";
+  changed: boolean;
+}
+
+/** How much of the folder was sent to the AI. */
+export interface RenameSampleInfo {
+  sent: number;
+  total: number;
+  truncated: boolean;
+  shapes: number;
+  folders_with_files: number;
+}
+
 export interface RenameGenerateResult {
   profile: RenameProfile;
   verification: { before: string; expected: string; actual: string | null; ok: boolean }[];
   all_ok: boolean;
   attempts: number;
   model: string;
+  sample: RenameSampleInfo | null;
+  proposed_examples: RenameProposedExample[];
+}
+
+/** What to look at when the AI also reads the names in a folder. */
+export interface RenameFolderScope {
+  folder: string;
+  targets: string;
+  maxDepth: number;
+  includeRoot: boolean;
 }
 
 export function fetchRenameProfiles(): Promise<{ profiles: RenameProfile[] }> {
@@ -424,12 +458,24 @@ export function testRenameProfile(
   });
 }
 
+/**
+ * Ask the AI for a profile. With `scope` it also gets a capped sample of the real names in that
+ * folder (Other mode), so `examples` may be empty.
+ */
 export function generateRenameProfile(
   mode: RenameMode,
-  examples: { before: string; after: string }[],
+  examples: RenameExample[],
+  scope?: RenameFolderScope,
 ): Promise<RenameGenerateResult> {
+  const body: Record<string, unknown> = { mode, examples };
+  if (scope) {
+    body.folder = scope.folder;
+    body.targets = scope.targets;
+    body.max_depth = scope.maxDepth;
+    body.include_root = scope.includeRoot;
+  }
   return request<RenameGenerateResult>("/api/rename/profiles/generate", {
     method: "POST",
-    body: JSON.stringify({ mode, examples }),
+    body: JSON.stringify(body),
   });
 }

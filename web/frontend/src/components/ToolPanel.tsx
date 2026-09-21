@@ -5,7 +5,7 @@ import { CheckField, PathField, SelectField, ToolRunActions } from "@/components
 import { ModForm } from "@/components/ModForm";
 import { OrderedFileList, type FileListItem } from "@/components/OrderedFileList";
 import { DownloadPanel } from "@/components/DownloadPanel";
-import { RenameForm } from "@/components/RenameForm";
+import { RenameForm, type RenamedRoot } from "@/components/RenameForm";
 import { SubtitleCleanupForm, SubtitleTranslateForm } from "@/components/SubtitlePanel";
 import type { ActiveJob, DownloadJobMeta, ModInfo, ToolId, TranslationSample } from "@/lib/types";
 import { fileExtension, normalizeFilePath, withFileExtension } from "@/lib/utils";
@@ -29,6 +29,8 @@ interface ToolPanelProps {
   downloadJobs?: ActiveJob[];
   onCancelDownload?: (jobId: string) => void;
   onDismissFinishedDownloads?: () => void;
+  /** Set when the last rename also renamed the folder the user had selected. */
+  renamedRoot?: RenamedRoot;
 }
 
 export function ToolPanel({
@@ -41,6 +43,7 @@ export function ToolPanel({
   downloadJobs = [],
   onCancelDownload,
   onDismissFinishedDownloads,
+  renamedRoot,
 }: ToolPanelProps) {
   const [error, setError] = useState<string | null>(null);
 
@@ -103,7 +106,7 @@ export function ToolPanel({
         {mod.ui.kind === "form" ? (
           <ModForm key={mod.id} mod={mod} onRun={run} disabled={running} />
         ) : (
-          <BuiltinPanel panel={mod.ui.panel} onRun={run} disabled={running} />
+          <BuiltinPanel panel={mod.ui.panel} onRun={run} disabled={running} renamedRoot={renamedRoot} />
         )}
 
         {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
@@ -121,16 +124,18 @@ function BuiltinPanel({
   panel,
   onRun,
   disabled,
+  renamedRoot,
 }: {
   panel: string;
   onRun: (p: Record<string, unknown>) => void;
   disabled?: boolean;
+  renamedRoot?: RenamedRoot;
 }) {
   switch (panel) {
     case "stitch":
       return <StitchForm onRun={onRun} disabled={disabled} />;
     case "rename":
-      return <RenameForm onRun={onRun} disabled={disabled} />;
+      return <RenameForm onRun={onRun} disabled={disabled} renamedRoot={renamedRoot} />;
     case "subtitle_translate":
       return <SubtitleTranslateForm onRun={onRun} disabled={disabled} />;
     case "subtitle_cleanup":

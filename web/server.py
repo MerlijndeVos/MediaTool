@@ -19,7 +19,7 @@ from core.ai import (
 )
 from core.download import probe_url
 from core.rename import preview_media_name
-from core.rename_ai import generate_profile
+from core.rename_ai import FolderContext, generate_profile
 from core.rename_generic import preview_generic
 from core.rename_profiles import (
     ProfileError,
@@ -250,8 +250,28 @@ def rename_profile_test(body: RenameProfileTestRequest) -> RenameProfileTestResp
 
 @app.post("/api/rename/profiles/generate", response_model=RenameProfileGenerateResponse)
 def rename_profile_generate(body: RenameProfileGenerateRequest) -> RenameProfileGenerateResponse:
+    from pathlib import Path
+
+    from core.paths import clean_path_string, path_is_dir
+
+    context: Optional[FolderContext] = None
+    if body.folder:
+        folder = Path(clean_path_string(body.folder))
+        if not path_is_dir(folder):
+            raise HTTPException(status_code=422, detail=f"Folder not found: {folder}")
+        try:
+            context = FolderContext.scan(folder, body.targets, body.max_depth, body.include_root)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        if not context.items:
+            raise HTTPException(
+                status_code=422,
+                detail="There is nothing in this folder to look at with the chosen options.",
+            )
     try:
-        result = generate_profile([e.model_dump() for e in body.examples], body.mode)
+        result = generate_profile(
+            [e.model_dump(exclude_none=True) for e in body.examples], body.mode, folder=context
+        )
     except ValueError as exc:  # invalid input/profile or missing API key
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception as exc:

@@ -95,6 +95,13 @@ export default function App() {
     [jobs],
   );
 
+  // The latest rename that also renamed the folder the user had selected, so the Rename form can follow it.
+  const renamedRoot = useMemo(() => {
+    const job = jobs.find((j) => j.command === "rename" && !j.undo_of && j.status === "completed" && j.renamed_root);
+    if (!job?.renamed_root) return undefined;
+    return { ...job.renamed_root, jobId: job.id, undone: Boolean(job.undo_used) };
+  }, [jobs]);
+
   const handleQueueDownloads = async (
     items: Array<{ params: Record<string, unknown>; downloadMeta: DownloadJobMeta }>,
   ) => {
@@ -340,6 +347,7 @@ export default function App() {
               downloadJobs={downloadJobs}
               onCancelDownload={cancel}
               onDismissFinishedDownloads={dismissFinishedDownloads}
+              renamedRoot={renamedRoot}
             />
           )}
         </main>

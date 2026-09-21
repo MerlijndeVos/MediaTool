@@ -8,9 +8,11 @@ import logging
 from pathlib import Path
 from typing import Any, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from core.paths import clean_path_string
 from core.rename import run_rename, run_undo_from_journal
+from core.rename_generic import check_options, check_root_renamable
 from core.rename_profiles import ProfileError, profile_from_dict
 
 
@@ -35,6 +37,21 @@ class Params(BaseModel):
     layout: bool = True
     targets: Literal["folders", "files", "both"] = "folders"
     max_depth: int = Field(default=1, ge=1, le=50)
+    # Generic mode: also rename the selected folder itself, after everything inside it.
+    include_root: bool = False
+
+    @model_validator(mode="after")
+    def _validate_include_root(self) -> "Params":
+        if not self.include_root:
+            return self
+        if self.mode != "generic":
+            raise ValueError("Renaming the selected folder only works in the Other mode.")
+        try:
+            check_options(self.targets, True)
+            check_root_renamable(Path(clean_path_string(self.input)))
+        except ValueError as exc:
+            raise ValueError(str(exc)) from exc
+        return self
 
     @field_validator("profile")
     @classmethod
@@ -67,6 +84,7 @@ def run(params, ctx):
             layout=p["layout"],
             targets=p["targets"],
             max_depth=p["max_depth"],
+            include_root=p["include_root"],
         )
     )
     if manifest:

@@ -25,7 +25,7 @@
 | **Stitch** | Join multiple clips end-to-end |
 | **Download** | Save URLs as MP4 or MP3 via yt-dlp |
 | **DVD (VTS)** | Join DVD `VIDEO_TS` VOB segments into MKV per title |
-| **Rename** | Organize TV/movie files for Plex/Jellyfin, or clean up any folder/file names, with reusable format profiles (optionally AI-generated). Includes a built-in *Date + name* profile that date-stamps folders (`2006 juli 13 - Holiday`) from the dates in their video file names |
+| **Rename** | Organize TV/movie files for Plex/Jellyfin, or clean up any folder/file names, with reusable format profiles (optionally AI-generated: from examples you type, or by letting the AI look at a capped sample of the names in your folder, which you then check and correct). In the *Other* mode the selected folder itself can be renamed too. Includes a built-in *Date + name* profile that date-stamps folders (`2006 juli 13 - Holiday`) from the dates in their video file names |
 | **Audio** | Set default audio track in MKV files |
 | **Dedup** | Strip `(2)` duplicate suffixes from filenames |
 
@@ -120,6 +120,7 @@ toolbox convert --input "C:\DV_in" --output "D:\DV_out"
 toolbox vts --input "D:\DVD_rips" --output "E:\MKV_out" --dry-run
 toolbox rename --input "Z:\Media"                # previews; add --apply to rename
 toolbox rename --input "D:\Samples" --mode generic --targets both --max-depth 3 --profile "Tidy names"
+toolbox rename --input "D:\Samples\Pack_[FREE]" --mode generic --include-root --apply   # also renames the Pack_[FREE] folder itself, last
 toolbox dedup --input "Z:\Media" --apply
 toolbox download --url "https://youtu.be/…" --output "D:\Downloads"
 toolbox trim --input "clip.mp4" --trim-start 10
