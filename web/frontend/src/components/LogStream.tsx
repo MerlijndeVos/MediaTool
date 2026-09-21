@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AlertTriangle, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -66,19 +66,45 @@ function UndoConfirmDialog({
   );
 }
 
+/** How far from the bottom (in px) still counts as "at the bottom", so a rounding error does not unstick the log. */
+const BOTTOM_SLOP = 24;
+
 export function LogStream({
   logs,
   className,
   wrap = false,
   emptyMessage = "Output from jobs will appear here…",
+  stick,
+  onStickChange,
 }: {
   logs: LogLine[];
   className?: string;
   wrap?: boolean;
   emptyMessage?: string;
+  /** Keep the newest line in view. Leave undefined for a log that never scrolls by itself. */
+  stick?: boolean;
+  /** Called when the reader scrolls away from the bottom (false) or back to it (true). */
+  onStickChange?: (stick: boolean) => void;
 }) {
+  const ref = useRef<HTMLPreElement>(null);
+
+  // Follow new lines. Runs before paint, so the log never flashes a frame that is scrolled up.
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (stick && el) el.scrollTop = el.scrollHeight;
+  }, [stick, logs.length, wrap]);
+
+  const handleScroll = () => {
+    const el = ref.current;
+    if (!el || stick === undefined || !onStickChange) return;
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight <= BOTTOM_SLOP;
+    if (atBottom !== stick) onStickChange(atBottom);
+  };
+
   return (
     <pre
+      ref={ref}
+      onScroll={handleScroll}
       className={cn(
         "cursor-text select-text overflow-auto font-mono text-xs leading-relaxed text-muted-foreground",
         wrap ? "whitespace-pre-wrap break-words" : "whitespace-pre",

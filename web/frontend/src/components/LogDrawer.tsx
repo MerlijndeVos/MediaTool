@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Check, ChevronDown, ChevronUp, Copy, Terminal, WrapText } from "lucide-react";
+import { ArrowDownToLine, Check, ChevronDown, ChevronUp, Copy, Terminal, WrapText } from "lucide-react";
 import { LogStream, UndoRenameBar } from "@/components/LogStream";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -10,6 +10,7 @@ const DEFAULT_HEIGHT = 256;
 const MIN_HEIGHT = 120;
 const HEIGHT_STORAGE_KEY = "log-drawer-height";
 const WRAP_STORAGE_KEY = "log-drawer-wrap";
+const STICK_STORAGE_KEY = "log-drawer-stick";
 
 interface LogDrawerProps {
   open: boolean;
@@ -34,6 +35,12 @@ function readStoredWrap(): boolean {
   return localStorage.getItem(WRAP_STORAGE_KEY) === "1";
 }
 
+/** Following the newest line is the default; only an explicit "0" turns it off. */
+function readStoredStick(): boolean {
+  if (typeof window === "undefined") return true;
+  return localStorage.getItem(STICK_STORAGE_KEY) !== "0";
+}
+
 export function LogDrawer({
   open,
   onToggle,
@@ -47,6 +54,7 @@ export function LogDrawer({
   const [height, setHeight] = useState(readStoredHeight);
   const [copied, setCopied] = useState(false);
   const [wrap, setWrap] = useState(readStoredWrap);
+  const [stick, setStick] = useState(readStoredStick);
   const dragging = useRef(false);
   const startY = useRef(0);
   const startHeight = useRef(0);
@@ -82,6 +90,12 @@ export function LogDrawer({
       localStorage.setItem(WRAP_STORAGE_KEY, next ? "1" : "0");
       return next;
     });
+  }, []);
+
+  // Scrolling up to read unsticks the log and scrolling back down sticks it again; the button does it explicitly.
+  const updateStick = useCallback((next: boolean) => {
+    setStick(next);
+    localStorage.setItem(STICK_STORAGE_KEY, next ? "1" : "0");
   }, []);
 
   const onResizeStart = useCallback(
@@ -164,6 +178,17 @@ export function LogDrawer({
           <Button
             variant="ghost"
             size="sm"
+            onClick={() => updateStick(!stick)}
+            className={cn(stick && "text-primary")}
+            aria-pressed={stick}
+            aria-label="Stick to bottom"
+            title={stick ? "Stuck to the bottom: new lines stay in view (click to stop)" : "Stick to the bottom so new lines stay in view"}
+          >
+            <ArrowDownToLine className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => void onCopy()}
             disabled={logs.length === 0}
           >
@@ -180,7 +205,7 @@ export function LogDrawer({
           {onUndoRename && (
             <UndoRenameBar jobs={undoableJobs} onUndo={onUndoRename} undoing={undoing} />
           )}
-          <LogStream logs={logs} wrap={wrap} className="flex-1 p-4" />
+          <LogStream logs={logs} wrap={wrap} stick={stick} onStickChange={updateStick} className="flex-1 p-4" />
         </div>
       )}
     </div>
