@@ -21,6 +21,9 @@ from core.mods import (
     ModContext,
     ModError,
     ParamSpec,
+    install,
+    market,
+    prompts,
     registry,
     safe_mode,
     user_mods_dir,
@@ -85,10 +88,45 @@ def _add_param(parser: argparse.ArgumentParser, spec: ParamSpec) -> None:
 
 def register(subparsers: Any) -> None:
     """Add ``mods`` and a generated subcommand for every enabled mod that has none yet."""
-    mods = subparsers.add_parser("mods", help="List, enable or disable mods.", description="Manage mods.")
+    mods = subparsers.add_parser(
+        "mods",
+        help="List, install, update, enable, disable or remove mods.",
+        description="Manage mods. A mod is code that runs with the same access as Toolbox: read it before you install it.",
+    )
     actions = mods.add_subparsers(dest="mods_action", required=True)
     actions.add_parser("list", help="List built-in features and user mods.")
     actions.add_parser("folder", help="Print the folder where user mods live.")
+
+    inst = actions.add_parser(
+        "install",
+        help="Install a mod from a git address, folder, .zip or .py file.",
+        description="Shows what the mod is and where it comes from, then asks before installing. Nothing runs.",
+    )
+    inst.add_argument("location", help="https:// git address (GitHub, or any host if git is installed), or a local path.")
+    inst.add_argument("--ref", default="", help="Branch, tag or commit to install (git addresses). Default: the default branch.")
+    inst.add_argument("--subdir", default="", help="Folder inside the repository that holds mod.toml.")
+    inst.add_argument("--yes", "-y", action="store_true", help="Do not ask; the details are still printed.")
+    inst.add_argument("--enable", action="store_true", help="Turn the mod on after installing.")
+
+    remove = actions.add_parser("remove", help="Delete an installed mod.")
+    remove.add_argument("id", help="Mod id (see 'mods list').")
+    remove.add_argument("--yes", "-y", action="store_true", help="Do not ask.")
+
+    update = actions.add_parser(
+        "update",
+        help="Check git-installed mods for newer commits; with an id, review and apply the update.",
+    )
+    update.add_argument("id", nargs="?", help="Mod id. Without it, only check every git-installed mod.")
+    update.add_argument("--yes", "-y", action="store_true", help="Do not ask before applying.")
+
+    search = actions.add_parser("search", help="Search the mod market.")
+    search.add_argument("query", nargs="*", help="Words to look for in names, descriptions, authors and tags.")
+    search.add_argument("--refresh", action="store_true", help="Reload the list instead of using the cached one.")
+
+    prompt = actions.add_parser("prompt", help="Print the copy-paste prompt for an AI assistant.")
+    prompt.add_argument(
+        "--review", action="store_true", help="Print the prompt for reviewing a mod instead of writing one."
+    )
     for name, text in (("enable", "Turn a user mod on."), ("disable", "Turn a user mod off.")):
         sub = actions.add_parser(name, help=text)
         sub.add_argument("id", help="Mod id (see 'mods list').")
@@ -120,12 +158,152 @@ def _print_mods() -> None:
         print(f"! {err.path}: {err.message}", file=sys.stderr)
 
 
+def _fail(message: str) -> None:
+    print(f"Error: {message}", file=sys.stderr)
+    sys.exit(1)
+
+
+def _confirm(question: str, assume_yes: bool) -> None:
+    if assume_yes:
+        return
+    if not sys.stdin.isatty():
+        _fail("Refusing to continue without a terminal to ask you. Use --yes to confirm in scripts.")
+    try:
+        answer = input(f"{question} [y/N] ")
+    except EOFError:  # e.g. stdin is /dev/null, which some platforms still call a terminal
+        _fail("No answer available. Use --yes to confirm in scripts.")
+    if answer.strip().lower() not in ("y", "yes"):
+        print("Cancelled.")
+        sys.exit(0)
+
+
+_ACCESS_LABELS = (
+    ("network", "uses the network"),
+    ("writes_files", "writes files"),
+    ("runs_programs", "runs programs"),
+)
+
+
+def _print_preview(preview: dict) -> None:
+    """The trust prompt, as text."""
+    manifest, source = preview["manifest"], preview["source"]
+    declared = [label for key, label in _ACCESS_LABELS if manifest["permissions"].get(key)]
+    print(f"\n{manifest['name']}  v{manifest['version']}  (id: {manifest['id']})")
+    if manifest["author"]:
+        print(f"  Author:      {manifest['author']}")
+    if manifest["description"]:
+        print(f"  Description: {manifest['description']}")
+    if source["type"] == "git":
+        print(f"  From:        {source['url']}" + (f"  [{source['subdir']}]" if source["subdir"] else ""))
+        print(f"  Commit:      {source['commit']}  (pinned)")
+    else:
+        print(f"  From:        {source['type']} {source.get('path', '')}")
+    print(f"  Declares:    {', '.join(declared) if declared else 'no special access'}  (not enforced)")
+    print(f"  Files:       {', '.join(f['path'] for f in preview['files'])}")
+    if preview.get("replaces"):
+        old = preview["replaces"]
+        print(f"  Replaces:    version {old['version']}" + (f" at {old['commit'][:10]}" if old["commit"] else ""))
+        for change in preview.get("changes") or []:
+            print(f"    {change['status']:<8} {change['path']}")
+        if preview.get("compare_url"):
+            print(f"  Changes:     {preview['compare_url']}")
+    for warning in preview["warnings"]:
+        print(f"  ! {warning}")
+    print(
+        "\nA mod is code that runs with the same access as Toolbox. It can read, change and delete your\n"
+        "files. Toolbox does not vet mods, and the access above is only what the author says.\n"
+        "Read the code first (the files are staged; nothing has run)."
+    )
+
+
+def _review_and_commit(preview: dict, question: str, assume_yes: bool, *, enable: bool = False) -> None:
+    """Show the trust prompt, ask, then install; the staged copy is dropped on any other outcome."""
+    token = preview["token"]
+    try:
+        _print_preview(preview)
+        _confirm(question, assume_yes)
+        install.commit(token, enable=enable)
+    except ModError as exc:
+        install.discard(token)
+        _fail(str(exc))
+    except BaseException:
+        install.discard(token)
+        raise
+
+
+def _install(args: argparse.Namespace) -> None:
+    try:
+        preview = install.prepare(args.location, ref=args.ref, subdir=args.subdir)
+    except ModError as exc:
+        _fail(str(exc))
+    _review_and_commit(preview, f"\nInstall {preview['manifest']['name']}?", args.yes, enable=args.enable)
+    mod_id = preview["manifest"]["id"]
+    print(f"Installed {mod_id}." + ("" if args.enable else f" It is off; turn it on with: toolbox mods enable {mod_id}"))
+
+
+def _remove(args: argparse.Namespace) -> None:
+    _confirm(f"Delete the mod '{args.id}' and its files?", args.yes)
+    try:
+        install.remove(args.id)
+    except ModError as exc:
+        _fail(str(exc))
+    print(f"Removed {args.id}.")
+
+
+def _update(args: argparse.Namespace) -> None:
+    ids = [args.id] if args.id else [m.id for m in registry.all() if not m.builtin]
+    for mod_id in ids:
+        try:
+            status = install.check_update(mod_id)
+        except ModError as exc:
+            _fail(str(exc))
+        if not status["supported"]:
+            if args.id:
+                _fail(status["reason"])
+            continue
+        if not status["available"]:
+            print(f"{mod_id}: up to date ({status['current'][:10]})")
+            continue
+        print(f"{mod_id}: update available {status['current'][:10]} -> {status['latest'][:10]}")
+        if not args.id:
+            print(f"  Review and apply it with: toolbox mods update {mod_id}")
+            continue
+        try:
+            preview = install.prepare_update(mod_id)
+        except ModError as exc:
+            _fail(str(exc))
+        _review_and_commit(preview, f"\nUpdate {mod_id}?", args.yes)
+        print(f"Updated {mod_id}.")
+
+
+def _search(args: argparse.Namespace) -> None:
+    result = market.fetch_market(force=args.refresh)
+    if result["error"]:
+        _fail(result["error"])
+    found = [e for e in result["mods"] if market.matches(e, " ".join(args.query))]
+    for entry in found:
+        print(f"{entry['id']:<22} {entry['version']:<8} {entry['name']}: {entry['description']}")
+        where = entry["repo"] + (f" --subdir {entry['path']}" if entry["path"] else "")
+        print(f"{'':<22} toolbox mods install {where} --ref {entry['commit']}")
+    print(f"{len(found)} of {len(result['mods'])} mods. Listed is not reviewed: read the code before you install.")
+
+
 def _handle_mods(args: argparse.Namespace) -> None:
     action = args.mods_action
     if action == "list":
         _print_mods()
     elif action == "folder":
         print(user_mods_dir(create=True))
+    elif action == "install":
+        _install(args)
+    elif action == "remove":
+        _remove(args)
+    elif action == "update":
+        _update(args)
+    elif action == "search":
+        _search(args)
+    elif action == "prompt":
+        print(prompts.REVIEW_PROMPT if args.review else prompts.BUILD_PROMPT)
     else:
         try:
             mod = registry.set_enabled(args.id, action == "enable")

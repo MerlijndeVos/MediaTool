@@ -13,12 +13,14 @@ from .manifest import (
     load_manifest,
     parse_manifest,
 )
+from . import install, market, prompts
 from .registry import (
     LoadError,
     Mod,
     ModError,
     ModRegistry,
     builtin_mods_dir,
+    read_install_meta,
     registry,
     safe_mode,
     set_safe_mode,
@@ -38,6 +40,7 @@ __all__ = [
     "ParamSpec",
     "builtin_mods_dir",
     "load_manifest",
+    "read_install_meta",
     "parse_manifest",
     "registry",
     "safe_mode",

@@ -4,7 +4,12 @@ import type {
   JobCreateResponse,
   JobSummary,
   JobUndoResponse,
+  MarketResponse,
+  ModInstallPreview,
+  ModPrompts,
+  ModSourceResponse,
   ModsResponse,
+  ModUpdateStatus,
 } from "@/lib/types";
 import type { RenameMode, RenameProfile } from "@/lib/renameProfiles";
 
@@ -149,6 +154,68 @@ export function setModEnabled(id: string, enabled: boolean): Promise<ModsRespons
 
 export function openModsFolder(): Promise<{ ok: boolean }> {
   return request("/api/mods/open-folder", { method: "POST" });
+}
+
+export interface ModInstallRequest {
+  /** A git address, or a path to a folder, .zip or .py file. */
+  location: string;
+  ref?: string;
+  subdir?: string;
+  update_of?: string;
+  /** A market listing's claims, checked against the code that was downloaded. */
+  expect?: Record<string, unknown>;
+}
+
+/** Downloads and checks a mod without running it; the answer is what the trust prompt shows. */
+export function prepareModInstall(body: ModInstallRequest): Promise<ModInstallPreview> {
+  return request<ModInstallPreview>("/api/mods/install/prepare", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function confirmModInstall(token: string, enable: boolean): Promise<ModsResponse> {
+  return request<ModsResponse>("/api/mods/install/confirm", {
+    method: "POST",
+    body: JSON.stringify({ token, enable }),
+  });
+}
+
+export function cancelModInstall(token: string): Promise<{ ok: boolean }> {
+  return request(`/api/mods/install/${encodeURIComponent(token)}`, { method: "DELETE" });
+}
+
+export function removeMod(id: string): Promise<ModsResponse> {
+  return request<ModsResponse>(`/api/mods/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+export function fetchModSource(id: string): Promise<ModSourceResponse> {
+  return request<ModSourceResponse>(`/api/mods/${encodeURIComponent(id)}/source`);
+}
+
+export function checkModUpdate(id: string): Promise<ModUpdateStatus> {
+  return request<ModUpdateStatus>(`/api/mods/${encodeURIComponent(id)}/update`);
+}
+
+export function prepareModUpdate(id: string): Promise<ModInstallPreview> {
+  return request<ModInstallPreview>(`/api/mods/${encodeURIComponent(id)}/update/prepare`, {
+    method: "POST",
+  });
+}
+
+export function setModsSafeMode(enabled: boolean): Promise<ModsResponse> {
+  return request<ModsResponse>("/api/mods/safe-mode", {
+    method: "POST",
+    body: JSON.stringify({ enabled }),
+  });
+}
+
+export function fetchModPrompts(): Promise<ModPrompts> {
+  return request<ModPrompts>("/api/mods/prompts");
+}
+
+export function fetchMarket(refresh = false): Promise<MarketResponse> {
+  return request<MarketResponse>(`/api/mods/market${refresh ? "?refresh=true" : ""}`);
 }
 
 export function listJobs(): Promise<JobSummary[]> {

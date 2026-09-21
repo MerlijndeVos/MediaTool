@@ -53,7 +53,7 @@ Toolbox separates **business logic** from **front-ends**. Every feature is imple
 | `ffmpeg_bootstrap.py` | Download static ffmpeg builds per OS |
 | `runtime.py` | Frozen-app paths, user data directory |
 | `progress.py` | `on_log` / `on_progress` callbacks for any front-end |
-| `mods/` | The mod system: manifest parser, registry (built-in + user mods), the `ctx` a mod receives |
+| `mods/` | The mod system: manifest parser, registry (built-in + user mods), the `ctx` a mod receives, `install.py` (stage → trust prompt → commit, pinned git installs, update checks, remove), `market.py` (the public index), `prompts.py` (the AI prompts) |
 
 ### AI providers (`core/ai/`)
 

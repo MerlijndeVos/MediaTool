@@ -199,6 +199,32 @@ class ModEnableRequest(BaseModel):
     enabled: bool
 
 
+class ModInstallPrepareRequest(BaseModel):
+    """What to install: a git address, or a path to a folder, .zip or .py file."""
+
+    location: str
+    ref: str = ""
+    subdir: str = ""
+    # Set when updating an installed mod; the new code must have the same id.
+    update_of: Optional[str] = None
+    # A market listing's claims (id, version, permissions), checked against the real code.
+    expect: Optional[dict[str, Any]] = None
+
+
+class ModInstallConfirmRequest(BaseModel):
+    token: str
+    enable: bool = False
+
+
+class SafeModeRequest(BaseModel):
+    enabled: bool
+
+
+class ModPromptsResponse(BaseModel):
+    build: str
+    review: str
+
+
 class LogFileInfo(BaseModel):
     name: str
     size_bytes: int

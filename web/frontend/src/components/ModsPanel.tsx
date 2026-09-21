@@ -1,42 +1,35 @@
-import { useState } from "react";
-import { AlertTriangle, FolderOpen, RefreshCw } from "lucide-react";
-import { openModsFolder } from "@/api/client";
+import { useEffect, useRef, useState } from "react";
+import { FolderOpen, RefreshCw, ShieldAlert, ShieldCheck, Trash2 } from "lucide-react";
+import {
+  cancelModInstall,
+  checkModUpdate,
+  confirmModInstall,
+  fetchModPrompts,
+  fetchModSource,
+  openModsFolder,
+  prepareModUpdate,
+  removeMod,
+  setModsSafeMode,
+} from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
+import { CodeFiles, CopyButton, PermissionChips, TrustNotice } from "@/components/ModBits";
+import { ModAddForm } from "@/components/ModAddForm";
+import { ModInstallReview, describeSource } from "@/components/ModInstallReview";
+import { ModMarket } from "@/components/ModMarket";
 import type { ModsState } from "@/hooks/useMods";
 import { modIcon } from "@/lib/modIcons";
-import type { ModInfo } from "@/lib/types";
-
-function PermissionChips({ mod }: { mod: ModInfo }) {
-  const chips = [
-    mod.permissions.network && "Uses the network",
-    mod.permissions.writes_files && "Writes files",
-    mod.permissions.runs_programs && "Runs programs",
-  ].filter(Boolean) as string[];
-  if (chips.length === 0) {
-    return <span className="text-xs text-muted-foreground">Declares no special access</span>;
-  }
-  return (
-    <span className="flex flex-wrap gap-1.5">
-      {chips.map((chip) => (
-        <span
-          key={chip}
-          className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-medium text-amber-900 dark:text-amber-200"
-        >
-          {chip}
-        </span>
-      ))}
-    </span>
-  );
-}
+import type { ModInfo, ModInstallPreview, ModSourceFile, ModUpdateStatus } from "@/lib/types";
 
 function ModRow({
   mod,
   onToggle,
+  children,
 }: {
   mod: ModInfo;
   onToggle?: (mod: ModInfo) => void;
+  children?: React.ReactNode;
 }) {
   const Icon = modIcon(mod.icon);
   return (
@@ -53,10 +46,8 @@ function ModRow({
           </span>
         </p>
         {mod.description && <p className="text-xs text-muted-foreground">{mod.description}</p>}
-        <PermissionChips mod={mod} />
-        {!mod.builtin && mod.path && (
-          <p className="break-all text-[11px] text-muted-foreground">{mod.path}</p>
-        )}
+        <PermissionChips permissions={mod.permissions} />
+        {children}
       </div>
       {onToggle && (
         <Switch
@@ -69,11 +60,141 @@ function ModRow({
   );
 }
 
+interface UserModItemProps {
+  mod: ModInfo;
+  busy: boolean;
+  onToggle: (mod: ModInfo) => void;
+  onReview: (preview: ModInstallPreview) => void;
+  onRemove: (mod: ModInfo) => Promise<void>;
+  onError: (message: string) => void;
+}
+
+function UserModItem({ mod, busy, onToggle, onReview, onRemove, onError }: UserModItemProps) {
+  const [files, setFiles] = useState<ModSourceFile[] | null>(null);
+  const [update, setUpdate] = useState<ModUpdateStatus | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [removing, setRemoving] = useState(false);
+  const install = mod.install;
+  const isGit = install?.type === "git";
+
+  const guard = async (fn: () => Promise<void>) => {
+    try {
+      await fn();
+    } catch (e) {
+      onError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const toggleCode = () =>
+    guard(async () => setFiles(files ? null : (await fetchModSource(mod.id)).files));
+
+  const check = async () => {
+    setChecking(true);
+    await guard(async () => setUpdate(await checkModUpdate(mod.id)));
+    setChecking(false);
+  };
+
+  return (
+    <div className="space-y-2">
+      <ModRow mod={mod} onToggle={busy ? undefined : onToggle}>
+        <p className="break-all text-[11px] text-muted-foreground">
+          {install ? (
+            <>
+              {describeSource(install)}
+              {isGit && install.commit && <> · commit {install.commit.slice(0, 10)}</>}
+            </>
+          ) : (
+            <>Added by hand · {mod.path}</>
+          )}
+        </p>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-1 text-xs">
+          <button type="button" className="text-primary hover:underline" onClick={() => void toggleCode()}>
+            {files ? "Hide code" : "View code"}
+          </button>
+          {isGit && (
+            <button
+              type="button"
+              className="text-primary hover:underline disabled:opacity-50"
+              disabled={checking || busy}
+              onClick={() => void check()}
+            >
+              {checking ? "Checking…" : "Check for updates"}
+            </button>
+          )}
+          {update &&
+            (!update.supported ? (
+              <span className="text-muted-foreground">{update.reason}</span>
+            ) : update.available ? (
+              <button
+                type="button"
+                className="font-medium text-amber-700 hover:underline dark:text-amber-300"
+                disabled={busy}
+                onClick={() => void guard(async () => onReview(await prepareModUpdate(mod.id)))}
+              >
+                Update available: review changes
+              </button>
+            ) : (
+              <span className="text-muted-foreground">Up to date</span>
+            ))}
+          <button
+            type="button"
+            className="inline-flex items-center gap-1 text-red-600 hover:underline dark:text-red-400"
+            disabled={busy}
+            onClick={() => setRemoving(true)}
+          >
+            <Trash2 className="h-3 w-3" />
+            Remove
+          </button>
+        </div>
+      </ModRow>
+      {files && <CodeFiles files={files} />}
+      {removing && (
+        <div className="space-y-3 rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm">
+          <p>
+            Remove <span className="font-semibold">{mod.name}</span>? Its folder is deleted from
+            your computer. Files the mod created elsewhere are not touched.
+          </p>
+          <div className="flex gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={() => setRemoving(false)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              onClick={() => {
+                setRemoving(false);
+                void onRemove(mod);
+              }}
+            >
+              Remove
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+type Tab = "installed" | "browse";
+
 export function ModsPanel({ mods }: { mods: ModsState }) {
   const { data, setEnabled, reload } = mods;
+  const [tab, setTab] = useState<Tab>("installed");
   const [confirming, setConfirming] = useState<ModInfo | null>(null);
+  const [review, setReview] = useState<ModInstallPreview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  // A staged mod that is never confirmed would sit in the staging folder; drop it when the panel goes away.
+  const staged = useRef<string | null>(null);
+  staged.current = review?.token ?? null;
+  useEffect(
+    () => () => {
+      if (staged.current) void cancelModInstall(staged.current).catch(() => undefined);
+    },
+    [],
+  );
 
   if (!data) {
     return (
@@ -101,6 +222,17 @@ export function ModsPanel({ mods }: { mods: ModsState }) {
     }
   };
 
+  const showReview = (preview: ModInstallPreview) => {
+    if (review) void cancelModInstall(review.token).catch(() => undefined);
+    setReview(preview);
+    setTab("installed");
+  };
+
+  const dropReview = () => {
+    if (review) void cancelModInstall(review.token).catch(() => undefined);
+    setReview(null);
+  };
+
   const handleToggle = (mod: ModInfo) => {
     if (mod.enabled) {
       void attempt(() => setEnabled(mod.id, false));
@@ -115,124 +247,231 @@ export function ModsPanel({ mods }: { mods: ModsState }) {
         <CardTitle>Mods</CardTitle>
         <CardDescription>
           Mods add tools to Toolbox. The built-in features are mods too; the ones you add
-          yourself start turned off.
+          yourself start turned off unless you choose otherwise.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         {data.safe_mode && (
-          <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
-            Safe mode is on: your own mods are not loaded. Restart without{" "}
-            <code className="rounded bg-muted px-1">--no-mods</code> to use them.
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
+            <span>Safe mode is on: your own mods are not loaded.</span>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={busy}
+              onClick={() =>
+                void attempt(async () => {
+                  await setModsSafeMode(false);
+                  await reload();
+                })
+              }
+            >
+              <ShieldCheck className="h-4 w-4" />
+              Turn safe mode off
+            </Button>
           </div>
         )}
 
-        <div className="flex gap-3 rounded-lg border border-red-500/30 bg-red-500/5 p-3 text-xs text-muted-foreground">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-600 dark:text-red-400" />
-          <p>
-            A mod is code that runs with the same access as Toolbox: it can read, change and
-            delete your files. The access a mod declares is only a description, it is not
-            enforced. Only turn on mods from people you trust, and read the code first.
-          </p>
-        </div>
+        <TrustNotice />
 
-        <section className="space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Your mods
-            </h2>
-            <div className="flex gap-2">
-              <Button
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div role="tablist" aria-label="Mods" className="flex gap-1 rounded-lg bg-muted p-1">
+            {(
+              [
+                ["installed", "Your mods"],
+                ["browse", "Browse"],
+              ] as const
+            ).map(([id, label]) => (
+              <button
+                key={id}
                 type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => void attempt(async () => void (await openModsFolder()))}
+                role="tab"
+                aria-selected={tab === id}
+                onClick={() => setTab(id)}
+                className={
+                  "rounded-md px-3 py-1 text-sm font-medium transition-colors " +
+                  (tab === id ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground")
+                }
               >
-                <FolderOpen className="h-4 w-4" />
-                Open mods folder
-              </Button>
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <CopyButton
+              onFailed={setError}
+              getText={async () => (await fetchModPrompts()).build}
+              title="Copy a prompt that tells an AI assistant how to write a mod for you"
+            >
+              Copy AI prompt
+            </CopyButton>
+            {!data.safe_mode && (
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
                 disabled={busy}
-                onClick={() => void attempt(reload)}
+                title="Turn every mod you added off until Toolbox restarts"
+                onClick={() =>
+                  void attempt(async () => {
+                    await setModsSafeMode(true);
+                    await reload();
+                  })
+                }
               >
-                <RefreshCw className="h-4 w-4" />
-                Rescan
+                <ShieldAlert className="h-4 w-4" />
+                Safe mode
               </Button>
-            </div>
+            )}
           </div>
-          <p className="break-all text-xs text-muted-foreground">
-            Folder: <code className="rounded bg-muted px-1">{data.mods_dir}</code>
-          </p>
+        </div>
 
-          {userMods.length === 0 ? (
-            <p className="rounded-lg border border-dashed border-border/60 p-4 text-sm text-muted-foreground">
-              No mods yet. Put a mod folder (one that contains a <code>mod.toml</code>) in the
-              folder above, then press Rescan.
-            </p>
-          ) : (
-            <div className="space-y-2">
-              {userMods.map((mod) => (
-                <div key={mod.id} className="space-y-2">
-                  <ModRow mod={mod} onToggle={busy ? undefined : handleToggle} />
-                  {confirming?.id === mod.id && (
-                    <div className="space-y-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
-                      <p>
-                        Turn on <span className="font-semibold">{mod.name}</span>? It will run
-                        code from <code className="break-all rounded bg-muted px-1">{mod.path}</code>{" "}
-                        whenever you use it.
-                      </p>
-                      <div className="flex gap-2">
-                        <Button type="button" variant="outline" size="sm" onClick={() => setConfirming(null)}>
-                          Cancel
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          onClick={() => {
-                            setConfirming(null);
-                            void attempt(() => setEnabled(mod.id, true));
-                          }}
-                        >
-                          Turn on
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-
-        {data.errors.length > 0 && (
-          <section className="space-y-2">
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Could not load
-            </h2>
-            {data.errors.map((err) => (
-              <div
-                key={err.path}
-                className="rounded-lg border border-red-500/30 bg-red-500/5 p-3 text-xs"
-              >
-                <p className="break-all font-medium">{err.path}</p>
-                <p className="text-muted-foreground">{err.message}</p>
-              </div>
-            ))}
-          </section>
+        {review && (
+          <ModInstallReview
+            preview={review}
+            busy={busy}
+            onError={setError}
+            onCancel={dropReview}
+            onConfirm={(enable) =>
+              void attempt(async () => {
+                await confirmModInstall(review.token, enable);
+                setReview(null);
+                await reload();
+              })
+            }
+          />
         )}
 
-        <section className="space-y-2">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Built in
-          </h2>
-          <div className="space-y-2">
-            {builtinMods.map((mod) => (
-              <ModRow key={mod.id} mod={mod} />
-            ))}
-          </div>
-        </section>
+        {tab === "browse" ? (
+          <ModMarket
+            installedIds={new Set(userMods.map((m) => m.id))}
+            busy={busy}
+            onBusy={setBusy}
+            onPrepared={showReview}
+            onError={(message) => setError(message || null)}
+          />
+        ) : (
+          <>
+            <ModAddForm
+              busy={busy}
+              onBusy={setBusy}
+              onPrepared={showReview}
+              onError={(message) => setError(message || null)}
+            />
+
+            <section className="space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Your mods
+                </h2>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => void attempt(async () => void (await openModsFolder()))}
+                  >
+                    <FolderOpen className="h-4 w-4" />
+                    Open mods folder
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={busy}
+                    onClick={() => void attempt(reload)}
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                    Rescan
+                  </Button>
+                </div>
+              </div>
+              <p className="break-all text-xs text-muted-foreground">
+                Folder: <code className="rounded bg-muted px-1">{data.mods_dir}</code>
+              </p>
+
+              {userMods.length === 0 ? (
+                <p className="rounded-lg border border-dashed border-border/60 p-4 text-sm text-muted-foreground">
+                  No mods yet. Add one above, or find one under Browse. A mod folder you copy into
+                  the folder above shows up after Rescan.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {userMods.map((mod) => (
+                    <div key={mod.id} className="space-y-2">
+                      <UserModItem
+                        mod={mod}
+                        busy={busy}
+                        onToggle={handleToggle}
+                        onReview={showReview}
+                        onError={setError}
+                        onRemove={(m) =>
+                          attempt(async () => {
+                            await removeMod(m.id);
+                            await reload();
+                          })
+                        }
+                      />
+                      {confirming?.id === mod.id && (
+                        <div className="space-y-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+                          <p>
+                            Turn on <span className="font-semibold">{mod.name}</span>? It will run
+                            code from{" "}
+                            <code className="break-all rounded bg-muted px-1">{mod.path}</code>{" "}
+                            whenever you use it.
+                          </p>
+                          <div className="flex gap-2">
+                            <Button type="button" variant="outline" size="sm" onClick={() => setConfirming(null)}>
+                              Cancel
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              onClick={() => {
+                                setConfirming(null);
+                                void attempt(() => setEnabled(mod.id, true));
+                              }}
+                            >
+                              Turn on
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+
+            {data.errors.length > 0 && (
+              <section className="space-y-2">
+                <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Could not load
+                </h2>
+                {data.errors.map((err) => (
+                  <div
+                    key={err.path}
+                    className="rounded-lg border border-red-500/30 bg-red-500/5 p-3 text-xs"
+                  >
+                    <p className="break-all font-medium">{err.path}</p>
+                    <p className="text-muted-foreground">{err.message}</p>
+                  </div>
+                ))}
+              </section>
+            )}
+
+            <section className="space-y-2">
+              <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Built in
+              </h2>
+              <div className="space-y-2">
+                {builtinMods.map((mod) => (
+                  <ModRow key={mod.id} mod={mod} />
+                ))}
+              </div>
+            </section>
+          </>
+        )}
 
         {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
       </CardContent>

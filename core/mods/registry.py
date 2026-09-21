@@ -13,6 +13,7 @@ mod is actually run.
 from __future__ import annotations
 
 import importlib.util
+import json
 import logging
 import os
 import sys
@@ -30,6 +31,10 @@ logger = logging.getLogger(__name__)
 
 BUILTIN_DIRNAME = "builtin_mods"
 USER_DIRNAME = "mods"
+# Written into a mod's folder when it is installed from a git URL, folder, zip or file:
+# where it came from and the exact commit, so the panel can show it and check for updates.
+INSTALL_META = ".toolbox-install.json"
+MODULE_PREFIX = "toolbox_mod_"
 SAFE_MODE_ENV = "TOOLBOX_NO_MODS"
 # The variable's name before version 3.0. Still honoured: silently ignoring a safety switch
 # someone set to keep a misbehaving mod off would turn that mod back on after the update.
@@ -83,7 +88,7 @@ class Mod:
             if not entry.is_file():
                 raise ModError(f"Mod '{self.id}': entry file {self.manifest.entry} not found.")
             # Flat, dot-free name so relative imports (`from .helpers import x`) work.
-            name = "toolbox_mod_" + self.id.replace("-", "_")
+            name = module_name(self.id)
             spec = importlib.util.spec_from_file_location(
                 name, entry, submodule_search_locations=[str(self.path)]
             )
@@ -120,7 +125,28 @@ class Mod:
         data["builtin"] = self.builtin
         data["enabled"] = self.enabled
         data["path"] = None if self.builtin else str(self.path)
+        data["install"] = None if self.builtin else read_install_meta(self.path)
         return data
+
+
+def module_name(mod_id: str) -> str:
+    return MODULE_PREFIX + mod_id.replace("-", "_")
+
+
+def unload_modules(mod_id: str) -> None:
+    """Forget an imported mod (and its helper modules) so the next run imports it afresh."""
+    name = module_name(mod_id)
+    for key in [k for k in sys.modules if k == name or k.startswith(name + ".")]:
+        sys.modules.pop(key, None)
+
+
+def read_install_meta(mod_dir: Path) -> dict[str, Any] | None:
+    """The record written when a mod was installed, or None for a mod that was just dropped in."""
+    try:
+        data = json.loads((mod_dir / INSTALL_META).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return data if isinstance(data, dict) else None
 
 
 def safe_mode() -> bool:
@@ -233,6 +259,14 @@ class ModRegistry:
         with self._lock:
             self._ensure()
             return list(self._errors)
+
+    def forget_enabled(self, mod_id: str) -> None:
+        """Drop *mod_id* from the enabled list (used when a mod is removed)."""
+        with self._lock:
+            current = {str(x) for x in load_settings().get("enabled_mods", [])}
+            if mod_id in current:
+                current.discard(mod_id)
+                save_settings(enabled_mods=sorted(current))
 
     def set_enabled(self, mod_id: str, enabled: bool) -> Mod:
         with self._lock:

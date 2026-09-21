@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Toolbox mod market</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f7f7f8; --card: #ffffff; --text: #16181d; --muted: #5d6572; --line: #dfe2e8;
+    --accent: #2563eb; --accent-text: #ffffff; --warn-bg: #fff4dc; --warn-line: #e6b34d; --chip: #eef0f4;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #101216; --card: #191c22; --text: #e9ebf0; --muted: #98a0ad; --line: #2b303a;
+      --accent: #5b8cff; --accent-text: #0b0d11; --warn-bg: #2b2413; --warn-line: #6b5522; --chip: #262a33;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 68rem; margin: 0 auto; padding: 2rem 1rem 4rem; }
+  h1 { margin: 0 0 .25rem; font-size: 1.75rem; }
+  .lede { margin: 0 0 1.25rem; color: var(--muted); }
+  .warn { background: var(--warn-bg); border: 1px solid var(--warn-line); border-radius: .6rem; padding: .75rem 1rem; margin-bottom: 1.25rem; font-size: .9rem; }
+  input[type=search] { width: 100%; padding: .7rem .9rem; font: inherit; color: inherit; background: var(--card); border: 1px solid var(--line); border-radius: .6rem; }
+  input[type=search]:focus-visible, button:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .meta { margin: .75rem 0 1rem; color: var(--muted); font-size: .85rem; min-height: 1.3em; }
+  .grid { display: grid; gap: .9rem; grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 1fr)); }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: .75rem; padding: 1rem; display: flex; flex-direction: column; gap: .5rem; }
+  .card h2 { margin: 0; font-size: 1.05rem; }
+  .card h2 small { font-weight: 400; color: var(--muted); margin-left: .4rem; font-size: .8rem; }
+  .card p { margin: 0; }
+  .by { color: var(--muted); font-size: .85rem; }
+  .chips { display: flex; flex-wrap: wrap; gap: .35rem; }
+  .chip { background: var(--chip); border-radius: 999px; padding: .1rem .55rem; font-size: .75rem; }
+  .chip.access { background: var(--warn-bg); border: 1px solid var(--warn-line); }
+  .install { margin-top: auto; display: flex; flex-direction: column; gap: .4rem; }
+  code { font: .78rem/1.4 ui-monospace, SFMono-Regular, Consolas, monospace; word-break: break-all; background: var(--chip); padding: .35rem .5rem; border-radius: .4rem; display: block; }
+  .row { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+  button, .link { font: inherit; font-size: .85rem; padding: .35rem .8rem; border-radius: .5rem; border: 1px solid var(--line); background: var(--card); color: var(--text); cursor: pointer; text-decoration: none; }
+  button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+  .empty { padding: 2rem 0; color: var(--muted); }
+  footer { margin-top: 2rem; color: var(--muted); font-size: .85rem; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Toolbox mod market</h1>
+  <p class="lede">Extra tools for <a href="https://toolbox.murly.nl">Toolbox</a>, made by other people. Search below, then install from <strong>Settings → Mods → Browse</strong> in the app.</p>
+  <div class="warn"><strong>Listed is not reviewed.</strong> A mod is code that runs with the same access as Toolbox: it can read, change and delete your files. The project does not check these mods. Toolbox shows you the code and what the mod declares before it installs anything; read it first.</div>
+  <input id="q" type="search" placeholder="Search by name, description, author or tag" aria-label="Search mods" autofocus>
+  <div class="meta" id="meta" role="status"></div>
+  <div class="grid" id="grid"></div>
+  <footer>Want your mod here? <a href="README.md">Open a pull request</a> that adds it to <code style="display:inline;padding:.05rem .3rem">index.json</code>.</footer>
+</main>
+<script>
+  // Where the list comes from. Keep it next to this page, or point it at the raw file on GitHub.
+  const INDEX_URL = "index.json";
+
+  const grid = document.getElementById("grid");
+  const meta = document.getElementById("meta");
+  const box = document.getElementById("q");
+  let mods = [];
+
+  // The index is written by third parties: build the page with textContent, and only link to https.
+  const safeHttps = (u) => { try { return new URL(u).protocol === "https:" ? u : null; } catch { return null; } };
+  const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
+
+  function installCommand(m) {
+    const parts = ["toolbox mods install", m.repo, "--ref", m.commit];
+    if (m.path) parts.push("--subdir", m.path);
+    return parts.join(" ");
+  }
+
+  function card(m) {
+    const c = el("article", "card");
+    const h = el("h2", null, m.name);
+    h.append(el("small", null, "v" + (m.version || "0.0.0")));
+    c.append(h);
+    c.append(el("div", "by", m.author ? "by " + m.author + (m.license ? " · " + m.license : "") : (m.license || "")));
+    c.append(el("p", null, m.description || ""));
+    const chips = el("div", "chips");
+    for (const t of m.tags || []) chips.append(el("span", "chip", t));
+    const p = m.permissions || {};
+    if (p.network) chips.append(el("span", "chip access", "uses the network"));
+    if (p.writes_files) chips.append(el("span", "chip access", "writes files"));
+    if (p.runs_programs) chips.append(el("span", "chip access", "runs programs"));
+    if (chips.childNodes.length) c.append(chips);
+
+    const inst = el("div", "install");
+    const cmd = el("code", null, installCommand(m));
+    inst.append(cmd);
+    const row = el("div", "row");
+    const copy = el("button", "primary", "Copy install command");
+    copy.type = "button";
+    copy.onclick = async () => {
+      try { await navigator.clipboard.writeText(cmd.textContent); copy.textContent = "Copied"; }
+      catch { const r = document.createRange(); r.selectNodeContents(cmd); getSelection().removeAllRanges(); getSelection().addRange(r); copy.textContent = "Selected, press Ctrl+C"; }
+      setTimeout(() => (copy.textContent = "Copy install command"), 2000);
+    };
+    row.append(copy);
+    const repo = safeHttps(m.homepage) || safeHttps(m.repo);
+    if (repo) { const a = el("a", "link", "View code"); a.href = repo; a.rel = "noopener noreferrer"; row.append(a); }
+    inst.append(row);
+    inst.append(el("div", "by", "Pinned to commit " + String(m.commit || "").slice(0, 10)));
+    c.append(inst);
+    return c;
+  }
+
+  function render() {
+    const words = box.value.toLowerCase().split(/\s+/).filter(Boolean);
+    const shown = mods.filter((m) => {
+      const hay = [m.id, m.name, m.description, m.author, ...(m.tags || [])].join(" ").toLowerCase();
+      return words.every((w) => hay.includes(w));
+    });
+    grid.replaceChildren(...shown.map(card));
+    meta.textContent = mods.length ? shown.length + " of " + mods.length + " mods" : "";
+    if (mods.length && !shown.length) grid.append(el("div", "empty", "No mods match that search."));
+  }
+
+  fetch(INDEX_URL, { cache: "no-cache" })
+    .then((r) => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+    .then((data) => {
+      if (!data || data.format !== 1 || !Array.isArray(data.mods)) throw new Error("unexpected format");
+      mods = data.mods.filter((m) => m && typeof m.id === "string" && typeof m.name === "string" && typeof m.repo === "string" && typeof m.commit === "string");
+      render();
+    })
+    .catch((e) => { meta.textContent = "Could not load the list (" + e.message + ")."; });
+  box.addEventListener("input", render);
+</script>
+</body>
+</html>

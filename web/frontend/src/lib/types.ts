@@ -135,6 +135,8 @@ export interface ModInfo {
   builtin: boolean;
   enabled: boolean;
   path?: string | null;
+  /** Where an installed mod came from; null for built-in features and mods that were just dropped in. */
+  install?: ModInstallMeta | null;
   ui: {
     kind: "form" | "builtin";
     panel: string;
@@ -159,4 +161,81 @@ export interface ModsResponse {
   errors: ModLoadError[];
   safe_mode: boolean;
   mods_dir: string;
+}
+
+export interface ModInstallMeta {
+  type: "git" | "folder" | "zip" | "file";
+  /** git installs: the repository, the ref the user asked for, the pinned commit and the folder inside it. */
+  url?: string;
+  ref?: string;
+  commit?: string;
+  subdir?: string;
+  /** folder, zip and file installs: where it was copied from. */
+  path?: string;
+  version?: string;
+  installed_at?: string;
+}
+
+export interface ModSourceFile {
+  path: string;
+  size: number;
+  /** null for binary files (and for text beyond the size shown here). */
+  text: string | null;
+  truncated: boolean;
+}
+
+export interface ModInstallPreview {
+  token: string;
+  manifest: Omit<ModInfo, "source" | "builtin" | "enabled" | "path" | "install">;
+  source: ModInstallMeta;
+  files: ModSourceFile[];
+  warnings: string[];
+  /** Set when this replaces an installed version (an update). */
+  replaces: { version: string; commit: string } | null;
+  changes: { path: string; status: "added" | "removed" | "changed" }[] | null;
+  compare_url: string | null;
+}
+
+export interface ModSourceResponse {
+  id: string;
+  files: ModSourceFile[];
+  warnings: string[];
+}
+
+export interface ModUpdateStatus {
+  supported: boolean;
+  reason?: string;
+  available?: boolean;
+  current?: string;
+  latest?: string;
+  ref?: string;
+  compare_url?: string | null;
+}
+
+export interface MarketEntry {
+  id: string;
+  name: string;
+  description: string;
+  author: string;
+  version: string;
+  api_version: number;
+  repo: string;
+  path: string;
+  commit: string;
+  tags: string[];
+  license: string;
+  homepage: string;
+  permissions: { network: boolean; writes_files: boolean; runs_programs: boolean } | null;
+}
+
+export interface MarketResponse {
+  url: string;
+  mods: MarketEntry[];
+  problems: string[];
+  error: string | null;
+}
+
+export interface ModPrompts {
+  build: string;
+  review: string;
 }

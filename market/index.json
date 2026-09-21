@@ -1,0 +1,20 @@
+{
+  "format": 1,
+  "mods": [
+    {
+      "id": "count-files",
+      "name": "Count Files",
+      "description": "Count the files in a folder, grouped by extension. The example mod from MODDING.md.",
+      "author": "Toolbox",
+      "version": "1.0.0",
+      "api_version": 1,
+      "repo": "https://github.com/MerlijndeVos/Toolbox",
+      "path": "examples/mods/count-files",
+      "commit": "1bc5226b2232eea2810b470666d54147f0ee52b8",
+      "tags": ["example", "files"],
+      "license": "MIT",
+      "homepage": "https://github.com/MerlijndeVos/Toolbox/tree/main/examples/mods/count-files",
+      "permissions": { "network": false, "writes_files": false, "runs_programs": false }
+    }
+  ]
+}

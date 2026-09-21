@@ -31,7 +31,8 @@ from core.rename_profiles import (
 from core.subtitles import detect_lang_from_path, scan_junk
 from core.subtitle_languages import language_options
 from core.log_storage import clear_logs, logs_dir, logs_stats, read_log_chunk, resolve_log_file
-from core.mods import ModError, registry, safe_mode, user_mods_dir
+from core.mods import ModError, install as mod_install, market as mod_market, prompts as mod_prompts
+from core.mods import registry, safe_mode, set_safe_mode, user_mods_dir
 from core.settings_store import load_settings, save_settings
 from core.shell import open_path
 from core.tools import get_tools_status, retry_bootstrap_background, start_bootstrap_background
@@ -58,11 +59,15 @@ from .schemas import (
     LogChunkResponse,
     LogsStatsResponse,
     ModEnableRequest,
+    ModInstallConfirmRequest,
+    ModInstallPrepareRequest,
+    ModPromptsResponse,
     ModsResponse,
     OpenLogFileRequest,
     OpenPathResponse,
     RenameProfileGenerateRequest,
     RenameProfileGenerateResponse,
+    SafeModeRequest,
     RenameProfileSaveRequest,
     RenameProfilesResponse,
     RenameProfileTestItem,
@@ -382,6 +387,95 @@ def reload_mods() -> ModsResponse:
 def set_mod_enabled(mod_id: str, body: ModEnableRequest) -> ModsResponse:
     try:
         registry.set_enabled(mod_id, body.enabled)
+    except ModError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return _mods_response()
+
+
+@app.post("/api/mods/safe-mode", response_model=ModsResponse)
+def set_mods_safe_mode(body: SafeModeRequest) -> ModsResponse:
+    """Turn every user mod off (or back on) until the app is restarted. Built-in features stay on."""
+    set_safe_mode(body.enabled)
+    registry.reload()
+    return _mods_response()
+
+
+@app.get("/api/mods/prompts", response_model=ModPromptsResponse)
+def mod_ai_prompts() -> ModPromptsResponse:
+    """The copy-paste prompts for building a mod, and for reviewing someone else's, with an AI assistant."""
+    return ModPromptsResponse(build=mod_prompts.BUILD_PROMPT, review=mod_prompts.REVIEW_PROMPT)
+
+
+@app.get("/api/mods/market")
+def mods_market(refresh: bool = False) -> dict:
+    """Mods listed in the public market index. Listing is not a review."""
+    return mod_market.fetch_market(force=refresh)
+
+
+@app.post("/api/mods/install/prepare")
+def prepare_mod_install(body: ModInstallPrepareRequest) -> dict:
+    """Download and check a mod without running it; the answer is what the trust prompt shows."""
+    try:
+        return mod_install.prepare(
+            body.location,
+            ref=body.ref,
+            subdir=body.subdir,
+            update_of=body.update_of,
+            expect=body.expect,
+        )
+    except ModError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/mods/install/confirm", response_model=ModsResponse)
+def confirm_mod_install(body: ModInstallConfirmRequest) -> ModsResponse:
+    try:
+        mod_install.commit(body.token, enable=body.enable)
+    except ModError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return _mods_response()
+
+
+@app.delete("/api/mods/install/{token}", response_model=OpenPathResponse)
+def cancel_mod_install(token: str) -> OpenPathResponse:
+    try:
+        mod_install.discard(token)
+    except ModError:
+        pass  # already gone
+    return OpenPathResponse()
+
+
+@app.get("/api/mods/{mod_id}/source")
+def mod_source(mod_id: str) -> dict:
+    """The files of an installed mod, so the user can read the code."""
+    try:
+        return mod_install.describe_installed(mod_id)
+    except ModError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.get("/api/mods/{mod_id}/update")
+def mod_update_status(mod_id: str) -> dict:
+    """Is a newer commit available for a git-installed mod? Only looks, never updates."""
+    try:
+        return mod_install.check_update(mod_id)
+    except ModError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/mods/{mod_id}/update/prepare")
+def prepare_mod_update(mod_id: str) -> dict:
+    """Stage the newest commit for review. Nothing changes until it is confirmed."""
+    try:
+        return mod_install.prepare_update(mod_id)
+    except ModError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.delete("/api/mods/{mod_id}", response_model=ModsResponse)
+def remove_mod(mod_id: str) -> ModsResponse:
+    try:
+        mod_install.remove(mod_id)
     except ModError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return _mods_response()

@@ -15,15 +15,65 @@ my-mod/
 
 ## Try the example
 
-1. Copy [`examples/mods/count-files`](examples/mods/count-files) into your mods folder.
-   Find it in **Settings → Mods → Open mods folder** or with `toolbox mods folder`.
-2. **Settings → Mods → Rescan**, then turn **Count Files** on (or `toolbox mods enable count-files`).
+1. **Settings → Mods → Add a mod**, choose the folder
+   [`examples/mods/count-files`](examples/mods/count-files) (or run
+   `toolbox mods install examples/mods/count-files`). Toolbox shows what it is and asks first.
+2. Turn **Count Files** on (the install prompt has a checkbox for it, or
+   `toolbox mods enable count-files`).
 3. Open **Count Files** in the sidebar (group *Other*), or run
    `toolbox count-files --folder D:\Videos`.
 
-Mods you add yourself always start **off**. Nothing from a mod runs until you turn it on, and
-`main.py` is only imported when you actually run the mod. Start Toolbox with `--no-mods`
-(or set `TOOLBOX_NO_MODS=1`) to load none of them, for example if one misbehaves.
+Mods you add yourself start **off** unless you tick *Turn on after installing*. Nothing from a
+mod runs until it is on, and `main.py` is only imported when you actually run the mod. Start
+Toolbox with `--no-mods` (or set `TOOLBOX_NO_MODS=1`), or press **Safe mode** in Settings → Mods,
+to load none of them, for example if one misbehaves.
+
+## Installing, updating and removing
+
+Everything below shows a **trust prompt** first (what the mod is, who wrote it, where it comes
+from, the exact commit, what it declares it needs, and every file) and installs nothing until
+you say yes. The mod is downloaded and checked, but not run.
+
+| From | In the app (Settings → Mods → Add a mod) | Command line |
+| --- | --- | --- |
+| A git address | paste `https://github.com/name/my-mod`, optionally a tag, branch or commit | `toolbox mods install https://github.com/name/my-mod --ref v1.2` |
+| A folder | *Choose folder* | `toolbox mods install D:\mods\my-mod` |
+| A `.zip` | *Choose file* | `toolbox mods install my-mod.zip` |
+| A single `.py` file | *Choose file* | `toolbox mods install my-mod.py` |
+| The market | Settings → Mods → **Browse** | `toolbox mods search subtitles` |
+
+- **Git installs are pinned.** The ref you give (or the default branch) is turned into a full
+  commit hash first, and exactly that commit is downloaded and recorded. GitHub repositories are
+  fetched as an archive, so you do not need `git`; other `https://` hosts need `git` installed.
+  A repository can hold several mods: point at one with a folder (`--subdir mods/my-mod`, or a
+  `https://github.com/name/repo/tree/<ref>/<folder>` address).
+- **Updates are never automatic.** *Check for updates* (or `toolbox mods update`) compares the
+  recorded commit with the current one. To apply an update you review the changed files, and
+  approve, the same way as an install. Whether the mod is on or off stays as it was.
+- **Remove** deletes the mod's folder and forgets that it was enabled (`toolbox mods remove <id>`).
+- **View code** in the mods list shows every file of an installed mod.
+- A **single `.py` file** has no `mod.toml`, so the manifest goes in a comment block at the top:
+
+  ```python
+  # /// toolbox-mod
+  # id = "hello"
+  # name = "Hello"
+  # [ui]
+  # run_mode = "run"
+  # ///
+  def run(params, ctx):
+      ctx.log("hello")
+  ```
+
+  The block holds the same TOML as `mod.toml`; the file is installed as `main.py`.
+- A mod folder, zip or repository can have at most 500 files and 20 MB, and cannot contain
+  symbolic links.
+
+## Share your mod
+
+Put it in a public git repository, then **list it in the [market](market/README.md)** by opening a
+pull request that adds an entry to `market/index.json`. Anyone can then find it under
+**Settings → Mods → Browse** or on the website, and install it pinned to the commit you listed.
 
 ## `mod.toml`
 
@@ -159,19 +209,27 @@ fails with `ModuleNotFoundError`, that module needs adding to the list.
 **A mod is code that runs with the same access as Toolbox.** It can read, change and delete
 any file you can, use the network and start programs. Python cannot sandbox that, so:
 
-- Only turn on mods from people you trust, and read `main.py` first (or ask an AI assistant to
-  explain it: *"What does this code do, and which files, folders and programs does it touch?"*).
+- Only turn on mods from people you trust, and read the code first (or use the
+  [review prompt](#ask-an-ai-assistant-to-review-a-mod) below).
 - The `[permissions]` table is what the author says the mod does. It is shown to you, but it is
   not enforced.
-- Mods start off, are opt-in one at a time, and are never updated automatically.
-- Safe mode (`--no-mods`) starts the app without any user mods.
+- Installing shows the source, the exact commit, the author and the declared access before
+  anything is copied, and installs nothing until you approve. Git installs are pinned to a commit.
+- Mods start off (unless you tick the box when installing), are opt-in one at a time, and are
+  never updated automatically: an update shows you what changed and waits for your approval.
+- Safe mode (`--no-mods`, or the **Safe mode** button in Settings → Mods) runs the app without
+  any user mods. A mod that crashes fails its own job with the error in the log; it does not
+  take the app down.
+- **Mods are third-party code. The project does not vet them**, and neither the market nor any
+  other list says a mod is safe. AI-written mods can be wrong too.
 
 Built-in features cannot be turned off, and a user mod cannot take over a built-in id.
 
 ## Ask an AI assistant to write one
 
 Paste this into any AI assistant and replace the last paragraph with what you want. Then check
-the result (see Security above) before you install it.
+the result (see Security above) before you install it. In the app, **Settings → Mods → Copy AI
+prompt** copies exactly this text (and `toolbox mods prompt` prints it).
 
 ````text
 You are helping me build a mod for Toolbox, a desktop app that converts, renames and
@@ -233,4 +291,39 @@ files. Finally, list 2-3 things I should test before trusting it.
 <DESCRIBE YOUR FEATURE HERE: what goes in, what should come out, and any examples. For
 example: "For every video in a folder, cut the first 10 seconds and save the result next to
 the original with '_trimmed' added to the name.">
+````
+
+## Ask an AI assistant to review a mod
+
+Before you install a mod someone else wrote, paste this into an AI assistant together with the
+mod's files. It explains in plain language what the code does, which files and programs it
+touches, and whether that matches what the mod declares. It cannot run the code, so treat the
+answer as a second opinion, not a guarantee. In the app, the install prompt has a
+**Copy review prompt with the code** button (and `toolbox mods prompt --review` prints this text).
+
+````text
+You are a careful, plain-spoken code reviewer. I am thinking about installing a mod for
+Toolbox, a desktop app that converts, renames and organizes media files. A mod is code that
+runs on my computer with the same access as the app: it can read, change and delete my files,
+use the network and start programs. Below are the mod's manifest and code. I am not a
+programmer, so explain in plain language.
+
+## What I want from you
+1. **What it does**: 2-4 sentences, based on the code and not only on its description.
+2. **Files**: every file or folder it reads, creates, changes, moves or deletes, and when.
+3. **Programs and network**: every program it starts and every web address it contacts.
+4. **Anything suspicious**: code unrelated to what it claims to do; code that downloads and
+   runs other code (exec, eval, pip, curl, PowerShell, base64 blobs); anything that reads
+   passwords, API keys, browser data, SSH keys or environment variables; obfuscated or
+   deliberately hard-to-read code; deleting or overwriting my files without a preview.
+5. **Does it match its manifest?** Compare what it really does with the `[permissions]`
+   it declares (network, writes_files, runs_programs) and say where they disagree.
+6. **Verdict**: "looks consistent with what it says" or "has concerns", with the 2-3 most
+   important reasons.
+
+Be honest about what you cannot tell. You cannot run the code and you may have missed
+something, so say so rather than guessing, and do not call anything "safe".
+
+## The mod
+<PASTE mod.toml AND main.py HERE, plus any other .py files in the mod folder.>
 ````

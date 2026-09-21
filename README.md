@@ -31,7 +31,7 @@
 
 The UI includes drag-and-drop paths, live logs, per-job progress, dark mode, and native folder pickers in the desktop app.
 
-**Mods:** every tool above is a *mod*, and you can add your own without touching the app's code. A mod is a folder with a `mod.toml` and a `main.py`; it gets a generated form, live logs and a `toolbox <id>` command. Mods you add start turned off. See **[MODDING.md](MODDING.md)** (it includes a prompt you can give an AI assistant to write one for you).
+**Mods:** every tool above is a *mod*, and you can add your own without touching the app's code. A mod is a folder with a `mod.toml` and a `main.py`; it gets a generated form, live logs and a `toolbox <id>` command. Install one from a git address, folder, zip or file (with a review prompt first), or browse the [mod market](market/README.md); mods you add start turned off. See **[MODDING.md](MODDING.md)** (it includes a prompt you can give an AI assistant to write one for you).
 
 **AI (optional):** subtitle translation and AI-generated rename profiles need an AI provider. Pick one on the **AI** page in settings: **OpenAI** (the default), any **OpenAI-compatible** server (Ollama, LM Studio, OpenRouter, Groq, ... using a base URL, so a local model keeps everything on your machine), **Anthropic (Claude)** or **Google Gemini**. Each provider keeps its own key, and **Test connection** checks the settings before you use them. Keys can also come from `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` or `GEMINI_API_KEY`.
 
@@ -127,7 +127,7 @@ toolbox stitch --input part1.mp4 --input part2.mp4 --output joined.mp4
 toolbox rename --input "D:\DV_out" --mode generic --profile "Date + name (Dutch)" --apply
 ```
 
-`toolbox mods list` shows every mod, `mods enable <id>` turns a user mod on, and `--no-mods` starts without any user mods.
+`toolbox mods list` shows every mod, `mods install <git-url|folder|zip|file>` adds one (after showing you what it is), `mods search` browses the market, `mods update [id]` checks for newer commits, `mods enable|disable|remove <id>` manage them, and `--no-mods` starts without any user mods.
 
 Use `--help` on any subcommand for full options. GPU encoding (`--use-gpu auto|on|off`), CRF, presets, dry-run, and resume-safe output handling apply where relevant.
 
