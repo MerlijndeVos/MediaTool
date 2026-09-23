@@ -55,7 +55,7 @@
       "name": "Solarized",
       "description": "Ethan Schoonover's Solarized palette: warm cream in light mode, deep teal in dark mode. The example theme.",
       "author": "Toolbox",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "api_version": 2,
       "type": "theme",
       "swatches": [
@@ -68,7 +68,7 @@
       ],
       "repo": "https://github.com/MerlijndeVos/Toolbox",
       "path": "examples/mods/solarized-theme",
-      "commit": "2d7f0a33ba839a2d4370c959e04b12fd5ad0ad9b",
+      "commit": "e080eaf487d3d63904fa144f2ab2285b951bcd44",
       "tags": [
         "example",
         "theme",
