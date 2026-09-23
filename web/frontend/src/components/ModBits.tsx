@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { AlertTriangle, Check, Copy, ShieldCheck } from "lucide-react";
+import { CodeBlock } from "@/components/Highlight";
 import { Button, type ButtonProps } from "@/components/ui/button";
 import { copyText } from "@/lib/clipboard";
 import type { ModSourceFile } from "@/lib/types";
@@ -131,24 +132,37 @@ export function CodeFiles({ files }: { files: ModSourceFile[] }) {
   return (
     <div className="space-y-1.5">
       {files.map((file) => (
-        <details key={file.path} className="rounded-md border border-border/60 bg-background">
-          <summary className="flex cursor-pointer items-center justify-between gap-3 px-3 py-1.5 text-xs">
-            <span className="min-w-0 break-all font-medium">{file.path}</span>
-            <span className="shrink-0 text-muted-foreground">{formatSize(file.size)}</span>
-          </summary>
-          {file.text === null ? (
-            <p className="border-t border-border/60 px-3 py-2 text-xs text-muted-foreground">
-              Not shown ({file.size === 0 ? "empty" : "binary or too large"}).
-            </p>
-          ) : (
-            <pre className="max-h-80 overflow-auto border-t border-border/60 p-3 text-[11px] leading-snug">
-              {file.text}
-              {file.truncated ? "\n… (cut off)" : ""}
-            </pre>
-          )}
-        </details>
+        <CodeFile key={file.path} file={file} />
       ))}
     </div>
+  );
+}
+
+function CodeFile({ file }: { file: ModSourceFile }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <details
+      className="rounded-md border border-border/60 bg-background"
+      onToggle={(e) => setOpen(e.currentTarget.open)}
+    >
+      <summary className="flex cursor-pointer items-center justify-between gap-3 px-3 py-1.5 text-xs">
+        <span className="min-w-0 break-all font-medium">{file.path}</span>
+        <span className="shrink-0 text-muted-foreground">{formatSize(file.size)}</span>
+      </summary>
+      {file.text === null ? (
+        <p className="border-t border-border/60 px-3 py-2 text-xs text-muted-foreground">
+          Not shown ({file.size === 0 ? "empty" : "binary or too large"}).
+        </p>
+      ) : (
+        <CodeBlock
+          text={file.text}
+          path={file.path}
+          active={open}
+          suffix={file.truncated ? "\n… (cut off)" : undefined}
+          className="max-h-80 overflow-auto border-t border-border/60 p-3 text-[11px] leading-snug"
+        />
+      )}
+    </details>
   );
 }
 

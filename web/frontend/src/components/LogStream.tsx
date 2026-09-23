@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AlertTriangle, RotateCcw } from "lucide-react";
+import { LogText } from "@/components/Highlight";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { ActiveJob, LogLine } from "@/lib/types";
@@ -122,7 +123,7 @@ export function LogStream({
               line.level === 30 && "text-log-warn",
             )}
           >
-            {line.message}
+            <LogText text={line.message} />
           </div>
         ))
       )}

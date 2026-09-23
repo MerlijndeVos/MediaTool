@@ -10,7 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeout
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import AsyncIterator, Optional
+from typing import AsyncIterator, Optional, get_args
 
 from core.ai import (
     PROVIDERS as AI_PROVIDERS,
@@ -88,6 +88,7 @@ from .schemas import (
     AiTestResponse,
     SettingsResponse,
     SettingsUpdateRequest,
+    SyntaxScheme,
     SubtitleLanguagesResponse,
     SubtitleScanJunkRequest,
     SubtitleScanJunkResponse,
@@ -185,6 +186,9 @@ def _settings_response() -> SettingsResponse:
         logs=LogsStatsResponse(**logs_stats()),
         theme=str(settings.get("theme") or "theme-default"),
         color_mode=settings.get("color_mode") if settings.get("color_mode") in ("system", "light", "dark") else "system",
+        syntax_code=bool(settings.get("syntax_code", True)),
+        syntax_logs=bool(settings.get("syntax_logs", True)),
+        syntax_scheme=scheme if (scheme := settings.get("syntax_scheme")) in get_args(SyntaxScheme) else "theme",
     )
 
 

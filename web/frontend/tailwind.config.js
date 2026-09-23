@@ -52,6 +52,16 @@ export default {
           warn: "hsl(var(--log-warn))",
           error: "hsl(var(--log-error))",
         },
+        syntax: {
+          keyword: "hsl(var(--syntax-keyword))",
+          string: "hsl(var(--syntax-string))",
+          number: "hsl(var(--syntax-number))",
+          comment: "hsl(var(--syntax-comment))",
+          function: "hsl(var(--syntax-function))",
+          type: "hsl(var(--syntax-type))",
+          property: "hsl(var(--syntax-property))",
+          meta: "hsl(var(--syntax-meta))",
+        },
         category: {
           files: "hsl(var(--category-files))",
           media: "hsl(var(--category-media))",

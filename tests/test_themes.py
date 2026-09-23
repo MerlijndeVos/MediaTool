@@ -156,6 +156,12 @@ class ContrastTests(unittest.TestCase):
         self.assertTrue(any("muted-foreground" in w for w in m.theme.warnings))
         self.assertEqual(parse_manifest(theme_manifest({})).theme.warnings, ())
 
+    def test_syntax_colours_can_be_set_and_are_contrast_checked(self):
+        m = parse_manifest(theme_manifest({"dark": {"syntax-keyword": "#ff79c6"}}))
+        self.assertEqual(m.theme.dark["syntax-keyword"], t.parse_color("#ff79c6", "x"))
+        m = parse_manifest(theme_manifest({"light": {"syntax-comment": "#d0d0d0"}}))
+        self.assertTrue(any("syntax-comment" in w for w in m.theme.warnings))
+
 
 class DefaultPaletteSyncTests(unittest.TestCase):
     """The stylesheet is what shows before any theme loads; it must match the palette the server knows."""
@@ -334,6 +340,21 @@ class ActiveThemeTests(ModEnvTestCase):
     def test_bad_values_are_rejected(self):
         self.assertEqual(self.client.patch("/api/settings", json={"theme": "../x"}).status_code, 422)
         self.assertEqual(self.client.patch("/api/settings", json={"color_mode": "purple"}).status_code, 422)
+
+    def test_syntax_highlighting_settings_are_saved(self):
+        s = self.client.get("/api/settings").json()
+        self.assertEqual((s["syntax_code"], s["syntax_logs"], s["syntax_scheme"]), (True, True, "theme"))
+        res = self.client.patch("/api/settings", json={"syntax_logs": False, "syntax_scheme": "github"})
+        self.assertEqual(res.status_code, 200, res.text)
+        s = self.client.get("/api/settings").json()
+        self.assertEqual((s["syntax_code"], s["syntax_logs"], s["syntax_scheme"]), (True, False, "github"))
+        self.assertEqual(self.client.patch("/api/settings", json={"syntax_scheme": "neon"}).status_code, 422)
+
+    def test_an_unknown_stored_scheme_falls_back_to_the_theme(self):
+        from core.settings_store import save_settings
+
+        save_settings(syntax_scheme="removed-scheme")
+        self.assertEqual(self.client.get("/api/settings").json()["syntax_scheme"], "theme")
 
     def test_turning_off_the_active_theme_returns_to_the_default(self):
         self.client.patch("/api/settings", json={"theme": "sol"})

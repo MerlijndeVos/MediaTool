@@ -8,11 +8,13 @@ import {
   cacheMode,
   readCachedMode,
 } from "@/lib/theme";
+import { DEFAULT_SYNTAX, type SyntaxSettings, applySyntaxScheme, setSyntaxSettings } from "@/lib/syntax";
 
 const DARK_QUERY = "(prefers-color-scheme: dark)";
 
 /**
- * The look of the app: which theme mod is active, and light / dark / follow the system.
+ * The look of the app: which theme mod is active, light / dark / follow the system, and how code
+ * and log previews are highlighted.
  *
  * The choice is stored in the app's settings. A theme that is off, removed or not loaded (safe
  * mode) is simply not found, and the default look is used, so the app can never be stranded in a
@@ -21,6 +23,7 @@ const DARK_QUERY = "(prefers-color-scheme: dark)";
 export function useAppearance(themes: ModInfo[], modsLoaded: boolean) {
   const [themeId, setThemeId] = useState(DEFAULT_THEME_ID);
   const [mode, setModeState] = useState<ColorMode>(readCachedMode);
+  const [syntax, setSyntaxState] = useState<SyntaxSettings>(DEFAULT_SYNTAX);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [systemDark, setSystemDark] = useState(
     () => typeof window !== "undefined" && window.matchMedia(DARK_QUERY).matches,
@@ -34,6 +37,7 @@ export function useAppearance(themes: ModInfo[], modsLoaded: boolean) {
         setThemeId(s.theme || DEFAULT_THEME_ID);
         setModeState(s.color_mode);
         cacheMode(s.color_mode);
+        setSyntaxState({ code: s.syntax_code, logs: s.syntax_logs, scheme: s.syntax_scheme });
         setSettingsLoaded(true);
       })
       .catch(() => undefined);
@@ -53,6 +57,13 @@ export function useAppearance(themes: ModInfo[], modsLoaded: boolean) {
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);
   }, [dark]);
+
+  useEffect(() => {
+    setSyntaxSettings(syntax);
+  }, [syntax]);
+  useEffect(() => {
+    if (settingsLoaded) applySyntaxScheme(syntax.scheme);
+  }, [settingsLoaded, syntax.scheme]);
 
   const active = useMemo(() => themes.find((t) => t.id === themeId) ?? null, [themes, themeId]);
   const activeId = active?.id ?? DEFAULT_THEME_ID;
@@ -75,7 +86,16 @@ export function useAppearance(themes: ModInfo[], modsLoaded: boolean) {
     await updateSettings({ color_mode: next });
   }, []);
 
-  return { themeId: activeId, mode, dark, selectTheme, setMode };
+  const setSyntax = useCallback(async (patch: Partial<SyntaxSettings>) => {
+    setSyntaxState((prev) => ({ ...prev, ...patch }));
+    await updateSettings({
+      syntax_code: patch.code,
+      syntax_logs: patch.logs,
+      syntax_scheme: patch.scheme,
+    });
+  }, []);
+
+  return { themeId: activeId, mode, dark, selectTheme, setMode, syntax, setSyntax };
 }
 
 export type AppearanceState = ReturnType<typeof useAppearance>;

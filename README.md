@@ -27,7 +27,7 @@
 | **Audio** | Set default audio track in MKV files |
 | **Dedup** | Strip `(2)` duplicate suffixes from filenames |
 
-The UI includes drag-and-drop paths, live logs, per-job progress, light and dark mode with switchable themes (**Settings → Appearance**), and native folder pickers in the desktop app.
+The UI includes drag-and-drop paths, live logs, per-job progress, light and dark mode with switchable themes and syntax highlighting for code and logs (**Settings → Appearance**), and native folder pickers in the desktop app.
 
 **Mods:** every tool above is a *mod*, and you can add your own without touching the app's code. A mod is a folder with a `mod.toml` and a `main.py`; it gets a generated form, live logs and a `toolbox <id>` command. Install one from a git address, folder, zip or file (with a review prompt first), or browse the [mod market](market/README.md); mods you add start turned off. A mod picks which menu section it appears in, and its form can have sections, conditional fields, sliders and a table or file list of results, all from `mod.toml`. **Themes** are mods too: one data file that changes colours, corners and font (no code), installable the same way. See **[MODDING.md](MODDING.md)** (it includes prompts you can give an AI assistant to write a mod or design a theme for you) and the examples in [`examples/mods`](examples/mods).
 

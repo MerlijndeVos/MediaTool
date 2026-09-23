@@ -15,6 +15,10 @@ _DEFAULTS: dict[str, Any] = {
     # Appearance: the id of the active theme mod (see core/mods/theme.py) and light/dark/system.
     "theme": "theme-default",
     "color_mode": "system",
+    # Syntax highlighting of code and log previews, and its colour scheme ("theme" follows the theme).
+    "syntax_code": True,
+    "syntax_logs": True,
+    "syntax_scheme": "theme",
 }
 
 

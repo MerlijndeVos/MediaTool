@@ -434,6 +434,14 @@ Every colour is a token, and this is the whole list. Values are `#rrggbb`, `hsl(
 | `log-info` | `#606876` | `#8491a4` | Normal lines in the log panel. |
 | `log-warn` | `#b35309` | `#fbbd23` | Warning lines in the log panel. |
 | `log-error` | `#dc2828` | `#f87272` | Error lines in the log panel. |
+| `syntax-keyword` | `#6b33cc` | `#b48ef6` | Keywords in code previews (def, import, if) and log level tags. |
+| `syntax-string` | `#117442` | `#69d390` | Strings in code, quoted text and URLs in logs. |
+| `syntax-number` | `#b34d09` | `#f6a655` | Numbers and constants (true, null) in code and logs. |
+| `syntax-comment` | `#666d7a` | `#8791a1` | Comments in code and timestamps in logs. |
+| `syntax-function` | `#1d55cd` | `#77b1f8` | Function names in code and file paths in logs. |
+| `syntax-type` | `#0a6c7b` | `#59cfcf` | Class names, types and built-ins; exception names in logs. |
+| `syntax-property` | `#bf2256` | `#f28899` | Keys and attributes (TOML, JSON, YAML, HTML). |
+| `syntax-meta` | `#97560c` | `#f0c74c` | Decorators, headings and section names ([table] in TOML). |
 | `category-files` | `#e21d4b` | `#f43e5c` | Accent of the Files section. |
 | `category-media` | `#2463eb` | `#3c83f6` | Accent of the Media section. |
 | `category-subtitles` | `#7c3bed` | `#895af6` | Accent of the Subtitles section. |
@@ -444,6 +452,10 @@ Every colour is a token, and this is the whole list. Values are `#rrggbb`, `hsl(
 
 `[theme.groups]` is shorthand: `files = "#..."` sets `category-files` for light and dark. If
 `[theme.light]` or `[theme.dark]` names the token itself, that wins for its mode.
+
+The `syntax-*` tokens colour code and log previews when **Settings → Appearance → Syntax
+highlighting** is set to *From the theme* (the default). The other schemes there (GitHub, One,
+High contrast) ignore them.
 
 ### What is checked
 
@@ -684,6 +696,14 @@ One code block labelled `mod.toml`, and a short sentence or two about the look. 
 - log-info: Normal lines in the log panel. (default light #606876, dark #8491a4)
 - log-warn: Warning lines in the log panel. (default light #b35309, dark #fbbd23)
 - log-error: Error lines in the log panel. (default light #dc2828, dark #f87272)
+- syntax-keyword: Keywords in code previews (def, import, if) and log level tags. (default light #6b33cc, dark #b48ef6)
+- syntax-string: Strings in code, quoted text and URLs in logs. (default light #117442, dark #69d390)
+- syntax-number: Numbers and constants (true, null) in code and logs. (default light #b34d09, dark #f6a655)
+- syntax-comment: Comments in code and timestamps in logs. (default light #666d7a, dark #8791a1)
+- syntax-function: Function names in code and file paths in logs. (default light #1d55cd, dark #77b1f8)
+- syntax-type: Class names, types and built-ins; exception names in logs. (default light #0a6c7b, dark #59cfcf)
+- syntax-property: Keys and attributes (TOML, JSON, YAML, HTML). (default light #bf2256, dark #f28899)
+- syntax-meta: Decorators, headings and section names ([table] in TOML). (default light #97560c, dark #f0c74c)
 - category-files: Accent of the Files section. (default light #e21d4b, dark #f43e5c)
 - category-media: Accent of the Media section. (default light #2463eb, dark #3c83f6)
 - category-subtitles: Accent of the Subtitles section. (default light #7c3bed, dark #895af6)

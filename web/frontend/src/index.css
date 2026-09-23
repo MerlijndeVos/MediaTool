@@ -33,6 +33,14 @@
     --log-info: 220 10% 42%;
     --log-warn: 26 90% 37%;
     --log-error: 0 72% 51%;
+    --syntax-keyword: 262 60% 50%;
+    --syntax-string: 150 75% 26%;
+    --syntax-number: 24 90% 37%;
+    --syntax-comment: 220 9% 44%;
+    --syntax-function: 221 75% 46%;
+    --syntax-type: 188 85% 26%;
+    --syntax-property: 340 70% 44%;
+    --syntax-meta: 32 85% 32%;
     --category-files: 346 77% 50%;
     --category-media: 221 83% 53%;
     --category-subtitles: 262 83% 58%;
@@ -72,6 +80,14 @@
     --log-info: 215 15% 58%;
     --log-warn: 43 96% 56%;
     --log-error: 0 91% 71%;
+    --syntax-keyword: 262 85% 76%;
+    --syntax-string: 142 55% 62%;
+    --syntax-number: 30 90% 65%;
+    --syntax-comment: 217 12% 58%;
+    --syntax-function: 213 90% 72%;
+    --syntax-type: 180 55% 58%;
+    --syntax-property: 350 80% 74%;
+    --syntax-meta: 45 85% 62%;
     --category-files: 350 89% 60%;
     --category-media: 217 91% 60%;
     --category-subtitles: 258 90% 66%;
@@ -134,4 +150,167 @@
   dialog.app-dialog::backdrop {
     background: hsl(var(--overlay) / 0.55);
   }
+}
+
+/* Syntax highlighting (code and log previews, see lib/syntax.ts). The colours come from a scheme:
+   "theme" reads the theme's --syntax-* tokens, the others are fixed palettes with a light and a dark
+   variant. The scheme is a data-syntax attribute on <html> (or on a preview box), and sets --hl-*;
+   the token classes below only read --hl-*. Kept outside a Tailwind layer: the classes are made at
+   runtime, so Tailwind would not see them. */
+:root,
+[data-syntax="theme"] {
+  --hl-keyword: hsl(var(--syntax-keyword));
+  --hl-string: hsl(var(--syntax-string));
+  --hl-number: hsl(var(--syntax-number));
+  --hl-comment: hsl(var(--syntax-comment));
+  --hl-function: hsl(var(--syntax-function));
+  --hl-type: hsl(var(--syntax-type));
+  --hl-property: hsl(var(--syntax-property));
+  --hl-meta: hsl(var(--syntax-meta));
+}
+
+[data-syntax="github"] {
+  --hl-keyword: #cf222e;
+  --hl-string: #0a3069;
+  --hl-number: #0550ae;
+  --hl-comment: #636c76;
+  --hl-function: #8250df;
+  --hl-type: #953800;
+  --hl-property: #116329;
+  --hl-meta: #0550ae;
+}
+
+.dark[data-syntax="github"],
+.dark [data-syntax="github"] {
+  --hl-keyword: #ff7b72;
+  --hl-string: #a5d6ff;
+  --hl-number: #79c0ff;
+  --hl-comment: #8b949e;
+  --hl-function: #d2a8ff;
+  --hl-type: #ffa657;
+  --hl-property: #7ee787;
+  --hl-meta: #79c0ff;
+}
+
+[data-syntax="one"] {
+  --hl-keyword: #a626a4;
+  --hl-string: #3e7d3c;
+  --hl-number: #8a5d00;
+  --hl-comment: #6b6d76;
+  --hl-function: #2f64d6;
+  --hl-type: #8c6000;
+  --hl-property: #c8412f;
+  --hl-meta: #2f64d6;
+}
+
+.dark[data-syntax="one"],
+.dark [data-syntax="one"] {
+  --hl-keyword: #c678dd;
+  --hl-string: #98c379;
+  --hl-number: #d19a66;
+  --hl-comment: #8b919c;
+  --hl-function: #61afef;
+  --hl-type: #e5c07b;
+  --hl-property: #e06c75;
+  --hl-meta: #56b6c2;
+}
+
+[data-syntax="contrast"] {
+  --hl-keyword: #6a00b0;
+  --hl-string: #005a1e;
+  --hl-number: #8a3000;
+  --hl-comment: #3d3d3d;
+  --hl-function: #0033cc;
+  --hl-type: #004c57;
+  --hl-property: #9b0040;
+  --hl-meta: #6b3a00;
+}
+
+.dark[data-syntax="contrast"],
+.dark [data-syntax="contrast"] {
+  --hl-keyword: #e0b0ff;
+  --hl-string: #9dffb0;
+  --hl-number: #ffc27a;
+  --hl-comment: #c8c8c8;
+  --hl-function: #9cc8ff;
+  --hl-type: #7ff0ff;
+  --hl-property: #ffa0c0;
+  --hl-meta: #ffe07a;
+}
+
+/* highlight.js class names (also used by the log tokenizer, plus hl-timestamp). */
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-doctag,
+.hljs-template-tag,
+.hljs-operator {
+  color: var(--hl-keyword);
+}
+.hljs-string,
+.hljs-regexp,
+.hljs-char,
+.hljs-link,
+.hljs-code,
+.hljs-addition,
+.hljs-template-variable {
+  color: var(--hl-string);
+}
+.hljs-number,
+.hljs-literal,
+.hljs-symbol,
+.hljs-bullet {
+  color: var(--hl-number);
+}
+.hljs-comment,
+.hljs-quote,
+.hljs-deletion,
+.hl-timestamp {
+  color: var(--hl-comment);
+}
+.hljs-comment,
+.hljs-quote {
+  font-style: italic;
+}
+.hljs-title,
+.hljs-title.function_ {
+  color: var(--hl-function);
+}
+.hljs-type,
+.hljs-built_in,
+.hljs-title.class_,
+.hljs-title.class_.inherited__,
+.hljs-class .hljs-title {
+  color: var(--hl-type);
+}
+.hljs-attr,
+.hljs-attribute,
+.hljs-property,
+.hljs-variable,
+.hljs-name,
+.hljs-selector-id,
+.hljs-selector-class,
+.hljs-selector-attr,
+.hljs-selector-pseudo {
+  color: var(--hl-property);
+}
+.hljs-meta,
+.hljs-meta .hljs-keyword,
+.hljs-section,
+.hljs-tag {
+  color: var(--hl-meta);
+}
+.hljs-meta .hljs-string {
+  color: var(--hl-string);
+}
+.hljs-section,
+.hljs-strong {
+  font-weight: 600;
+}
+.hljs-emphasis {
+  font-style: italic;
+}
+.hljs-subst,
+.hljs-params,
+.hljs-punctuation {
+  color: inherit;
 }

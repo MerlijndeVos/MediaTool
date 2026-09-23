@@ -7,7 +7,7 @@
 id = "solarized"
 name = "Solarized"
 description = "Ethan Schoonover's Solarized palette: warm cream in light mode, deep teal in dark mode."
-version = "1.0.0"
+version = "1.1.0"
 author = "Toolbox"
 type = "theme"
 api_version = 2            # themes need mod API 2
@@ -43,6 +43,14 @@ success-text = "#4d5c00"
 log-info = "#4a616a"
 log-warn = "#7a4a00"
 log-error = "#a8231f"
+syntax-keyword = "#5f6e00"
+syntax-string = "#1d6f69"
+syntax-number = "#a3265f"
+syntax-comment = "#52666d"
+syntax-function = "#1a6390"
+syntax-type = "#735700"
+syntax-property = "#a8401a"
+syntax-meta = "#4f539c"
 
 [theme.dark]
 background = "#002b36"
@@ -71,6 +79,14 @@ success-text = "#b5c826"
 log-info = "#a6b4b4"
 log-warn = "#e0b52e"
 log-error = "#ff8a84"
+syntax-keyword = "#b5c826"
+syntax-string = "#3ec4b9"
+syntax-number = "#f07cb3"
+syntax-comment = "#93a6a8"
+syntax-function = "#6ab7ea"
+syntax-type = "#e0b52e"
+syntax-property = "#f0874f"
+syntax-meta = "#a4a8ee"
 
 # Accent per section, used in light and dark mode. Names: files, media, subtitles,
 # experimental, other, settings.

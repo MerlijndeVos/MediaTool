@@ -320,6 +320,9 @@ class AiSettingsResponse(BaseModel):
     providers: dict[str, AiProviderSettings]
 
 
+SyntaxScheme = Literal["theme", "github", "one", "contrast"]
+
+
 class SettingsResponse(BaseModel):
     file_logging: bool
     ai: AiSettingsResponse
@@ -327,6 +330,10 @@ class SettingsResponse(BaseModel):
     # Appearance: the active theme mod and light / dark / follow the system.
     theme: str = "theme-default"
     color_mode: Literal["system", "light", "dark"] = "system"
+    # Syntax highlighting in code and log previews ("theme" takes the colours from the theme).
+    syntax_code: bool = True
+    syntax_logs: bool = True
+    syntax_scheme: SyntaxScheme = "theme"
 
 
 class AiProviderUpdate(BaseModel):
@@ -347,6 +354,9 @@ class SettingsUpdateRequest(BaseModel):
     ai: Optional[AiSettingsUpdate] = None
     theme: Optional[str] = Field(default=None, pattern=r"^[a-z][a-z0-9_-]{0,39}$")
     color_mode: Optional[Literal["system", "light", "dark"]] = None
+    syntax_code: Optional[bool] = None
+    syntax_logs: Optional[bool] = None
+    syntax_scheme: Optional[SyntaxScheme] = None
 
 
 class AiTestRequest(AiProviderUpdate):

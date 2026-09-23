@@ -14,6 +14,7 @@ import type {
 } from "@/lib/types";
 import type { RenameMode, RenameProfile } from "@/lib/renameProfiles";
 import type { ColorMode } from "@/lib/theme";
+import type { SyntaxScheme } from "@/lib/syntax";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 
@@ -297,6 +298,10 @@ export interface AppSettings {
   /** The active theme mod and whether to follow the system's light/dark setting. */
   theme: string;
   color_mode: ColorMode;
+  /** Syntax highlighting in code and log previews, and its colour scheme. */
+  syntax_code: boolean;
+  syntax_logs: boolean;
+  syntax_scheme: SyntaxScheme;
 }
 
 /** Omitted fields are kept; an empty string clears the field. */
@@ -314,6 +319,9 @@ export function updateSettings(patch: {
   file_logging?: boolean;
   theme?: string;
   color_mode?: ColorMode;
+  syntax_code?: boolean;
+  syntax_logs?: boolean;
+  syntax_scheme?: SyntaxScheme;
   ai?: {
     provider?: AiProviderId;
     providers?: Partial<Record<AiProviderId, AiProviderUpdate>>;
